@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>为 AI Agent 做高效的上下文工程 · CS 329Z 中文学习站</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html"><span class="brand-mark">CS</span>329Z<span class="brand-sub">中文学习站</span></a>
+    <nav class="topnav">
+      <a href="../index.html#syllabus">课程表</a>
+      <a href="../index.html#dates">重要日期</a>
+      <a href="../index.html#about">关于本站</a>
+    </nav>
+    <div class="searchbox"><input id="search-input" type="search" placeholder="搜索材料 / 主题…" autocomplete="off"><div id="search-results" class="search-results" hidden></div></div>
+  </div>
+</header>
+<div class="read-layout">
+  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li><a href="#_2">全文中译</a></li><li><a href="#vs">上下文工程 vs. 提示工程</a></li><li><a href="#agent">为什么上下文工程对构建强大 Agent 至关重要</a></li><li><a href="#_3">高效上下文的构成</a></li><li><a href="#agentic">上下文检索与 Agentic 搜索</a></li><li class="has-sub"><a href="#_4">长时程任务的上下文工程</a><ul><li><a href="#compaction">压缩(Compaction)</a></li><li><a href="#structured-note-taking">结构化笔记(Structured Note-taking)</a></li><li><a href="#sub-agent-architectures">子智能体架构(Sub-agent Architectures)</a></li></ul></li><li><a href="#_5">结论</a></li><li><a href="#_6">致谢</a></li><li><a href="#_7">要点速览</a></li></ul></aside>
+  <main class="read-main">
+    <div class="crumb"><a href="../index.html">首页</a> / <a href="../index.html#week-week02a_llms_for_builders">第2周 · 给开发者的 LLM</a></div>
+    <article class="read-article">
+      <h1 class="read-title">为 AI Agent 做高效的上下文工程</h1>
+      <p class="read-title-en">&quot;Effective Context Engineering for AI Agents&quot;</p>
+      <p class="read-meta">&quot;Prithvi Rajasekaran et al.&quot; · &quot;Anthropic Engineering Blog 2025 · Anthropic&quot;</p>
+      <p class="read-badges"><span class="badge badge-recommended">推荐</span><span class="badge badge-kind">全文中译</span><button class="lang-toggle" id="lang-toggle" type="button">仅看中文</button><a class="orig-link" href="../originals/week02a_llms_for_builders/Rajasekaran2025_Effective_Context_Engineering_Anthropic.html" target="_blank" rel="noopener">查看原文(HTML) ↗</a></p>
+      <div class="markdown-body">
+<h2 id="_1">导读</h2>
+<p>本文是 Anthropic 应用 AI 团队(Prithvi Rajasekaran、Ethan Dixon、Carly Ryan、Jeremy Hadfield)发表于 2025 年 9 月 29 日的工程博客,被安排在第 2 周「给开发者的 LLM」单元。它系统阐述了从「提示工程(prompt engineering)」到「上下文工程(context engineering)」的转变:提示工程关注如何写好一段指令,而上下文工程关注在多轮推理、更长时程的 Agent 运行中,如何策展(curate)进入有限上下文窗口的全部信息——系统提示、工具、示例、消息历史、外部数据等。文章解释了为什么这很重要(注意力预算有限、上下文腐烂 context rot)、高效上下文的构成原则(最小高信号 token 集),并给出三大运行时技术:即时(just-in-time)Agentic 检索,以及面向长时程任务的压缩(compaction)、结构化笔记与子智能体架构。这些内容直接对应课程中 Agent 上下文管理与记忆系统的设计讨论,与 Claude Code 的实际工程实践紧密相关。</p>
+<h2 id="_2">全文中译</h2>
+<h1 id="ai-agent">为 AI Agent 做高效的上下文工程</h1>
+<p>发布时间:2025 年 9 月 29 日 · Anthropic 工程博客</p>
+<p>上下文是 AI Agent 的关键但有限的资源。在这篇文章中,我们探讨有效策展与管理驱动 Agent 的上下文的策略。</p>
+<p>经过几年提示工程在应用 AI 领域的风头无两之后,一个新词开始走红:<strong>上下文工程(context engineering)</strong>。基于语言模型构建,正在越来越少地关乎为提示找到正确的措辞,而越来越多地关乎回答一个更宏观的问题——「什么样的上下文配置最有可能引发模型产生我们期望的行为?」</p>
+<p><strong>上下文(context)</strong> 指从大语言模型(LLM)采样时一并纳入的 token 集合。这里的<strong>工程(engineering)</strong>问题,是在 LLM 固有约束之下优化这些 token 的效用,从而稳定地达成期望结果。有效驾驭 LLM 常常需要「用上下文来思考(thinking in context)」——换言之:考虑 LLM 在任一时刻可及的整体状态,以及该状态可能引发哪些潜在行为。</p>
+<p>在这篇文章中,我们将探讨这门新兴的上下文工程艺术,并为构建可引导、高效的 Agent 提供一个 refined 的心智模型。</p>
+<h2 id="vs">上下文工程 vs. 提示工程</h2>
+<p>在 Anthropic,我们把上下文工程视为提示工程的自然演进。提示工程指的是为获得最优结果而编写和组织 LLM 指令的方法(参见我们的文档,其中有概览和实用的提示工程策略)。</p>
+<p><strong>上下文工程</strong>指的是一组策略,用于在 LLM 推理期间策展并维护最优的 token(信息)集合——包括提示之外所有可能进入上下文的信息。</p>
+<p>在用 LLM 做工程的早期,提示是 AI 工程工作最大的组成部分,因为日常聊天之外的大多数用例都需要针对一次性分类或文本生成任务优化提示。顾名思义,提示工程的核心是如何写出有效的提示,尤其是系统提示。然而,随着我们转向构建更强大的 Agent——在多轮推理和更长的时间跨度上运行——我们需要管理整个上下文状态(系统指令、工具、模型上下文协议(Model Context Protocol, MCP)、外部数据、消息历史等)的策略。</p>
+<p>运行在循环中的 Agent 会不断生成<strong>可能</strong>与下一轮推理相关的数据,这些信息必须被循环往复地精炼。上下文工程是一门从那个不断演化的可能信息宇宙中,策展什么进入有限上下文窗口的<strong>艺术与科学</strong>。</p>
+<p>与写一段提示这样的离散任务不同,上下文工程是迭代的,策展发生在我们每次决定传给模型什么内容的时刻。</p>
+<h2 id="agent">为什么上下文工程对构建强大 Agent 至关重要</h2>
+<p>尽管 LLM 速度飞快、能处理越来越大的数据量,我们观察到 LLM 和人一样,在某个节点会失去专注或陷入混乱。关于大海捞针(needle-in-a-haystack)式基准测试的研究揭示了一个概念——<strong>上下文腐烂(context rot)</strong>:随着上下文窗口中的 token 数量增加,模型从该上下文中准确召回信息的能力随之下降。</p>
+<p>虽然有些模型的退化比另一些更平缓,但这一特征在所有模型上都会出现。因此,上下文必须被视为一种边际收益递减的有限资源。像工作记忆容量有限的人类一样,LLM 在解析大量上下文时也要动用一个「注意力预算(attention budget)」。每一个新引入的 token 都会消耗一部分预算,这就更要求我们仔细策展 LLM 可及的 token。</p>
+<p>这种注意力稀缺源于 LLM 的架构约束。LLM 基于 transformer 架构,它让每个 token 都能对整个上下文中的<strong>所有其他 token</strong>做注意力计算,这产生了 n 个 token 之间 n² 量级的两两关系。随着上下文变长,模型捕捉这些两两关系的能力被摊薄,在上下文长度与注意力聚焦之间形成天然的张力。此外,模型的注意力模式来自训练数据分布,其中短序列通常远比长序列常见。这意味着模型对跨上下文的依赖关系经验更少、专用参数更少。</p>
+<p>位置编码插值(position encoding interpolation)等技术让模型能通过向最初训练的较小上下文适配来处理更长序列,但对 token 位置的理解会有一定退化。这些因素造成的是一条性能梯度而非硬性悬崖:模型在长上下文上仍然能力很强,但在信息检索和长程推理上的精度可能不如短上下文场景。</p>
+<p>这些现实意味着,深思熟虑的上下文工程对构建强大的 Agent 至关重要。</p>
+<h2 id="_3">高效上下文的构成</h2>
+<p>鉴于 LLM 受限于有限的注意力预算,<strong>好的</strong>上下文工程意味着找到<strong>尽可能最小</strong>的高信号 token 集合,以最大化达成某个期望结果的可能性。说起来容易做起来难,但在下一节中,我们概述这条指导原则在上下文各组成部分上的具体含义。</p>
+<p><strong>系统提示</strong>应当极其清晰,使用简单、直接的语言,以合适的「高度(altitude)」向 Agent 呈现想法。合适的高度是介于两种常见失败模式之间的金发姑娘(Goldilocks)区间。一个极端是工程师在提示中硬编码复杂、脆弱的逻辑来诱发精确的智能体行为——这会带来脆弱性,并随时间推高维护复杂度。另一个极端是工程师只给出模糊、高层的指导,既无法给 LLM 关于期望输出的具体信号,又错误地假定了共享上下文。最优的高度是一种平衡:具体到足以有效引导行为,又足够灵活,让模型拥有引导行为的强启发式。</p>
+<p>[图:频谱一端是硬编码 if-else 的脆弱提示,另一端是过于泛化或错误假定共享上下文的提示]</p>
+<p>我们建议把提示组织成清晰的分区(如 <code>&lt;background_information&gt;</code>、<code>&lt;instructions&gt;</code>、<code>## Tool guidance</code>、<code>## Output description</code> 等),并用 XML 标签或 Markdown 标题来划分这些区块,不过随着模型能力增强,提示的具体格式化可能正变得不那么重要。</p>
+<p>无论你决定如何组织系统提示,你都应追求「完整勾勒期望行为的最小信息集」。(注意,最小不一定等于短;你仍需预先给 Agent 足够信息,确保它遵守期望行为。)最好先用可用的最强模型测试一个最小提示,看它在你的任务上表现如何,然后根据初始测试中发现的失败模式,增加明确的指令和示例来改进性能。</p>
+<p><strong>工具</strong>让 Agent 与环境交互,并在工作中引入新的、额外的上下文。工具定义了 Agent 与其信息/行动空间之间的契约,因此工具必须促进效率:既返回 token 高效的信息,也鼓励高效的智能体行为。</p>
+<p>在《用 AI Agent 为 AI Agent 编写工具》中,我们讨论了构建 LLM 能充分理解、功能重叠最小的工具。与设计良好的代码库中的函数类似,工具应当自包含、对错误鲁棒,并且对其预期用途极其清晰。输入参数同样应当具有描述性、无歧义,并发挥模型的固有优势。</p>
+<p>我们最常见的失败模式之一是臃肿的工具集:覆盖了太多功能,或在「该用哪个工具」上产生模糊的决策点。如果一位人类工程师无法明确说出在某个场景该用哪个工具,就不能指望 AI Agent 做得更好。正如后文将讨论的,为 Agent 策展一个最小可用的工具集,也能让长交互中的维护与上下文修剪更可靠。</p>
+<p>提供示例(即少样本提示,few-shot prompting)是人尽皆知的最佳实践,我们继续强烈推荐。然而,团队常常把一长串边缘案例塞进提示,试图罗列 LLM 在某任务上应遵循的所有规则。我们不推荐这样做。相反,我们建议策展一组多样的、规范(canonical)的示例,有效呈现 Agent 的期望行为。对 LLM 而言,示例就是「胜过千言万语的图画」。</p>
+<p>我们对上下文各组成部分(系统提示、工具、示例、消息历史等)的总体建议是:深思熟虑,保持上下文信息丰富而又紧凑。下面我们来讨论在运行时动态检索上下文。</p>
+<h2 id="agentic">上下文检索与 Agentic 搜索</h2>
+<p>在《构建高效的 AI Agent》中,我们强调了基于 LLM 的工作流与 Agent 的区别。自那篇文章以来,我们倾向于一个对 Agent 的<strong>简单定义:LLM 在循环中自主使用工具</strong>。</p>
+<p>在与客户合作的过程中,我们看到整个领域正在向这个简单范式收敛。随着底层模型越来越强,Agent 的自主性水平可以相应扩展:更聪明的模型让 Agent 能独立穿行于微妙的问题空间,并从错误中恢复。</p>
+<p>我们现在看到工程师设计 Agent 上下文方式的转变。今天,许多 AI 原生应用采用某种基于嵌入(embedding)的推理前检索,来为 Agent 呈现需要推理的重要上下文。随着领域向更 Agentic 的方式过渡,我们看到越来越多的团队用「即时(just in time)」上下文策略来增强这些检索系统。</p>
+<p>采用「即时」方式构建的 Agent 不再预先处理所有相关数据,而是维护轻量的标识符(文件路径、存储的查询、网页链接等),并在运行时用这些引用通过工具动态地把数据加载进上下文。Anthropic 的 Agentic 编程方案 Claude Code 就用这种方式在大型数据库上做复杂数据分析:模型可以编写有针对性的查询、存储结果,并利用 head、tail 等 Bash 命令分析大量数据,而无需把完整数据对象装入上下文。这种方式与人类认知相呼应:我们一般不会背诵整个语料库,而是建立文件系统、收件箱、书签等外部组织与索引系统,按需检索相关信息。</p>
+<p>除了存储效率,这些引用的元数据还提供了高效精炼行为的机制——无论是显式提供还是直觉性的。对一个在文件系统中操作的 Agent 来说,tests 文件夹里名为 <code>test_utils.py</code> 的文件,与 src/core_logic/ 下同名文件,暗示着不同的用途。文件夹层级、命名约定、时间戳都提供了重要信号,帮助人类和 Agent 理解如何以及何时使用信息。</p>
+<p>让 Agent 自主导航和检索数据还支持渐进式披露(progressive disclosure)——换言之,允许 Agent 通过探索逐步发现相关上下文。每次交互都会产生指导下一步决策的上下文:文件大小暗示复杂度;命名约定提示用途;时间戳可以作为相关性的代理。Agent 可以一层层搭建理解,只在工作记忆中保留必要内容,并借助笔记策略获得额外的持久性。这种自管理的上下文窗口让 Agent 聚焦于相关的子集,而不是淹没在详尽却可能无关的信息中。</p>
+<p>当然,这有权衡:运行时探索比检索预计算数据更慢。不仅如此,还需要有主见、深思熟虑的工程,来确保 LLM 拥有有效导航其信息版图所需的正确工具和启发式。缺乏恰当引导,Agent 可能误用工具、追逐死胡同或找不到关键信息,从而浪费上下文。</p>
+<p>在某些场景中,最有效的 Agent 可能采用混合策略:预先检索一部分数据以获得速度,再自行决定是否进一步自主探索。「合适」自主性水平的决策边界取决于任务。Claude Code 就是采用这种混合模式的 Agent:<code>CLAUDE.md</code> 文件被朴素地预先放入上下文,而 glob、grep 等原语让它能导航环境、即时检索文件,有效绕过了索引过期和复杂语法树的问题。</p>
+<p>对于内容动态性较低的领域(如法律或金融),混合策略可能更适合。随着模型能力提升,Agentic 设计将趋向于「让聪明的模型聪明地行事」,人工策展会逐步减少。考虑到这个领域进步的速度,「做最简单且有效的事」很可能仍是我们给基于 Claude 构建 Agent 的团队的最佳建议。</p>
+<h2 id="_4">长时程任务的上下文工程</h2>
+<p>长时程任务要求 Agent 在 token 数超出 LLM 上下文窗口的动作序列上,维持连贯性、上下文和目标导向的行为。对于跨度从几十分钟到数小时连续工作的任务——比如大型代码库迁移或综合研究项目——Agent 需要专门的技术来绕过上下文窗口大小限制。</p>
+<p>等待更大的上下文窗口似乎是个显然的策略。但在可预见的未来,各种尺寸的上下文窗口很可能都会受制于上下文污染(context pollution)与信息相关性问题——至少在追求最强 Agent 表现的场景下如此。为了让 Agent 在延长时间跨度上有效工作,我们开发了直接应对这些上下文污染约束的几种技术:压缩(compaction)、结构化笔记和多智能体架构。</p>
+<h3 id="compaction">压缩(Compaction)</h3>
+<p>压缩是指把一段接近上下文窗口上限的对话加以总结,然后以该总结重启一个新的上下文窗口。压缩通常充当上下文工程中驱动更好长期连贯性的第一根杠杆。其核心是以高保真方式蒸馏上下文窗口的内容,使 Agent 能以最小的性能退化继续工作。</p>
+<p>以 Claude Code 为例,我们通过把消息历史交给模型来总结和压缩最关键的细节实现这一点:模型保留架构决策、未解决的 bug 和实现细节,丢弃冗余的工具输出或消息。Agent 随后可以带着这份压缩上下文加上最近访问的五个文件继续工作。用户得到连续性,无需担心上下文窗口限制。</p>
+<p>压缩的艺术在于保留什么、丢弃什么的选择,因为过于激进的压缩可能丢失微妙但关键的上下文——其重要性只有在后来才会显现。对于实现压缩系统的工程师,我们建议在复杂的 Agent 轨迹上仔细调优提示:先最大化召回,确保压缩提示捕获轨迹中每一条相关信息;再迭代提高精度,消除多余内容。</p>
+<p>一个唾手可得的多余内容例子是清理工具调用与结果——当一个工具早已在消息历史深处被调用过,Agent 为什么还需要再看到原始结果?最安全、最轻量的压缩形式之一就是工具结果清理,最近已作为 Claude 开发者平台的一项功能推出。</p>
+<h3 id="structured-note-taking">结构化笔记(Structured Note-taking)</h3>
+<p>结构化笔记,或者说智能体记忆(agentic memory),是这样一种技术:Agent 定期把笔记写入持久化于上下文窗口之外的存储,这些笔记之后会被拉回上下文窗口。</p>
+<p>这一策略以最小的开销提供了持久记忆。就像 Claude Code 创建待办清单,或你的自定义 Agent 维护一个 NOTES.md 文件,这个简单的模式让 Agent 能在复杂任务间跟踪进度,保住那些 otherwise 会在几十次工具调用中丢失的关键上下文与依赖。</p>
+<p>「Claude 玩宝可梦」展示了记忆如何在非编程领域改变 Agent 的能力。该 Agent 在数千个游戏步骤中维持精确记录——跟踪诸如「在过去 1,234 步里我一直在 1 号道路练级,皮卡丘已朝 10 级的目标升了 8 级」这样的目标。在没有任何关于记忆结构的提示下,它自行绘制了已探索区域的地图、记住已解锁的关键成就,并维护关于战斗策略的策略笔记,帮助它学习哪些攻击对不同对手最有效。</p>
+<p>上下文重置之后,Agent 会读取自己的笔记并继续数小时的练级序列或地牢探索。这种跨总结步骤的连贯性,使得仅靠把所有信息保存在 LLM 上下文窗口中不可能实现的长时程策略成为可能。</p>
+<p>作为 Sonnet 4.5 发布的一部分,我们在 Claude 开发者平台上推出了公测版的记忆工具(memory tool),通过基于文件的系统更方便地在上下文窗口之外存储和查询信息。这使 Agent 能随时间积累知识库、跨会话维护项目状态、引用先前的工作,而不必把一切保存在上下文中。</p>
+<h3 id="sub-agent-architectures">子智能体架构(Sub-agent Architectures)</h3>
+<p>子智能体架构提供了绕过上下文限制的另一种方式。与其让一个 Agent 试图在整个项目上维持状态,不如让专门的子智能体带着干净的上下文窗口处理聚焦的任务。主智能体用高层计划做协调,而子智能体执行深度技术工作或使用工具查找相关信息。每个子智能体也许会大量探索、消耗数万甚至更多 token,但只返回其工作的浓缩蒸馏摘要(通常 1,000–2,000 个 token)。</p>
+<p>这种方式实现了清晰的关注点分离——详细的搜索上下文被隔离在子智能体内部,而主智能体专注于综合与分析结果。这一模式(我们在《我们如何构建多智能体研究系统》中讨论过)在复杂研究任务上相比单智能体系统显示出大幅提升。</p>
+<p>这些方法之间的选择取决于任务特征。例如:</p>
+<ul>
+<li>压缩为需要大量来回交互的任务维持对话流;</li>
+<li>笔记法适合有清晰里程碑的迭代式开发;</li>
+<li>多智能体架构处理并行探索能带来红利的复杂研究与分析。</li>
+</ul>
+<p>即便模型持续进步,在扩展的交互中维持连贯性仍将是构建更有效 Agent 的核心挑战。</p>
+<h2 id="_5">结论</h2>
+<p>上下文工程代表了我们构建 LLM 应用方式的根本转变。随着模型越来越强,挑战不再只是打磨完美的提示,而是深思熟虑地策展每一步进入模型有限注意力预算的信息。无论你是在为长时程任务实现压缩、设计 token 高效的工具,还是让 Agent 即时探索环境,指导原则始终如一:<strong>找到最大化期望结果可能性的最小高信号 token 集合</strong>。</p>
+<p>我们概述的这些技术会随模型进步而继续演进。我们已经看到,更聪明的模型需要更少的指令式工程,让 Agent 能以更多自主性运行。但即使能力不断扩展,把上下文当作珍贵而有限的资源对待,仍将是构建可靠、高效 Agent 的核心。</p>
+<p>从今天开始在 Claude 开发者平台实践上下文工程,并通过我们的记忆与上下文管理 cookbook 获取有用的技巧与最佳实践。</p>
+<h2 id="_6">致谢</h2>
+<p>由 Anthropic 应用 AI 团队撰写:Prithvi Rajasekaran、Ethan Dixon、Carly Ryan、Jeremy Hadfield,团队成员 Rafi Ayub、Hannah Moran、Cal Rueb、Connor Jennings 贡献。特别感谢 Molly Vorwerck、Stuart Ritchie 和 Maggie Vo 的支持。</p>
+<h2 id="_7">要点速览</h2>
+<ul>
+<li>上下文工程是提示工程的自然演进:从「写好一段指令」扩展到「策展推理时进入模型的全部 token」——系统提示、工具、MCP、外部数据、消息历史等。</li>
+<li>核心约束是上下文腐烂(context rot):token 越多,准确召回能力越差;transformer 的 n² 两两注意力与训练分布偏好短序列,使上下文成为边际收益递减的有限资源。</li>
+<li>黄金法则:找到最小的、高信号的 token 集合,以最大化期望行为出现的概率;最小不等于最短。</li>
+<li>系统提示要落在「合适高度」:避免硬编码 if-else 的脆弱逻辑,也避免过于模糊的指导;建议用 XML/Markdown 分区组织。</li>
+<li>工具是 Agent 与信息/行动空间的契约:应自包含、token 高效、功能重叠最小;臃肿且含糊的工具集是常见失败模式;示例要「多样而规范」而非罗列边缘案例。</li>
+<li>Agent 的简单定义:LLM 在循环中自主使用工具;「即时」上下文策略——用文件路径等轻量引用在运行时按需加载(Claude Code 用 head/tail、glob/grep 分析大数据而不整装入上下文)。</li>
+<li>混合策略往往最优:预先放入部分上下文(如 CLAUDE.md)保证速度,同时保留自主探索;决策边界取决于任务动态性。</li>
+<li>长时程三技术:压缩(总结后重启窗口,保留架构决策与未解决 bug,清理旧工具结果)、结构化笔记/智能体记忆(NOTES.md、待办清单、记忆工具,如 Claude 玩宝可梦跨数千步维持状态)、子智能体架构(子智能体消耗数万 token 但只返回 1,000–2,000 token 摘要)。</li>
+<li>即使模型与上下文窗口继续变大,污染与相关性问题仍会存在——把上下文当作珍贵有限资源将始终是构建可靠 Agent 的核心。</li>
+</ul>
+      </div>
+    </article>
+    <nav class="pager"><a class="pager-prev" href="Zaharia2024_Compound_AI_Systems_BAIR_blog.html"><span>上一篇</span>从模型到复合 AI 系统的转变</a><a class="pager-next" href="Schluntz2024_Building_Effective_Agents_Anthropic.html"><span>下一篇</span>构建高效的 AI Agent</a></nav>
+  </main>
+</div>
+<script src="../assets/site.js"></script>
+</body>
+</html>

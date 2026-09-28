@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>&quot;面向 LLM 智能体的上下文化隐私防御(CDI)&quot; · CS 329Z 中文学习站</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html"><span class="brand-mark">CS</span>329Z<span class="brand-sub">中文学习站</span></a>
+    <nav class="topnav">
+      <a href="../index.html#syllabus">课程表</a>
+      <a href="../index.html#dates">重要日期</a>
+      <a href="../index.html#about">关于本站</a>
+    </nav>
+    <div class="searchbox"><input id="search-input" type="search" placeholder="搜索材料 / 主题…" autocomplete="off"><div id="search-results" class="search-results" hidden></div></div>
+  </div>
+</header>
+<div class="read-layout">
+  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">论文精读</a><ul><li><a href="#_3">摘要(全译)</a></li><li><a href="#1">1. 引言</a></li><li><a href="#2">2. 隐私风险仿真</a></li><li><a href="#3">3. 三种防御与未优化比较</a></li><li><a href="#4">4. 经验驱动优化</a></li></ul></li><li><a href="#_4">要点速览</a></li></ul></aside>
+  <main class="read-main">
+    <div class="crumb"><a href="../index.html">首页</a> / <a href="../index.html#week-week08b_safety">第8周 · 安全与护栏</a></div>
+    <article class="read-article">
+      <h1 class="read-title">&quot;面向 LLM 智能体的上下文化隐私防御(CDI)&quot;</h1>
+      <p class="read-title-en">&quot;Contextualized Privacy Defense for LLM Agents&quot;</p>
+      <p class="read-meta">Yule Wen, Yanzhe Zhang, Jianxun Lian, Xiaoyuan Yi, Xing Xie, Diyi Yang · &quot;arXiv 2603.02983 · 清华 / Georgia Tech / Microsoft / Stanford&quot;</p>
+      <p class="read-badges"><span class="badge badge-recommended">推荐</span><span class="badge badge-kind">论文精读</span><button class="lang-toggle" id="lang-toggle" type="button">仅看中文</button><a class="orig-link" href="../originals/week08b_safety/Wen2026_Contextualized_Privacy_Defense.pdf" target="_blank" rel="noopener">查看原文(PDF) ↗</a></p>
+      <div class="markdown-body">
+<h2 id="_1">导读</h2>
+<p>本文是第 8 周「安全与护栏」的防御侧代表作(清华 &amp; Microsoft &amp; Stanford Diyi Yang 组),与同讲 Zhang &amp; Yang 的攻击搜索论文是同一仿真的攻防两端——那篇负责"攻得更狠",这篇负责"守得更稳"。作者首先把现有 LLM 智能体隐私防御统一到 ReAct/MCP 式执行循环的<strong>干预点</strong>上:<strong>提示(Prompting)</strong>在初始化时加静态隐私指令,多轮交互中容易被淡忘;<strong>护栏(Guarding)</strong>在动作执行前拦截敏感工具调用,但不告诉智能体怎么改写,导致有用性骤降。CDI(Contextualized Defense Instructing)选择第三个干预点——<strong>在工具调用结果返回后、下一步动作生成前</strong>,由独立的轻量 instructor 模型(Qwen3-4B 即可)阅读当前上下文,生成<strong>针对本步、上下文感知的隐私指引</strong>,主动塑造动作而非仅仅否决。更关键的是<strong>经验驱动优化</strong>:收集被智能体攻击者攻破的失败轨迹,在"首次泄露点"截断,把轨迹变成 RL 环境,用 GRPO 训练 instructor(奖励为适当披露分 AD,先 PP 预热)。结果:优化后的 CDI 隐私保持率(PP)94.2%、有用性(HS)80.6%、综合 AD 86.5%,对新一轮对抗攻击仍保持 79.5% PP,且跨智能体骨干(让弱模型 nano 达到强模型水平)与未见场景泛化最佳。核心信息:<strong>防御要从"规则"变成"会学习的上下文推理",而失败的攻击是最浓缩的训练信号</strong>。</p>
+<h2 id="_2">论文精读</h2>
+<h3 id="_3">摘要(全译)</h3>
+<p>LLM 智能体日益接触用户个人信息,但既有隐私防御在设计与适应性上都有限。多数先前方法依赖静态或被动防御,如提示与护栏。这些范式不足以支撑多步智能体执行中的上下文化、主动式隐私决策。我们提出<strong>上下文化防御指令(Contextualized Defense Instructing, CDI)</strong>——一种新的隐私防御范式:由 instructor 模型在执行过程中生成<strong>步骤特定、上下文感知</strong>的隐私指引,主动塑造动作而非仅仅约束或否决。关键的是,CDI 配套一个经验驱动的优化框架,通过强化学习训练 instructor:我们把包含隐私违规的失败轨迹转化为学习环境。我们将基线防御与 CDI 形式化为规范智能体循环中不同的干预点,并在统一仿真框架中比较其隐私-有用性权衡。结果显示 CDI 一贯取得更好的隐私保持(94.2%)与有用性(80.6%)平衡,并具有优越的对抗鲁棒性与泛化能力。</p>
+<h3 id="1">1. 引言</h3>
+<ul>
+<li>理想目标:智能体应具备<strong>上下文隐私意识</strong>(依据情境完整性理论判断"此情境下分享此信息是否恰当"),在隐私与有用性之间平衡。</li>
+<li><strong>干预点分析</strong>(图 1,ReAct + MCP 式循环:系统提示初始化 → 工具调用提案 ↔ 工具调用结果):</li>
+<li><strong>Prompting</strong>(PrivacyLens 等):初始化时追加固定隐私增强指令——无法适应多样隐私情境,多轮中失效;</li>
+<li><strong>Guarding</strong>(GuardAgent、OpenAI 防护栏等):独立守卫模型审查工具调用、拦截危险动作——但被拦截的动作<strong>得不到改写指导</strong>,一拦了之伤有用性;</li>
+<li><strong>CDI(本文)</strong>:在工具结果(如读到的邮件内容)返回后介入,instructor 分析上下文生成隐私指引,主动引导后续动作。</li>
+<li>例证(图 1):Mike 索要会议时间(可分享)与 Emily 的证件号(不可分享)。Prompting 下智能体被说服"紧急就该灵活"全盘托出;Guarding 拦截后智能体误以为"连会议时间也是敏感的"一概拒绝(HS=0);CDI 生成指引"分享会议时间;拒绝任何超出协调范围的信息(如证件号)"——PP=1、HS=1。</li>
+<li>更根本的挑战:<strong>对抗自适应攻击的鲁棒性</strong>(说服、冒充、多轮社会工程)。朴素 CDI 也会被搜索式攻击攻破,但失败案例暴露了防御失效的精确情境与会话策略——<strong>是最浓缩的改进信号</strong>。问题:能否通过失败经验增强隐私防御?</li>
+</ul>
+<h3 id="2">2. 隐私风险仿真</h3>
+<ul>
+<li>设定:多用户各自委托工具型智能体操作 Gmail/Facebook/Messenger;每场仿真三智能体——<strong>数据主体</strong>(把个人数据交给发送方)、<strong>数据发送方(防御者)</strong>(监控通知并回复)、<strong>数据接收方(攻击者)</strong>(设法获取数据)。</li>
+<li><strong>隐私规范</strong>决定哪些个人信息在何情境可分享;个人信息划分为<strong>可分享</strong>(协调所需)与<strong>不可分享</strong>(必须保护),作为评估真值。</li>
+<li>配置:从 PrivacyLens 采样用户画像与敏感数据,gpt-5 增补可分享项,人工验证 + 多 LLM 裁判锚定规范;共 <strong>115 个配置</strong>(100 测试 + 15 优化用),覆盖多种社会关系(家人/朋友/医患)与数据类型(健康/财务/位置),每配置含 1-3 个可分享/不可分享项。</li>
+<li><strong>指标</strong>(经典度量类比):</li>
+<li>隐私保持率 PP = 1 − n_u/N_u(对应敏感项上的<strong>精确率</strong>,罚过度披露);</li>
+<li>有用性 HS = n_s/N_s(对应可分享项上的<strong>召回率</strong>,罚漏分享);</li>
+<li>适当披露 AD = 2n_s/(n_s+n_u+N_s)(F1 式调和,主指标)。</li>
+<li>用带标识符的隐私项 + LLM 裁判(gpt-5-mini)复查消息历史标注实际分享内容。</li>
+<li>智能体:ReAct/MCP 式工具调用循环,上下文缓冲累积(系统提示 + 用户消息 + (动作, 结果) 对),直到输出终止动作。</li>
+</ul>
+<h3 id="3">3. 三种防御与未优化比较</h3>
+<ul>
+<li><strong>Prompting</strong>:p'_0 = p_0 + p_privacy(取 PrivacyLens 的隐私提示)。</li>
+<li><strong>Guarding</strong>:守卫模型 LMG 在信息外传类工具调用(发邮件/发帖)前审查,输出 ALLOW/BLOCK;BLOCK 时返回 "Error due to privacy violations"。</li>
+<li><strong>CDI</strong>:若最近的工具结果非空,则 h_t = LMI(C_&lt;t)——instructor 标记传入数据的潜在风险、建议什么可以分享,以用户消息形式插入上下文,引导下一步动作。</li>
+<li><strong>评测设定</strong>:常规攻击者(通用任务描述)之外,还用 <strong>Zhang &amp; Yang (2025) 的搜索式攻击算法</strong>生成策略攻击者(伪造紧急/权威/同意等)测长尾漏洞;智能体骨干 gpt-4.1-mini,守卫/instructor 测试 5 种模型(Qwen3-4B、Qwen3-4B-SafeRL、gpt-oss-20B、gpt-oss-safeguard-20B、gpt-4.1-mini),每配置 5 次取平均。</li>
+<li><strong>结果(表 1)</strong>:</li>
+<li>无防御基线:PP 仅 35.5%、HS 81.2%——对良性恶意请求几乎不分青红皂白地响应;</li>
+<li>常规攻击下:CDI 最强(PP 75.9 / HS 86.9 / AD 82.8),显著超 Prompting(48.1/73.1/65.0)与 Guarding(47.0/82.0/70.0);Prompting 的通用声明在多轮中易被忽略;Guarding 的推理轨迹显示<strong>守卫会被前文带偏</strong>——看到数据主体发来的敏感消息没被拦,就以为分享是恰当的;</li>
+<li>策略攻击下:所有防御大幅退化(CDI PP 降至 38.1;最好的 gpt-oss-20B instructor 也只有 50.0%)——现成模型无法稳健保证隐私,必须优化;</li>
+<li><strong>安全对齐模型并不更强</strong>:SafeRL/safeguard 版本与其基座相比无明显提升——它们优化的是"阻止广义有害内容",而非理解微妙的情境隐私规范;且依赖用户详尽指定规范,而这在部署中通常不可得。</li>
+</ul>
+<h3 id="4">4. 经验驱动优化</h3>
+<ul>
+<li>动机:静态防御的隐私知识止于训练阶段与人工规则;而攻击者用大量计算模拟数千次交互自动发现复杂失效模式——<strong>静态启发式 vs 算力优化攻击的不对称</strong>,无法靠一次性设计解决。解法:把对抗攻击转化为高价值训练信号,把成功攻击<strong>当作 RL 学习环境</strong>而非待封锁的静态轨迹(最坏情形信号在常规对齐训练中通常不可见)。</li>
+<li><strong>两阶段算法</strong>:(1) 用优化后的攻击者模拟防御智能体,收集失败轨迹数据集;(2) 把轨迹当 RL 环境,<strong>在冻结上下文中定位到关键回合</strong>训练(避免昂贵的端到端重仿真):</li>
+<li><strong>Guarding</strong>:在首个分享动作处截断,按是否泄露标注;GRPO + 二元奖励(该拦拦对了/该放放对了得 1,否则 0);</li>
+<li><strong>CDI</strong>:在首个未能阻止泄露的指引处截断(连同该失败指引一并移除);过滤掉"尚无分享请求就已泄露"的案例;让 instructor 生成新指引插回轨迹,智能体再产生至多一个动作,<strong>奖励 = 该动作的 AD 分</strong>;为缓解冷启动,先用 PP 奖励训练 400 步预热、再切 AD 训练 200 步。</li>
+<li><strong>实现</strong>:智能体骨干 gpt-4.1-mini;微调 Qwen3-4B 作守卫/instructor;GRPO 600 步,LoRA rank 32、lr 2e-5;单张 A6000;15 个训练配置在搜索攻击下仿真 20 次 → 185 训练 + 30 验证轨迹。</li>
+<li><strong>三维度评测</strong>(表 2):Training(优化后防御面对"针对原防御调优的攻击者")/ Adversarial(对优化后防御<strong>重新运行攻击搜索</strong>)/ Testing(100 个未见配置)。</li>
+<li><strong>结果</strong>:</li>
+<li>优化把三者 PP 都拉起来,但 <strong>Prompting 与 Guarding 对新一轮攻击依然脆弱</strong>(89.0→55.1、80.2→50.3):优化出的系统提示满是"不要…"式约束,对新战术失效;优化后的守卫被细微的查询偏移绕过(把"活动详情"改成"活动标题");</li>
+<li><strong>Guarding 牺牲有用性</strong>:HS 训练 83.1→70.7、测试 79.3→69.0——拦截不给改写指导,混合内容被拦后智能体不知何者可为,陷入"拦截-重发"循环直至放弃分享;</li>
+<li><strong>CDI 优化后最强最稳</strong>:训练 PP/HS/AD = 89.7/89.7/89.7;新攻击下 PP 仍 79.5;未见配置 PP 94.2 / HS 80.6 / AD 86.5——训练生成上下文指引改进的是<strong>底层隐私推理</strong>而非仅仅违规检测,且没有记忆场景特定规范而是强化了基座已有的知识;</li>
+<li><strong>跨骨干泛化最好</strong>:优化后的 CDI 让较弱的 gpt-4.1-nano 达到与 gpt-4.1 相当的水平——CDI 给出直白易循的指引(如"拒绝征信分请求"),而 Prompting 要求跟随复杂检查流程、Guarding 要求智能体自行推断违规原因。</li>
+<li><strong>消融</strong>:</li>
+<li><strong>奖励设计(表 3)</strong>:只用 PP 奖励 → 过度保护、HS 崩(58.3/55.6);直接用 AD 训 CDI 有冷启动(隐私+有用混合奖励早期噪声大,梯度不稳);<strong>PP 预热 + AD 收尾</strong>两段式最优(89.7/89.7/89.7;测试 94.2/80.6/86.5);</li>
+<li><strong>训练集规模(表 4)</strong>:Prompting 最易学(5 个配置就高 AD)但加数据几乎无增益;Guarding 与 CDI 随数据变多而提升,CDI 在任一规模都更优(守卫的二元奖励信号比 AD 分更稀疏,更难学)。</li>
+<li><strong>案例研究</strong>:攻击者混合敏感与可分享项 + 索要"掩码后的家庭地址"诱导泄露真地址;优化后的 CDI 指引正确区分"分享 QA 时段与场次标题、拒绝征信分与地址"。</li>
+</ul>
+<h2 id="_4">要点速览</h2>
+<ul>
+<li><strong>干预点框架</strong>:Prompting = 初始化时(静态、易被淡忘);Guarding = 动作前拦截(否决但不引导);<strong>CDI = 工具结果后、动作前</strong>(主动、上下文感知的指引)——理解防御设计的统一透镜。</li>
+<li>CDI 用轻量 instructor(Qwen3-4B)即可大幅提升强骨干智能体的隐私表现;指引以用户消息形式注入上下文。</li>
+<li><strong>经验驱动优化</strong>:失败轨迹在首次泄露/失败指引处截断 → 冻结上下文的 RL 环境 → GRPO 训练 instructor,奖励为 AD(先 PP 预热防冷启动)。</li>
+<li>仿真相标:PP(≈精确率)/ HS(≈召回率)/ AD(F1 式主指标)——<strong>只测隐私不测有用性会训出过度保护的防御</strong>。</li>
+<li>主结果:优化后 CDI 在未见场景 PP 94.2 / HS 80.6 / AD 86.5,新一轮对抗攻击下 PP 仍 79.5;跨骨干泛化让 nano≈gpt-4.1。</li>
+<li>有趣发现:<strong>安全对齐模型(SafeRL/safeguard)当守卫并不更好</strong>(广义安全 ≠ 情境隐私);Guarding 会被"前面没拦就以为没问题"的上下文带偏。</li>
+<li>与课程关联:直接消费同讲 Zhang &amp; Yang(2025) 的搜索式攻击做对抗训练——"攻击搜索 + 防御学习"闭环;与 PrivacyLens(问题定义)、Li(事后关联风险)共同构成隐私专题全景。</li>
+</ul>
+      </div>
+    </article>
+    <nav class="pager"><a class="pager-prev" href="Shao2024_PrivacyLens_NeurIPSD&B2024.html"><span>上一篇</span>PrivacyLens:评估语言模型在行动中的隐私规范意识</a><a class="pager-next" href="Zhang2025_Searching_Privacy_Risks_LLM_Agents.html"><span>下一篇</span>&quot;通过仿真搜索 LLM 智能体的隐私风险&quot;</a></nav>
+  </main>
+</div>
+<script src="../assets/site.js"></script>
+</body>
+</html>

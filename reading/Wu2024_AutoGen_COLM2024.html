@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>&quot;AutoGen:以多智能体对话构建下一代 LLM 应用&quot; · CS 329Z 中文学习站</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html"><span class="brand-mark">CS</span>329Z<span class="brand-sub">中文学习站</span></a>
+    <nav class="topnav">
+      <a href="../index.html#syllabus">课程表</a>
+      <a href="../index.html#dates">重要日期</a>
+      <a href="../index.html#about">关于本站</a>
+    </nav>
+    <div class="searchbox"><input id="search-input" type="search" placeholder="搜索材料 / 主题…" autocomplete="off"><div id="search-results" class="search-results" hidden></div></div>
+  </div>
+</header>
+<div class="read-layout">
+  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">论文精读</a><ul><li><a href="#_3">摘要(全译)</a></li><li><a href="#1">1. 引言</a></li><li><a href="#2-autogen">2. AutoGen 框架</a></li><li><a href="#3">3. 六个应用</a></li><li><a href="#4">4. 讨论</a></li></ul></li><li><a href="#_4">要点速览</a></li></ul></aside>
+  <main class="read-main">
+    <div class="crumb"><a href="../index.html">首页</a> / <a href="../index.html#week-week05a_multi_agent">第5周 · 多智能体系统</a></div>
+    <article class="read-article">
+      <h1 class="read-title">&quot;AutoGen:以多智能体对话构建下一代 LLM 应用&quot;</h1>
+      <p class="read-title-en">&quot;AutoGen: Enabling Next-Gen LLM Applications via Multi-Agent Conversation&quot;</p>
+      <p class="read-meta">Qingyun Wu, Gagan Bansal, Jieyu Zhang, et al. · &quot;COLM 2024 · Microsoft Research / Penn State 等&quot;</p>
+      <p class="read-badges"><span class="badge badge-recommended">推荐</span><span class="badge badge-kind">论文精读</span><button class="lang-toggle" id="lang-toggle" type="button">仅看中文</button><a class="orig-link" href="../originals/week05a_multi_agent/Wu2024_AutoGen_COLM2024.pdf" target="_blank" rel="noopener">查看原文(PDF) ↗</a></p>
+      <div class="markdown-body">
+<h2 id="_1">导读</h2>
+<p>本文是第 5 周「多智能体系统」一讲的框架代表作(COLM 2024,微软研究院)。在 LangChain 式链式编排之外,AutoGen 提出用<strong>多智能体对话</strong>作为构建 LLM 应用的统一抽象:任何复杂工作流都被简化为一组可以互相收发消息的智能体。两个核心概念:①<strong>可对话智能体(conversable agent)</strong>——统一的消息收发/回复接口,后端可以是 LLM、人类、工具或三者的任意组合,由此派生出 AssistantAgent、UserProxyAgent 等预置角色;②<strong>对话编程(conversation programming)</strong>——用自然语言与编程语言混合控制"以对话为中心的计算"与"由对话驱动的控制流",auto-reply 机制让会话一旦初始化就自然推进、无需中央控制平面。论文用六个应用(数学解题、RAG 问答、ALFWorld 决策、带安全护栏的编码、动态群聊、对话式国际象棋)证明:开箱即用的两智能体组合在 MATH 上超过 ChatGPT+Code Interpreter 等商业方案,多智能体抽象在安全编码上带来 8-35% 的 F1 提升,OptiGuide 核心代码从 430 行减到 100 行。它与同讲《Why Do Multi-Agent LLM Systems Fail?》互为表里:一个给锤子,一个告诉你钉子在哪里。</p>
+<h2 id="_2">论文精读</h2>
+<h3 id="_3">摘要(全译)</h3>
+<p>AutoGen 是一个开源框架,允许开发者通过多个可相互对话以完成任务的智能体来构建 LLM 应用。AutoGen 智能体可定制、可对话,并能以组合 LLM、人类输入与工具的多种模式运行。使用 AutoGen,开发者还可以灵活定义智能体交互行为:自然语言与计算机代码都可用于为不同应用编程灵活的对话模式。AutoGen 是构建各种复杂度、各种 LLM 能力之应用的通用框架。实证研究在许多示例应用上展示了框架的有效性,领域涵盖数学、编码、问答、运筹、在线决策与娱乐等。</p>
+<h3 id="1">1. 引言</h3>
+<ul>
+<li>直觉:任务复杂度上升时,扩展智能体能力的直观路径是<strong>多智能体协作</strong>——已有证据表明多智能体可促进发散思维、提高事实性与推理质量、提供验证。</li>
+<li>三个可行性观察:(1) 聊天优化的 LLM(如 GPT-4)能吸收反馈,智能体可通过对话提供/寻求推理、观察、批评与验证;(2) 单个 LLM 配置不同提示与推理设置即可展现广谱能力,不同配置的智能体对话能以模块化、互补的方式组合这些能力;(3) LLM 擅长把复杂任务拆成简单子任务,多智能体对话天然支持这种拆分与整合。</li>
+<li>两个关键设计问题:(1) 如何设计<strong>有能力、可复用、可定制</strong>且适合多智能体协作的个体智能体?(2) 如何提供<strong>简明统一的接口</strong>容纳广泛的对话模式(单/多轮、不同人类介入模式、静态/动态会话),并允许开发者用自然语言或代码编程智能体交互?</li>
+</ul>
+<h3 id="2-autogen">2. AutoGen 框架</h3>
+<p><strong>2.1 可对话智能体</strong>:有特定角色、能向其他智能体收发消息的实体;基于收发消息维护内部上下文;能力可配置:</p>
+<ul>
+<li><strong>LLM 后端</strong>:角色扮演、基于会话历史的隐式状态推断与推进、提供/吸收反馈、编码;可通过提示技术组合增强;增强的推理层提供结果缓存、错误处理、消息模板等。</li>
+<li><strong>人类后端</strong>:human-backed 智能体在指定轮次征求人类输入;默认的 UserProxyAgent 支持可配置的介入级别与模式(频率、条件、可跳过)。</li>
+<li><strong>工具后端</strong>:通过代码执行或函数调用执行工具;默认 UserProxyAgent 可执行 LLM 建议的代码或函数调用。</li>
+<li><strong>定制与协作</strong>:ConversableAgent 是最高层抽象(默认 LLM+人+工具);AssistantAgent(LLM 助手)与 UserProxyAgent(人类代理/执行器)是两个预置子类。经典组合:助手生成方案→用户代理征求人类意见或执行代码→结果作为反馈回传。</li>
+</ul>
+<p><strong>2.2 对话编程</strong>:两个概念——<strong>计算</strong>(智能体在对话中生成回复的动作)与<strong>控制流</strong>(这些计算发生的顺序/条件),都以对话为中心:
+- <strong>统一接口 + auto-reply 机制</strong>:每个智能体实现 send/receive/generate_reply;收到消息即自动调用 generate_reply 并把回复发回发送者(除非满足终止条件)。内置基于 LLM 推理、代码/函数执行、人类输入的回复函数,也可注册自定义回复函数。<strong>一旦注册好回复函数并初始化会话,对话流被自然诱导,无需任何额外控制平面</strong>——去中心化、模块化、统一的工作流定义方式。
+- <strong>自然语言与编程语言融合控制</strong>:(1) 自然语言控制——用提示词指挥 LLM 智能体(如默认系统消息让助手在出错时修复并重生成代码;任务完成时回复 "TERMINATE" 终止程序);(2) 编程语言控制——用 Python 指定终止条件、人类输入模式、工具执行逻辑、最大自动回复数;(3) 两者间可切换——自定义回复函数内调 LLM 实现码→自然语言转移,LLM 发起函数调用实现自然语言→码转移。
+- <strong>动态会话流</strong>:两种通用方式——自定义 generate_reply(当前会话挂起、按内容与上下文发起与其他智能体的会话)与函数调用(LLM 按对话状态决定是否调用某函数、在函数里给其他智能体发消息);更复杂的动态群聊由内置 <strong>GroupChatManager</strong> 支持(动态选下一个发言者并广播)。</p>
+<h3 id="3">3. 六个应用</h3>
+<ul>
+<li><strong>A1 数学解题</strong>:直接复用两个内置智能体即可在 MATH 数据集(120 道 level-5 难题)上达到 52.5% 成功率,<strong>开箱即用超过</strong> Multi-Agent Debate(30.0%)、LangChain ReAct(26.67%)、原生 GPT-4(48.33%)、ChatGPT+Code Interpreter(45.0%)与 ChatGPT+Wolfram 插件(23.33%);全数据集上 69.48% 同样领先。场景 2/3 展示 human-in-the-loop(只需设 human_input_mode='ALWAYS')与多人类参与。</li>
+<li><strong>A2 检索增强问答/代码生成</strong>:Retrieval-augmented Chat = 检索增强版双智能体(Chroma 向量库 + SentenceTransformers)。利用对话式设计实现<strong>交互式检索</strong>:检索上下文不含所需信息时,助手回复 "UPDATE CONTEXT" 触发更多检索而非终止;消融显示该机制贡献显著(NQ 上 F1/Recall 25.88%/66.65% vs 无交互检索 15.12%/58.56%,对比 DPR 22.79%/62.59%)。另演示基于私有代码库的代码生成。</li>
+<li><strong>A3 文本世界决策(ALFWorld)</strong>:助手(提议计划)+ 执行器两智能体集成 ReAct 提示,性能相当;针对"缺乏物理常识导致错误循环"的共性痛点,模块化地加一个 <strong>grounding agent</strong>,在出现重复错误迹象时注入常识(如"必须先找到并拿起物体才能检查它"),平均带来 <strong>15%</strong> 性能提升(三智能体 69%/77% vs 两智能体 54%/63%,对比 ReAct 54%/66%)。</li>
+<li><strong>A4 多智能体编码(OptiGuide)</strong>:Commander 协调 Writer(写代码)与 Safeguard(安全审查)——通过检查才执行、异常带着调试信息回炉。<strong>核心工作流代码从 430+ 行减至 100 行</strong>;用户时间节省约 3 倍、交互减少 3-5 倍。消融:单智能体同时担任写码与护栏,F1(识别不安全代码)低 8%(GPT-4)/35%(GPT-3.5)——多智能体抽象不仅是便利,更是性能必需。</li>
+<li><strong>A5 动态群聊</strong>:GroupChatManager 循环三步——动态选发言者(角色扮演式提示比纯任务提示更有效:更考虑上下文与角色对齐,成功率更高、LLM 调用更少)、收集回复、广播。12 个手工复杂任务的试点研究支持该设计。</li>
+<li><strong>A6 对话式国际象棋</strong>:玩家智能体(人/AI 可混、可中途切换)+ 第三方棋盘智能体(按规则验证走法);去掉棋盘智能体只靠提示词"请确保双方走法合法"时,非法走法会破坏游戏——再次印证<strong>用专门智能体做 grounding</strong> 的价值。</li>
+</ul>
+<h3 id="4">4. 讨论</h3>
+<ul>
+<li>收益汇总:超过 SOTA 的性能、更少的开发代码(430→100 行)、更低的人工负担;支持动态模式与人类自然地加入多智能体会话。</li>
+<li>模块化红利:任务拆分给独立智能体,各智能体可分别开发、测试、维护,简化整体开发与代码管理。</li>
+</ul>
+<h2 id="_4">要点速览</h2>
+<ul>
+<li>两大抽象:<strong>可对话智能体</strong>(send/receive/generate_reply 统一接口,LLM/人/工具混合后端)+ <strong>对话编程</strong>(计算对话中心化、控制流对话驱动)。</li>
+<li><strong>auto-reply 机制</strong>是关键工程:注册好回复函数后,会话自动推进,无需中央控制平面——工作流即对话。</li>
+<li>控制流三态:自然语言(提示词)、编程语言(Python)、以及通过函数调用/自定义回复函数在两者间切换;动态会话靠自定义 generate_reply 或函数调用实现。</li>
+<li>实证亮点:MATH 上开箱即用超商业方案(52.5% vs ChatGPT+Code Interpreter 45.0%);交互式检索 +11 F1;grounding agent +15%;安全护栏拆分独立智能体 +8~35% F1;OptiGuide 代码 430→100 行。</li>
+<li>设计哲学:与其为每种工作流写专门编排,不如提供"对话"这一个原语,让工作流在对话中涌现。</li>
+<li>与课程关联:是"多智能体框架侧"的代表;读完后应接着读同讲《Why Do Multi-Agent LLM Systems Fail?》(失败分类学)与 Neubig 博客(单智能体辩护),形成完整判断;GroupChatManager 的动态发言者选择与 DyLAN 的动态团队构成互为参照。</li>
+</ul>
+      </div>
+    </article>
+    <nav class="pager"><a class="pager-prev" href="Neubig2024_Dont_Sleep_On_Single_Agent_Systems.html"><span>上一篇</span>别忽视单智能体系统</a><a class="pager-next" href="Agrawal2026_GEPA.html"><span>下一篇</span>&quot;GEPA:反思式提示进化可以胜过强化学习&quot;</a></nav>
+  </main>
+</div>
+<script src="../assets/site.js"></script>
+</body>
+</html>

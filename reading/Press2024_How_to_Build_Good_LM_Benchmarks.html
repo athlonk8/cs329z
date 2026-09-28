@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>&quot;如何构建好的语言建模基准&quot; · CS 329Z 中文学习站</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html"><span class="brand-mark">CS</span>329Z<span class="brand-sub">中文学习站</span></a>
+    <nav class="topnav">
+      <a href="../index.html#syllabus">课程表</a>
+      <a href="../index.html#dates">重要日期</a>
+      <a href="../index.html#about">关于本站</a>
+    </nav>
+    <div class="searchbox"><input id="search-input" type="search" placeholder="搜索材料 / 主题…" autocomplete="off"><div id="search-results" class="search-results" hidden></div></div>
+  </div>
+</header>
+<div class="read-layout">
+  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">全文中译</a><ul><li><a href="#_3">如何构建好的语言建模基准</a></li><li><a href="#1-natural">1. 自然(Natural)</a></li><li><a href="#2-automatically-evaluateable">2. 可自动评测(Automatically Evaluateable)</a></li><li><a href="#3-challenging">3. 有挑战(Challenging)</a></li><li><a href="#bonus-property">加分性质(Bonus Property)</a></li><li><a href="#_4">其他准则</a></li><li><a href="#concluding-thoughts">结语(Concluding Thoughts)</a></li></ul></li><li><a href="#_5">要点速览</a></li></ul></aside>
+  <main class="read-main">
+    <div class="crumb"><a href="../index.html">首页</a> / <a href="../index.html#week-week07b_evaluation">第7周 · 评测基础</a></div>
+    <article class="read-article">
+      <h1 class="read-title">&quot;如何构建好的语言建模基准&quot;</h1>
+      <p class="read-title-en">&quot;How to Build Good Language Modeling Benchmarks&quot;</p>
+      <p class="read-meta">&quot;Ofir Press&quot; · &quot;Blog · Ofir Press (Princeton), 2024-08-07&quot;</p>
+      <p class="read-badges"><span class="badge badge-recommended">推荐</span><span class="badge badge-kind">全文中译</span><button class="lang-toggle" id="lang-toggle" type="button">仅看中文</button><a class="orig-link" href="../originals/week07b_evaluation/Press2024_How_to_Build_Good_LM_Benchmarks.html" target="_blank" rel="noopener">查看原文(HTML) ↗</a></p>
+      <div class="markdown-body">
+<h2 id="_1">导读</h2>
+<p>本文是第 7 周「评测基础」单元的入门读物,作者 Ofir Press 是 SWE-bench、SWE-agent、SciCode、Bamboogle 等知名基准的缔造者之一(Princeton)。这篇 2024 年 8 月撰写、此后三次增补(2025 年 1 月、2025 年 5 月、2026 年 6 月)的博客,把他多年「既造基准、又刷基准」的经验浓缩为三条核心性质——<strong>自然(Natural)、可自动评测(Automatically Evaluateable)、有挑战(Challenging)</strong>——外加防训练数据泄漏的加分项与若干实操准则(单一指标、强基线、150–500 个任务等)。</p>
+<p>它的价值在于视角:基准不是论文附属品,而是「把 AI 前沿向前推」的第一驱动力。文中三次改口的「发射时准确率建议」(1%–35% → 0.1%–9% → 负 200%)生动记录了模型能力的爆炸式迭代速度,也预告了本单元后续论文(tinyBenchmarks 的评测成本问题、《Rigorous Agentic Benchmarks》指出的基准缺陷)所回应的时代背景。课程将其置于评测单元首位,正是为给「什么是好评测」树立作者视角的直觉标准。</p>
+<h2 id="_2">全文中译</h2>
+<h3 id="_3">如何构建好的语言建模基准</h3>
+<p>构建基准(benchmark)之所以重要,是因为它们像聚光灯一样照亮现有语言模型的弱点,从而指引整个社区如何改进模型。</p>
+<p>我的职业生涯中有大量时间既花在构建基准上,也花在构建能在某个基准上推进最先进水平的系统上。我相信,构建好的基准与构建新系统<strong>同样重要</strong>。</p>
+<p>设计一个好基准很有挑战性,我最近花了很多时间思考什么成就一个好基准。我把它归结为三条主要性质:</p>
+<h3 id="1-natural">1. 自然(Natural)</h3>
+<p>尽量构建这样的基准:它的问题应贴近某类人群日常频繁提出的真实问题。例如,我们的 SWE-bench 中的问题由真实用户在热门 GitHub 仓库里报告的<strong>真实</strong> bug 组成,任务是拿到报告的 bug 与仓库(以 bug 报告时的状态),尝试修复它。这是很多人每天都在做(甚至能领薪水)的非常自然的任务。我们最近转化为基准的其他自然任务还包括回答这样的问题:「我家附近哪家瑜伽馆在工作日早 8 点前有 vinyasa(流瑜伽)课?」(见 AssistantBench),以及「哪篇论文最先表明 Transformer 语言模型无法外推到长序列?」(见 CiteME)。</p>
+<p>有时我会看到不满足「自然性」标准的新基准发布,它们往往很难让社区兴奋起来。我觉得那些包含智商测试式题目、需要你在图形中识别规律的基准就不太令人兴奋。还有任何「常识」类基准,比如「Bob 朝 Alice 的脸扔了一个鸡蛋。Alice 是开心、难过还是无所谓?」这类基准在过去、当我们的 LM 还在基本任务上挣扎时,也许有点意思;但如今语言模型越来越强,我们需要用更难、更真实的任务来挑战它们。</p>
+<p>判断一个基准是否满足自然性,另一个角度是检验它是否满足我所说的<strong>有用性(usefulness)标准</strong>:一个在该基准上超过基线准确率的系统,对人类有用吗?能让任何人更高效吗?一个能自主修 bug 的系统哪怕只修得了最简单的 10% 的 bug,也能为开发者省下大量时间。一个能快速帮我找到符合需求的瑜伽课的系统,能为我省时间。</p>
+<p>我还注意到,基准「不自然」有两个简单的信号,我因此尽量避开具有这两种性质的基准:</p>
+<p><strong>A. 题目设定不现实</strong>:例如,基准若包含选择题,我认为就不自然。我去看医生时,从不会说:「医生医生,我的胳膊肘疼,而且它肯定是由这<strong>四</strong>个选项之一引起的……」请始终审视你的题目设定,一旦显得不现实,就动手修改。</p>
+<p><strong>B. 问题是编造的,而非取自真实人类提出的真实问题</strong>:如果你在 Google 工作,被安排构建一个有挑战的问答基准,一个很糟糕的做法是独自坐在房间里苦想问题。你大概率会想出一些真实用户永远不会问的奇怪问题。聪明的做法是查看 Google 搜索日志,过滤出用户输入过、却没有找到好答案的问题(例如,可以以用户翻到搜索结果第二页、或在首页停留超过五分钟为信号)。</p>
+<p>SWE-bench 包含真实用户在真实 GitHub 仓库里提交的真实 bug 报告。我认为这让该基准对社区更有吸引力。使用真实用户提出的问题意味着:构建在该基准上得高分的系统,就是在满足一种真实世界的需求。</p>
+<h3 id="2-automatically-evaluateable">2. 可自动评测(Automatically Evaluateable)</h3>
+<p>在基准中,给定模型对某问题生成的答案,我们需要判定模型答对还是答错。有时这很容易,但取决于问题类型,这也可能很难甚至不可能。验证代码的正确性就很有挑战,因为同一函数有许多不同写法——这正是 HumanEval 和 SWE-bench 这类基准用单元测试来自动验证代码的原因。</p>
+<p>摘要是我认为对人类可能非常有用的任务(「为这份病历写一份 500 词的摘要」),但这一领域的新基准寥寥,因为评测实在太难。正确总结一段文本的方式有很多种,而评估这些摘要很难。有人提议用 LM 来评估 LM 的输出,但我不认为那是正确的方向。我们要么让 LM 当解题者,要么让它当裁判;如果让它同时担任两者,就会出问题。</p>
+<h3 id="3-challenging">3. 有挑战(Challenging)</h3>
+<p>如果你发布了一个可自动评测且自然的基准,但发布时最好 LM 的准确率已达 80%,大家会觉得你的基准<strong>已被解决</strong>,不会想为它构建新模型。我认为让基准有挑战至关重要。我认为发布之时,好基准上顶级 LM 的准确率应在 1% 到 35% 之间。</p>
+<p><strong>2025 年 1 月补记</strong>:由于如今 LM 发展极快,我目前建议基准构建者以顶级准确率在 0.1% 到 9% 之间为目标发布。再高很可能意味着基准太容易了。</p>
+<p><strong>2025 年 5 月补记</strong>:我不得不再改一次。由于 AI 发展的速度,我现在要求合作者不要去想「发布时 AI 系统得 0%」的基准,而是想「发布时得 -200%」的基准。去找那些难到即使模型能力提升 3 倍也仍然全错的问题。只构建一个今天模型得 0% 的基准可能已经不够了。你必须观察模型过去 3–6 个月的进步方式,预测它们 6–12 个月后会到什么水平,构建不仅让当前模型失败、也让明年模型失败的基准。比这更容易的基准,饱和速度可能远超你的预期。</p>
+<p>如果你找到了一个基准点子并做了出来,它自然、可自动评测,但你跑了一个基线、得了 70% 的正确率,这时可以考虑的一件事是:<strong>用该基线过滤掉基准中较容易的实例</strong>。例如,我们的 Bamboogle 基准包含难以回答的二跳问题,我们构建数据集时过滤掉了所有 Google 搜索能答对的问题;CiteME 则过滤掉了所有 GPT-4o 在纯提示(即非 Agent)设定下能答对的问题。我认为「寻找强现有方法解决不了的任务」是构建基准的绝佳路径。</p>
+<p><strong>2026 年 6 月补记</strong>:如果你从某个特定领域收集基准任务,却发现自己需要过滤掉部分实例才能让基准变难,那么你面对的任务分布是整体太容易了。当然,你现在可以过滤掉一些较易实例,但这只是权宜之计。你的整体任务分布太容易了,你或许应该转向从一个完全不同的、难得多的领域收集任务。</p>
+<p><strong>当心——研究者也是人,人有情绪。</strong>发布时若顶级模型准确率不足 10%,对多数研究者可能显得非常吓人,他们可能根本不想碰你的基准。要为此做好规划。例如,我们发布 SWE-bench 时,顶级模型的准确率是 1.96%。当时我交谈过的几乎所有人都被吓退了,不想碰它。我并不担心,因为我们发布 SWE-bench 后立刻开始做 SWE-agent。我记得我跟团队说,只要我们能接近 10% 的准确率,社区就会看到 SWE-bench 并非看上去那么不可能,事情就会滚动起来。最终我们发布 SWE-agent 时准确率约 13%,不久之后大批其他模型涌现,一个比一个准。</p>
+<h3 id="bonus-property">加分性质(Bonus Property)</h3>
+<p>构建一个<strong>难以泄漏进训练数据</strong>的基准,是我一直在琢磨的事。能不能做到:即使基准本身泄漏进了某个 LM 的训练数据,也帮不了它在这个基准上得分?在 SciCode 中,我们请博士们编写各自研究领域的高难编程题,数据集里每个实例是一个函数描述、加上验证模型编程是否正确的单元测试。我们<strong>有意不</strong>发布这些编程题的任何答案,确保这些答案永远不会被塞进任何 LM 的训练数据。这样,即使我们的基准完全泄漏进某个 LM 的训练集,它也依然答不对这些问题。实现这一性质极其困难,所以我并不会在每个基准上都追求它。</p>
+<h3 id="_4">其他准则</h3>
+<p><strong>只给你的基准一个数。</strong>一个让人们追逐的指标。「我们在 HumanEval 上得了 87%」就是你要的那种感觉。不要搞三个指标,比如准确率、精确率、召回率一起上,只要一个。不要按类别拆分准确率,只报一个总体准确率。这非常重要。你要让基准的使用尽可能简单,让人们一眼就懂。如果你整出十七个指标、十九个类别,人们就很难理解你想做什么,你的基准流行起来的概率也会随之降低。</p>
+<p>写论文的分析章节时,给每个模型呈现其他指标、或按类别拆分性能,都完全没问题;但只能放在那里,在一般性介绍基准的场合不要带类别或额外指标。</p>
+<p>写论文时,<strong>永远要配上非常强的基线</strong>,既包括强专有模型,也包括领先的开源模型。绝不要为了让基准显得比实际更难,只放弱基线,或使用过时模型的基线系统,比如 GPT-3.5 或 Llama 3 7B。</p>
+<p><strong>基准该有多少任务?</strong>我认为一个好的下限是至少 150 个任务。但定义「任务」很难:一个有 50 个「任务」、每个任务有 10 个子任务的基准,也可以。目标是 300–500 个任务,让基准有更好的统计分辨率。以我的经验,再多帮助不大。我也会把 500 个任务当作上限,因为任务更多意味着跑一次基准可能耗时很长,这对普及 adoption 是很大的减分项。</p>
+<p>基准通常在一年内饱和。所以构建基准时,我认为不必纠结「这个问题在五年后还有意思吗」这类问题。深度学习的演进快得惊人,超过一年之后就无从预测。因此,基准里的问题即使一两年后答案会完全改变,也没关系,比如「纽约 Bushwick 附近哪些瑜伽馆在早 7 点前有 Vinyasa 课?」。</p>
+<p>基准的妙处在于它给了你巨大的创作空间,而且它能为社区指明前进方向,影响力可以非常大。希望这篇文章能帮你造出下一个大的 LM 基准。并且永远记住——规则就是用来打破的。我并不认为不遵守这些规则全部条目的基准就是坏的;我只是觉得,这些准则能较好地指示你是否走在正道上。</p>
+<h3 id="concluding-thoughts">结语(Concluding Thoughts)</h3>
+<p>在设计新基准时,可以思考以下问题:</p>
+<p>基准是一个任务的集合,其中每个任务由〈请求(request),环境(environment),停止条件(stopping criteria),评分器(scorer)〉四元组构成。</p>
+<ul>
+<li><strong>A. 请求</strong>是你希望模型实际去做的事,即在 SWE-bench 中就是「修复这个 issue」+ issue 正文。</li>
+<li><strong>B. 环境</strong>是对 Agent 解决你的请求时所处环境的完整描述。允许联网吗?哪些依赖已安装、哪些没有?你会给 Agent 提供什么特殊工具?</li>
+<li><strong>C. 停止条件</strong>是你如何决定何时结束一次 Agent 运行。对某些任务,Agent 大概会发出「提交」命令并退出,但你必须决定当这种情况始终不发生时怎么办。你会给每个任务设轮数上限?成本上限?墙钟时间上限?还是它们的组合?任何答案都可行,你只需做出决定。</li>
+<li><strong>D. 评分器</strong>接收 Agent 退出时的环境状态并打分。你要做二元通过/失败的基准,像我们在 SWE-bench 里用 fail2pass 与 pass2pass 测试那样?还是做连续得分的基准,像我们在 AlgoTune 中要求 Agent 加速程序、每题得分为 Agent 代码总运行时间除以基线总运行时间?或者用 ELO,像我们的 CodeClash?这里的可能性很多。</li>
+</ul>
+<p>你将使用的基线脚手架(scaffolding)是什么?它与当前通行的最佳脚手架有多接近?例如,如果你考的是编程题,而你的脚手架不允许执行代码,那就不能很好地反映现实;如果你考的是知识型问题,却不允许访问互联网,那也不现实。尽量把脚手架做得既贴近真实又足够好。这常常不像人们以为的那么费劲——mini-SWE-agent 虽然比 Claude Code 简单好几个数量级,如今却能取得非常有竞争力的分数(有时甚至反超)。我常谈「卖」一个现实基准有多容易——其中一部分是让任务现实,但基线脚手架也必须现实,否则人们不会信任你的结果。</p>
+<p>基准是把 AI 前沿向前推进的东西,没有什么比构建好的新基准更重要。祝你好运!</p>
+<p>(原文写于 2024 年 8 月 7 日)</p>
+<h2 id="_5">要点速览</h2>
+<ul>
+<li><strong>好基准三性质</strong>:自然(真实人群高频提出的任务)、可自动评测(如单元测试)、有挑战(发布时顶级模型准确率足够低)。</li>
+<li><strong>自然性 = 有用性</strong>:「在该基准上超过基线的系统是否对人有用」是自然性的试金石;能自主修 bug(SWE-bench)、能查本地瑜伽课(AssistantBench)、能溯源引用论文(CiteME)均通过此检验。</li>
+<li><strong>不自然的两大信号</strong>:题目设定不现实(如选择题——现实中没人带着四个选项去看医生);问题是编造的而非取自真实用户(应从搜索日志等真实查询中挖掘未获解答的问题)。</li>
+<li><strong>可自动评测是硬约束</strong>:代码可用单元测试验证;摘要等高价值任务因难以自动评估而少有新基准;警惕「LM 既当解题者又当裁判」——两者只能选其一。</li>
+<li><strong>挑战性门槛随时间三次上调</strong>:2024 年 8 月建议发布时顶级准确率 1%–35%;2025 年 1 月改为 0.1%–9%;2025 年 5 月进一步要求「-200%」——即难度需按未来 6–12 个月的模型进步预测预支,让明年的模型也失败。</li>
+<li><strong>过滤保难度</strong>:用强基线筛掉可被解决的实例(Bamboogle 过滤 Google 搜索能答对的、CiteME 过滤 GPT-4o 纯提示能答对的);但若需要大量过滤,说明该领域任务分布整体太容易,应换更难的领域(2026 年 6 月补记)。</li>
+<li><strong>心理门槛也是工程问题</strong>:SWE-bench 发布时顶级准确率仅 1.96%,吓退了几乎所有人;作者团队先用 SWE-agent 做到约 13% 打破「不可能」印象,社区随后跟进——基准发布需要配套「点火」策略。</li>
+<li><strong>防泄漏加分项</strong>:像 SciCode 那样只发布题目与测试、永不发布答案,即使题目泄漏进训练数据也无法记住答案;实现极难,不必每个基准强求。</li>
+<li><strong>实操准则</strong>:单一指标(「我们在 X 上得了 87%」);论文必须配强基线(禁用过时模型充当基线);任务量以 300–500 为宜,上限 500(运行成本制约普及);基准约一年饱和,不必为五年后的相关性纠结。</li>
+<li><strong>任务四元组与脚手架</strong>:每任务 =〈请求、环境、停止条件、评分器〉;基线脚手架须贴近现实(编程允许执行代码、知识题允许联网),否则结果不被信任——mini-SWE-agent 以极简脚手架比肩 Claude Code 说明了「现实」与「复杂」并不画等号。</li>
+</ul>
+      </div>
+    </article>
+    <nav class="pager"><a class="pager-prev" href="Polo2024_tinyBenchmarks_ICML2024.html"><span>上一篇</span>&quot;tinyBenchmarks:用更少样本评测大语言模型&quot;</a><a class="pager-next" href="Zhu2025_Rigorous_Agentic_Benchmarks.html"><span>下一篇</span>&quot;构建严谨 Agent 基准的最佳实践&quot;</a></nav>
+  </main>
+</div>
+<script src="../assets/site.js"></script>
+</body>
+</html>

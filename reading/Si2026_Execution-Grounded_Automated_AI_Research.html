@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>迈向执行接地的自动化 AI 研究 · CS 329Z 中文学习站</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html"><span class="brand-mark">CS</span>329Z<span class="brand-sub">中文学习站</span></a>
+    <nav class="topnav">
+      <a href="../index.html#syllabus">课程表</a>
+      <a href="../index.html#dates">重要日期</a>
+      <a href="../index.html#about">关于本站</a>
+    </nav>
+    <div class="searchbox"><input id="search-input" type="search" placeholder="搜索材料 / 主题…" autocomplete="off"><div id="search-results" class="search-results" hidden></div></div>
+  </div>
+</header>
+<div class="read-layout">
+  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">论文精读</a><ul><li><a href="#abstract">摘要(Abstract)</a></li><li><a href="#1-introduction">1. 引言(Introduction)</a></li><li><a href="#2-automated-idea-executor">2. 自动化想法执行器(Automated Idea Executor)</a></li><li><a href="#3-llm">3. 基准测试:LLM 作为想法生成器与执行器</a></li><li><a href="#4-execution-guided-evolutionary-search">4. 执行引导的进化搜索(Execution-Guided Evolutionary Search)</a></li><li><a href="#5-rl-from-execution-reward">5. 从执行奖励中强化学习(RL from Execution Reward)</a></li><li><a href="#6-related-work">6. 相关工作(Related Work)</a></li><li><a href="#7-conclusion-discussion">7. 结论与讨论(Conclusion &amp;amp; Discussion)</a></li></ul></li><li><a href="#_3">要点速览</a></li></ul></aside>
+  <main class="read-main">
+    <div class="crumb"><a href="../index.html">首页</a> / <a href="../index.html#week-week01_introduction">第1周 · 课程导论</a></div>
+    <article class="read-article">
+      <h1 class="read-title">迈向执行接地的自动化 AI 研究</h1>
+      <p class="read-title-en">&quot;Towards Execution-Grounded Automated AI Research&quot;</p>
+      <p class="read-meta">&quot;Chenglei Si, Zitong Yang, Yejin Choi, Emmanuel Candès, Diyi Yang, Tatsunori Hashimoto&quot; · &quot;arXiv 2601.14525, 2026 · Stanford University&quot;</p>
+      <p class="read-badges"><span class="badge badge-recommended">推荐</span><span class="badge badge-kind">论文精读</span><button class="lang-toggle" id="lang-toggle" type="button">仅看中文</button><a class="orig-link" href="../originals/week01_introduction/Si2026_Execution-Grounded_Automated_AI_Research.pdf" target="_blank" rel="noopener">查看原文(PDF) ↗</a></p>
+      <div class="markdown-body">
+<h2 id="_1">导读</h2>
+<p>这篇论文来自斯坦福大学(Chenglei Si、Zitong Yang 等,Yejin Choi、Emmanuel Candès、Diyi Yang、Tatsunori Hashimoto 团队),安排在第 1 周课程导论,是「Agent 能否真正自动化 AI 研究本身」这一课程主线的代表性实证工作。此前的研究(如对 LLM 生成研究想法的大规模专家评审)表明:LLM 生成的想法常常看起来很有说服力,但被人执行后并无效。本文提出用「执行接地(execution grounding)」来解决这一问题:构建一个高吞吐自动化执行器,把自然语言研究想法变成代码、在 GPU 集群上真正跑实验,再以实验结果作为反馈信号去改进想法生成。作者把两个真实的 GPU 密集型研究问题——LLM 预训练(改进 nanoGPT)与后训练(改进 GRPO)——改造成执行环境,系统比较了进化搜索与强化学习两种学习算法:前者样本高效、10 个搜索轮次内即超越基线甚至人类专家,后者虽能提高平均奖励却因模式坍缩(mode collapse)无法提升上界。论文对「自动化 AI 研究员」的可行性与局限都给出了扎实的量化证据。</p>
+<h2 id="_2">论文精读</h2>
+<h3 id="abstract">摘要(Abstract)</h3>
+<p>自动化 AI 研究在加速科学发现方面潜力巨大。然而,当前的 LLM 常常生成看似合理却无效的想法。执行接地(execution grounding)或许能帮上忙,但自动化执行是否可行、LLM 能否从执行反馈中学习,仍不清楚。为研究这些问题,作者首先构建了一个自动化执行器(automated executor)来实现想法,并发起大规模并行 GPU 实验验证其有效性;然后把两个现实的研究问题——LLM 预训练与后训练——转化为执行环境,证明该自动化执行器能够实现相当大比例的前沿 LLM 采样想法。作者分析了两种从执行反馈中学习的方法:进化搜索(evolutionary search)与强化学习(reinforcement learning,RL)。执行引导的进化搜索具有样本效率:它在后训练任务上找到显著优于 GRPO 基线的方法(69.4% 对 48.0%),在预训练任务上找到优于 nanoGPT 基线的配方(19.7 分钟对 35.9 分钟),且全部只用了十个搜索轮次。前沿 LLM 在搜索过程中常能生成有意义的算法性想法,但它们往往早早饱和,只偶尔展现扩展(scaling)趋势。相比之下,从执行奖励出发的强化学习则遭受模式坍缩(mode collapse):它成功提升了想法生成模型的平均奖励,却因模型收敛到简单想法而无法提升上界。作者对被执行的想法与训练动态做了深入分析,以促进未来执行接地的自动化 AI 研究。</p>
+<h3 id="1-introduction">1. 引言(Introduction)</h3>
+<p>作者设想这样的自动化 AI 研究:LLM 生成针对重要问题的研究想法、把想法实现为代码、运行实验验证有效性、并持续从执行结果中学习。若成功,这些「自动化 AI 研究员」可以在巨大的搜索空间中自动开发并识别有效的研究想法,从而可扩展地把算力转化为科学发现;被发现的想法又能反过来改进前沿 AI 模型本身,实现递归自我改进。然而,自动化 AI 研究的瓶颈在于 LLM 生成有效想法的能力:Si et al. (2025) 的大规模专家评审发现,LLM 想法常常「看起来令人信服,但被人执行后无效」。</p>
+<p>这凸显了把想法生成接地在执行上的必要性。但要以自动化、可扩展的方式获得想法的执行结果并不容易,尤其本文瞄准的是开放式(open-ended)AI 研究——任何能用自然语言表达的想法都在动作空间内。为此,作者设计并构建了一个高吞吐自动化想法执行器,能实现数百个模型生成的想法并并行执行以获得实验结果。</p>
+<p>为研究自动化程度,作者选择了两个 GPU 密集、对提升 LLM 能力至关重要的研究问题(预训练与后训练)作为研究环境,并首次证明自动化执行器能在这些挑战性开放式问题上实现很大比例的 LLM 想法——在预训练环境中,Claude-4.5-Sonnet 与 Claude-4.5-Opus 的执行率超过 90%。</p>
+<p>接着作者分析了执行反馈接地能否改进想法生成。执行引导的进化搜索在十个轮次内:在「后训练 1.5B 模型做数学推理」任务上找到优于 GRPO 基线的配方(69.4% vs 48.0%);在「最小化达到目标验证损失的训练墙钟时间」任务上找到优于 nanoGPT 基线的配方(19.7 分钟 vs 35.9 分钟)。分析显示模型除调超参数外还常生成算法性想法,且进化搜索在同等采样预算下显著优于 best-of-N;但在扩展趋势上,只有 Claude-4.5-Opus 呈现清晰的 scaling 曲线,Claude-4.5-Sonnet 与 GPT-5 都倾向于早早饱和。</p>
+<p>作者还把自动化执行器用作 RL 循环中的奖励函数来微调 Qwen3-30B。RL 能像典型的可验证奖励 RL(RLVR)那样成功提升想法生成模型的平均奖励,却不提升对科学发现更重要的最大奖励(max reward):RL 使模型收敛到少数容易实现的简单想法,导致思考长度与想法多样性的坍缩。</p>
+<h3 id="2-automated-idea-executor">2. 自动化想法执行器(Automated Idea Executor)</h3>
+<h4 id="21">2.1 用于想法生成的研究环境</h4>
+<p>每个研究环境由以下要素构成:一个研究问题、一份基线代码库、一个用于衡量性能的基准、固定的训练与评估数据,以及评估指标。构造环境时的原则是:问题要足够开放,给算法创新留出空间;同时要有成熟的基线与基准指标,使有效性衡量直接明了。</p>
+<p><strong>预训练任务:改进 nanoGPT。</strong> 基线代码改编自 nanoGPT speedrun(Jordan et al., 2024),原始任务是在 8 张 H100 GPU 上、在 FineWeb 语料上预训练 124M GPT-2 模型,使验证集损失达到 3.28,并最小化训练时间。作者做了两处修改:其一,引入等于验证损失倒数的代理奖励(1/loss),把训练墙钟时间固定为 25 分钟,让模型在固定预算下直接优化代理奖励,避免不同运行时长差异过大;其二,为防奖励欺骗(reward hacking),冻结所有评估超参数,并实现了一次只预测一个未来 token 的推理函数,防止模型以泄漏未来 token 的方式改动注意力机制(开发初期多次出现此类问题)。</p>
+<p><strong>后训练任务:改进 GRPO。</strong> 基线是组相对策略优化(GRPO)算法的实现:在 MATH 数据集上微调 Qwen2.5-Math-1.5B 检查点。想法生成模型需要构思比基线更有效的后训练算法。设定固定的训练墙钟时间预算,以训练期间 MATH 验证集上的最高准确率作为指标。为防奖励欺骗,所有验证相关代码保存在单独文件中,不允许自动执行器访问或修改。</p>
+<p>两个环境都不对想法范围设任何约束:从大规模超参数调整到全新的模型架构或训练算法,都在范围内。</p>
+<h4 id="22">2.2 系统设计</h4>
+<p>自动执行器可视为一个高层 API:输入一批自然语言想法,输出每个想法的基准性能。它有三个核心构建模块(图 1):</p>
+<ul>
+<li><strong>实现者(Implementer)</strong>:部署在高 IO 能力的 CPU 机器上。用户提交一批想法后,实现者对每个想法并行调用代码执行 LLM,获得可打入基线代码库的 diff 文件。为提升效率,同时用想法与基线代码库作为提示,并行采样 10 个 diff;若某个 diff 无法打补丁,则把补丁日志反馈给模型自我修正,最多重复 2 次;最终返回第一个可成功打入的 diff。打好补丁的代码库以 .zip 形式上传云存储。</li>
+<li><strong>调度器(Scheduler)</strong>:按固定时钟频率从云端下载新代码库;若尚未执行,则检查环境所需资源并准备要提交的作业配置。</li>
+<li><strong>工作者(Worker)</strong>:GPU 集群。一旦调度器找到可用资源,便把作业配置与 GPU 资源连接并初始化 worker 运行实验。执行成功则把实验日志(含全部性能指标)连同完整元数据(想法内容、代码改动、执行日志等)上传到另一个云桶(wandb);执行失败(如代码有 bug)则 worker 停止。用户(即想法生成模型)随后可下载执行结果,查看这批想法的性能与完整训练日志。</li>
+</ul>
+<h3 id="3-llm">3. 基准测试:LLM 作为想法生成器与执行器</h3>
+<p>执行接地反馈回路的前提是:当前 LLM 既能当想法生成器(ideator),又能当执行器(executor),从而产生有意义的奖励信号。</p>
+<h4 id="31">3.1 端到端的想法生成与执行</h4>
+<p>第一种设定是「自己想、自己执行」:从 Claude-4.5-Opus、Claude-4.5-Sonnet、GPT-5 各采样 50 个想法,并用同一模型执行自己的想法。衡量三个指标:(1)完成率——执行后获得有效(非零)实验结果的想法占比;(2)平均性能——成功执行想法的平均验证准确率或损失;(3)最佳性能——所有执行想法中的最高准确率或最低损失。结果显示(图 2 上排):大部分采样想法确实能成功执行,两个 Claude 模型的执行率显著高于 GPT-5;且这些模型的 best-of-50 已经能打败基线方案——GRPO 环境上 Claude-4.5-Sonnet 最高准确率 60.4%(基线 48.0%);nanoGPT 环境上 Claude-4.5-Opus 最低损失 3.237(基线 3.255)。</p>
+<h4 id="32">3.2 固定执行器、比较想法生成器</h4>
+<p>第二种设定把执行器固定为 GPT-5,用不同模型生成想法(图 2 下排)。即使生成器与执行器是不同模型,执行率仍然可观(42%–78%),但 Claude-4.5-Sonnet 的同一批想法由 GPT-5 执行时的执行率明显低于由自己执行(GRPO:84% vs 42%;nanoGPT:90% vs 78%)。开源前沿模型如 Kimi-K2-Thinking 与 Qwen3-235B-A22B 也能获得不俗的完成率,并在该设定下取得超越基线的 best-of-N 表现:例如 Qwen3-235B 在 GRPO 上达到 50.2% 的最高准确率、在 nanoGPT 上达到 3.238 的最低损失(N=50)。这些基准测试证明了自动化「想法生成—执行」回路的可行性。</p>
+<h3 id="4-execution-guided-evolutionary-search">4. 执行引导的进化搜索(Execution-Guided Evolutionary Search)</h3>
+<h4 id="41">4.1 搜索脚手架</h4>
+<p>进化搜索是无需梯度更新的传统优化方法。作者的搜索脚手架(算法 1)受 AlphaEvolve 等代码进化方法启发:第一个搜索轮次采样一整批新想法;后续每一轮把想法生成分为「利用(exploitation)」与「探索(exploration)」两个子集——利用部分选取此前优于基线的想法附到生成提示中,要求模型生成结合其优点的新变体;探索部分随机抽样此前想法填入提示直至达到上下文长度上限,要求模型生成与之不同的全新想法。第 1 轮以 50% 利用 / 50% 探索开始,随后逐渐退火降低探索比例、提高利用比例。批大小:GRPO 环境为 50,nanoGPT 环境为 80。</p>
+<h4 id="42">4.2 实验结果</h4>
+<p>对每个环境分别用 Claude-4.5-Opus、Claude-4.5-Sonnet、GPT-5 做自执行搜索,绘制每轮最佳性能(图 3),可总结出若干趋势。第一,Claude-4.5-Opus 呈现扩展趋势:搜索轮次越多、上界越高;相比之下 Claude-4.5-Sonnet 与 GPT-5 都早早饱和。第二,所有模型都能找到显著超越基线的想法:GRPO 上,Claude-4.5-Sonnet 发现「在本实验设置下,使用组平均基线的朴素策略梯度(不含重要性重加权与裁剪)优于标准 GRPO 目标」,并在后续轮次持续利用该发现,在第 2 轮以精细超参数调优取得 69.4% 的最佳解;nanoGPT 上,Claude-4.5-Opus 通过组合多种架构改动、超参数调优以及对中间检查点做指数移动平均(EMA)再验证,在第 9 轮达到 3.1407 的最低验证损失。将该最优解按 speedrun 相同设置在 8 张 H100 上运行,19.7 分钟即达到 3.28 目标验证损失,而基线代码库需要 35.9 分钟。</p>
+<p>与人类专家对比(表 1):GRPO 环境与斯坦福 CS336 研究生 LLM 课程同一作业的排行榜相比,最佳学生方案为 68.8%,低于 Claude-4.5-Sonnet 搜索出的 69.4%;nanoGPT 环境与 modded-nanogpt speedrun 排行榜相比,截至 2025 年 12 月人类最优解可在 2.1 分钟内达标,说明该环境上模型仍有巨大提升空间。</p>
+<h4 id="43-best-of-n">4.3 与 best-of-N 对比</h4>
+<p>为展示脚手架的有效性,在 nanoGPT 环境上用相同采样预算对比:搜索批大小为 80,因此把 GPT-5 主干的搜索前 3 轮与 N∈{80, 160, 240} 的 best-of-N 相比(图 4)。两者第 0 轮起点相近,但从第 1 轮起进化搜索显著胜出,说明模型有效利用了此前轮次的轨迹来生成更有效的新想法。</p>
+<h4 id="44">4.4 生成想法的分析</h4>
+<p><strong>超参数 vs 算法。</strong> 用 LLM 评审把全部生成想法分为「超参数调整」(通过改配置实现)与「算法性」(需要实现基线不支持的新改动)两类(表 2,GRPO 共 N=500、nanoGPT 共 N=800)。三个模型都生成了大量算法性想法;Claude-4.5-Sonnet 生成的超参数想法显著多于 Claude-4.5-Opus 和 GPT-5(如 GRPO 上三类模型的超参数占比分别为 41.1%、3.7%、5.0%;nanoGPT 上为 31.3%、8.7%、15.4%)。多数情况下最有效的想法来自算法类,使用 Claude-4.5-Sonnet 时除外。</p>
+<p><strong>定性例子。</strong> 表 3 给出 GRPO 环境上成功执行的想法示例:如 Opus 的「带动量的残差比率学习边界」(把重要性采样比分解为基线分量与残差分量,只对残差做 sigmoid 约束,验证准确率 61.6)、Sonnet 的「动态数学难度平衡」(按近期表现动态调整题目难度配比,64.0)、GPT-5 的「分块比率去噪」(把响应分成 C=8 块、用块内平均平滑 token 级对数比,58.2)。不同模型风格各异:Claude-4.5-Sonnet 更直觉化,Opus 与 GPT-5 更偏数学。</p>
+<p><strong>复现近期论文。</strong> 作者观察到多起模型生成的想法(未用任何 RAG)与论文写作前三个月内发布的论文高度相似的案例:如 Sonnet 提出「组内响应多样性奖励」(与 Li et al. 2025 相似)、Opus 提出「因果上下文压缩」(与 Allen-Zhu 2025 的 canon layer 相似)。虽然评估新颖性超出本文范围,但这表明自动化 AI 研究员有潜力支撑 LLM 研究前沿的工作。</p>
+<h3 id="5-rl-from-execution-reward">5. 从执行奖励中强化学习(RL from Execution Reward)</h3>
+<h4 id="51">5.1 奖励设计与实验设置</h4>
+<p>与进化搜索不同,RL 通过梯度更新塑造模型行为。作者首次探索把自动执行器当作奖励函数直接微调 LLM。基模型为 Qwen3-30B-A3B,用标准 GRPO 算法训练;提示批大小为 1(每个环境只有一个提示,提示中给出基线代码库并要求生成改进想法),思路类似单样本 RLVR。为稳定训练使用大组规模:后训练环境组大小 256,预训练环境 128;由于 GRPO 环境每个想法跑 1 张 GPU、nanoGPT 环境每个想法跑 8 张 GPU,这分别对应每批 rollout 用 256 与 1024 张 GPU 并行执行以获取执行奖励。每次 rollout 为「思考轨迹 + 自然语言想法」,采样最大输出长度 8192 token,只把抽取出的想法(不含思考轨迹)送给自动执行器。奖励:后训练环境直接用执行后的验证集准确率,执行失败记 0;预训练环境用验证损失倒数(1/loss),失败同样记 0。实验基于 Tinker API。</p>
+<h4 id="52">5.2 实验结果</h4>
+<p><strong>平均奖励的正向训练曲线。</strong> 图 5 上排显示,GRPO 环境的平均准确率从初始的 0.253 升至 40 个训练轮次后的 0.343;nanoGPT 环境的平均奖励从 0.194 升至 68 轮后的 0.246,对应平均验证损失从 5.150 降至 4.066。这是首次在开放式研究环境上证明生成想法的平均性能可随训练提升。</p>
+<p><strong>最大奖励的问题。</strong> 尽管复现了其他领域的正向曲线,作者指出想法生成不同于其他可验证领域:推动科学发现更关心上界而非平均质量——我们要的是一条压倒基线的突破性想法,而不是一堆高平均的「安全」想法。图 5 下排的最大奖励在整个 RL 训练中只是波动、没有明显上升趋势,揭示了标准 GRPO 算法在改进想法生成上的关键局限。</p>
+<h4 id="53">5.3 训练动态分析</h4>
+<p><strong>思考长度。</strong> 图 6 上排显示,两个环境中思考轨迹长度随训练迅速下降而想法长度大致不变——这与 DeepSeek-R1 等 RLVR 工作中思考涌现的趋势相反。进一步按思考长度分桶统计执行率(下排):前 20 轮中,思考最长的 30% 想法的执行率持续低于最短的 30%。作者据此假设:更长的思考对应更复杂、更难执行的想法,模型为最大化奖励而偏好更短的思考。</p>
+<p><strong>多样性坍缩。</strong> 人工检查发现模型收敛到少数能稳定拿到正奖励的简单想法。nanoGPT 环境中收敛到两个常见想法:(1)把 RMSNorm 换成 LayerNorm;(2)对中间检查点做 EMA。图 7 显示:第 0 轮每批 128 个采样想法中有 51 个属于这两类,而训练末期第 68 轮达到 128 中的 119 个,坍缩非常严重。这一现象与其他可验证领域「RL 后 pass@k 停滞甚至下降」的模式坍缩观察类似。作者尝试了三种改进(见附录 A.1):动态提示(把先前轮次轨迹附入采样提示)、长度奖励(上限 0.3)、多样性奖励(与上一轮想法的 token 级 Jaccard 相似度取负作惩罚)——长度奖励止住了思考变短但总奖励不再上升,多样性奖励维持了探索却未明显好于主实验,均未见明确收益而提前停止。</p>
+<h3 id="6-related-work">6. 相关工作(Related Work)</h3>
+<p><strong>AutoML</strong>:神经架构搜索(NAS)通过 RL 或搜索在受限算子集上优化架构;近期工作也直接用 LLM 提出并验证架构变体,以及自动化超参调优、发现 ML 算法、优化后训练目标、发现优化器、设计 Agent 脚手架等。不同之处在于:本文处理完全开放式、不限想法类型的自动化 AI 研究,目标是提升想法生成的有效性——自然语言想法是比具体架构变体或代码优化更高的抽象层。<strong>LLM 研究智能体</strong>:AI-Scientist、AI-Researcher、Agent Laboratory 等端到端研究智能体同样面对开放式 AI 研究,但不研究如何从执行反馈中学习;MLE-Bench、RE-Bench、ML-Gym 等有明确指标的基准上已有搜索或 RL 的工作,但那些偏向依赖特征工程与超参调优的 ML 工程任务,而非算法层面的开放式研究。<strong>AI for Research</strong>:文献综述、想法生成、数据分析、实验计划、研究代码执行、论文评审等环节都有大量工作,本文聚焦想法的自动执行与从执行反馈学习,与它们互补。<strong>代码领域的执行接地</strong>:已有工作用执行反馈改进代码生成,本文则把执行接地用于想法生成,其验证更复杂、更昂贵。</p>
+<h3 id="7-conclusion-discussion">7. 结论与讨论(Conclusion &amp; Discussion)</h3>
+<p>本文构建了大规模并行执行器,在开放式 LLM 研究问题(预训练与后训练)上自动执行模型生成的想法;以执行器为奖励函数,分析了执行引导的进化搜索——配备简单进化脚手架的前沿 LLM 能显著超越基线;也基准测试并揭示了执行奖励 RL 的局限——模型为提高平均奖励而收敛到简单想法、失去多样性且不提升上界。作者进一步指出四个未来方向:(1)当前流程未检验想法的泛化性,小规模上的最优想法未必能迁移到更大规模或其他数据集,可把泛化性与可扩展性纳入优化目标;(2)RL 只提升平均不提升上界,可能源于基座模型缺乏多样性、RL 目标缺乏探索激励,未来可利用执行轨迹中超越标量奖励的更丰富信号;(3)实验范围受限于执行智能体的能力,不少好想法无法被成功执行从而给奖励引入噪声,未来可用能装外部库、更会写代码的智能体;(4)本文只用有效性作奖励,新颖性、有趣度等更主观的指标可作为补充训练目标。</p>
+<h2 id="_3">要点速览</h2>
+<ul>
+<li>构建「自动化 AI 研究员」的关键瓶颈:LLM 生成的想法常看似合理但执行后无效,因此需要执行接地(execution grounding)。</li>
+<li>系统三模块:Implementer(想法→代码 diff,并行采 10 个、最多 2 次自我修正)、Scheduler(资源调度)、Worker(GPU 集群执行并上传 wandb 日志)。</li>
+<li>两个执行环境:nanoGPT 预训练(124M GPT-2、FineWeb、8×H100、固定 25 分钟、代理奖励 1/loss)与 GRPO 后训练(Qwen2.5-Math-1.5B、MATH 数据集、验证准确率),均冻结评估防奖励欺骗。</li>
+<li>可行性:预训练环境上 Claude-4.5-Sonnet/Opus 执行率超 90%;best-of-50 已能超基线(Sonnet 60.4% vs 48.0%;Opus 损失 3.237 vs 3.255);换 GPT-5 做执行器时完成率 42%–78%。</li>
+<li>进化搜索结果:10 轮内 GRPO 69.4% vs 基线 48.0%,超过 CS336 课程最佳学生方案 68.8%;nanoGPT 19.7 分钟 vs 35.9 分钟,但距人类 speedrun 最优 2.1 分钟仍有差距。</li>
+<li>搜索设计:利用(基于优于基线的想法生成变体)+ 探索(生成全新想法)按 50/50 起步并退火;同预算下显著优于 best-of-N。</li>
+<li>想法构成:三个模型都大量生成算法性想法(如 GRPO 上算法类占比 58.9%–96.3%),多数情况最有效想法来自算法类;模型还自发复现了近期论文中的想法。</li>
+<li>RL(Qwen3-30B-A3B + GRPO、组大小 256/128、对应 256/1024 张 GPU)提升平均(GRPO 平均准确率 0.253→0.343)但不提升最大奖励。</li>
+<li>RL 的病根:思考长度持续缩短、多样性坍缩(nanoGPT 上两个常见想法从第 0 轮 51/128 占比升至第 68 轮 119/128);长度奖励、多样性奖励等初步尝试均无明确收益。</li>
+<li>局限与展望:未验证想法跨规模/跨数据集的泛化;执行智能体能力不足带来奖励噪声;可引入新颖性等更丰富的训练信号。</li>
+</ul>
+      </div>
+    </article>
+    <nav class="pager"><a class="pager-prev" href="Ng2024_Agentic_Design_Patterns_TheBatch.html"><span>上一篇</span>Agentic 设计模式(一):四种提升 GPT-4 与 GPT-3.5 表现的 AI Agent 策略</a><a class="pager-next" href="Zaharia2024_Compound_AI_Systems_BAIR_blog.html"><span>下一篇</span>从模型到复合 AI 系统的转变</a></nav>
+  </main>
+</div>
+<script src="../assets/site.js"></script>
+</body>
+</html>

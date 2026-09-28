@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>介绍 Anthropic 的负责任扩展政策 · CS 329Z 中文学习站</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html"><span class="brand-mark">CS</span>329Z<span class="brand-sub">中文学习站</span></a>
+    <nav class="topnav">
+      <a href="../index.html#syllabus">课程表</a>
+      <a href="../index.html#dates">重要日期</a>
+      <a href="../index.html#about">关于本站</a>
+    </nav>
+    <div class="searchbox"><input id="search-input" type="search" placeholder="搜索材料 / 主题…" autocomplete="off"><div id="search-results" class="search-results" hidden></div></div>
+  </div>
+</header>
+<div class="read-layout">
+  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li><a href="#_2">全文中译</a></li><li><a href="#_3">要点速览</a></li></ul></aside>
+  <main class="read-main">
+    <div class="crumb"><a href="../index.html">首页</a> / <a href="../index.html#week-week08b_safety">第8周 · 安全与护栏</a></div>
+    <article class="read-article">
+      <h1 class="read-title">介绍 Anthropic 的负责任扩展政策</h1>
+      <p class="read-title-en">&quot;Introducing Anthropic&#x27;s Responsible Scaling Policy&quot;</p>
+      <p class="read-meta">Anthropic · &quot;Anthropic Blog · 2023-09-19&quot;</p>
+      <p class="read-badges"><span class="badge badge-recommended">推荐</span><span class="badge badge-kind">全文中译</span><button class="lang-toggle" id="lang-toggle" type="button">仅看中文</button><a class="orig-link" href="../originals/week08b_safety/Anthropic2023_Responsible_Scaling_Policy.html" target="_blank" rel="noopener">查看原文(HTML) ↗</a></p>
+      <div class="markdown-body">
+<h2 id="_1">导读</h2>
+<p>本篇是 Anthropic 于 2023 年 9 月 19 日发布的官方公告,首次公开其「负责任扩展政策」(Responsible Scaling Policy, RSP)。在第 8 周「安全与护栏」中,前面几篇材料关注的是攻击与防御的技术细节(提示注入、隐私再识别、Agent 隐私仿真),而本篇给出的是治理层面的顶层答案:当模型能力持续增长、前沿实验室自己也无法完全预知下一版模型会什么时,应当用什么制度来管理风险?RSP 的核心是「AI 安全等级」(AI Safety Levels, ASL)框架——参照美国政府处理危险生物材料的生物安全等级(BSL)标准,按模型造成灾难性风险的潜力分级,等级越高,要求的安全、安保与运营证明越严格。文中逐条给出 ASL-1 到 ASL-4+ 的定义,并说明该框架如何在「暂停训练以保安全」与「解锁下一级扩展」之间建立激励兼容:安全问题不解决,就不能继续放大模型。理解这份政策,有助于把课程中讨论的技术护栏放进「能力评估—安全承诺—董事会监督」的完整制度链条中,也是观察 2023 年以来前沿 AI 治理演进的起点文本。</p>
+<h2 id="_2">全文中译</h2>
+<blockquote>
+<p>原文:Introducing Anthropic's Responsible Scaling Policy(Anthropic,2023 年 9 月 19 日)</p>
+</blockquote>
+<p><strong>标题:介绍 Anthropic 的负责任扩展政策</strong></p>
+<p>今天,我们发布我们的<strong>负责任扩展政策(Responsible Scaling Policy, RSP)</strong>——一系列技术与组织协议(protocol),我们采用它们来帮助管理开发能力日益增强的 AI 系统所带来的风险。</p>
+<p>随着 AI 模型变得越来越强大,我们相信它们将创造巨大的经济与社会价值,但也会带来日益严重的风险。我们的 RSP 聚焦于<strong>灾难性风险(catastrophic risks)</strong>——即 AI 模型直接造成大规模毁灭的风险。这类风险可能来自对模型的蓄意滥用(例如恐怖分子或国家行为者利用模型制造生物武器),也可能来自模型以违背设计者意图的方式自主行动而造成破坏。</p>
+<p>我们的 RSP 定义了一个名为<strong>AI 安全等级(AI Safety Levels, ASL)</strong>的框架来应对灾难性风险,它松散地参照了美国政府处理危险生物材料的生物安全等级(biosafety level, BSL)标准。其基本思想是:要求与模型灾难性风险潜力相匹配的安全、安保和运营标准,ASL 等级越高,所要求的安全证明就越严格。</p>
+<p>对 ASL 体系的一个极为简略的概述如下:</p>
+<ul>
+<li><strong>ASL-1</strong> 指不构成任何有意义的灾难风险的系统,例如一个 2018 年的 LLM,或一个只会下国际象棋的 AI 系统。</li>
+<li><strong>ASL-2</strong> 指已显示出危险能力早期迹象的系统——例如能够给出如何制造生物武器的指令——但由于可靠性不足或并未提供搜索引擎等渠道无法提供的信息,这些信息尚不真正有用。当前的 LLM(包括 Claude)看起来处于 ASL-2。</li>
+<li><strong>ASL-3</strong> 指相较于非 AI 基线(例如搜索引擎或教科书)而言,会实质性地增加灾难性滥用风险的系统,或者显示出低水平自主能力的系统。</li>
+<li><strong>ASL-4 及更高等级(ASL-5+)</strong> 尚未定义,因为它们距离现有系统还太远,但它们很可能涉及灾难性滥用潜力与自主性方面的质变式升级。</li>
+</ul>
+<p>每个 ASL 等级的定义、判定标准和安全措施在主文件中有详细描述。概括地说,ASL-2 级别的措施代表我们当前的安全与安保标准,与我们在最近的<strong>白宫承诺(White House commitments)</strong>高度重合。ASL-3 级别的措施包括更严格的标准,要及时满足它们需要密集的研究与工程投入,例如异常强大的安保要求,以及一项承诺:如果 ASL-3 模型在世界一流红队测试人员(red-teamer)的对抗性测试下显示出任何有意义的灾难性滥用风险,我们就不部署该模型(这与仅仅承诺「进行红队测试」形成对比)。我们的 ASL-4 措施尚未撰写(我们的承诺是在达到 ASL-3 之前将其写好),但它可能需要如今尚未解决的研究问题所对应的保证方法,例如利用可解释性方法,从机制上证明某个模型不太可能做出某些灾难性行为。</p>
+<p>我们设计 ASL 体系,是为了在「有效针对灾难性风险」与「激励有益应用和安全进步」之间取得平衡。一方面,ASL 体系隐含地要求我们:如果 AI 扩展(scaling)的速度超过了我们遵守必要安全规程的能力,就暂时暂停训练更强大的模型。但它的做法是直接激励我们去解决必要的安全问题,以此作为解锁进一步扩展的方式,并允许我们使用上一个 ASL 等级中最强大的模型,作为为下一个等级开发安全特性的工具。[1]</p>
+<p>如果这一政策被各前沿实验室采纳为标准,我们希望它能创造一种「竞相向上」(race to the top)的动态,让竞争激励被直接引导到解决安全问题上。</p>
+<p>从商业角度,我们想明确说明:RSP 不会改变 Claude 当前的用途,也不会中断我们产品的可用性。相反,它应当被看作类似于汽车或航空业中的上市前测试与安全特性设计——其目标是在产品投放市场之前严格论证其安全性,而这最终会让客户受益。</p>
+<p>Anthropic 的 RSP 已获得董事会的正式批准,任何修改都必须在与<strong>长期利益信托(Long Term Benefit Trust)</strong>协商后经董事会批准。在完整文件中,我们描述了一系列程序性保障措施,以确保评估过程的公正性。</p>
+<p>不过,我们想强调的是:这些承诺是我们当前的最佳猜测,是一个我们将在此基础上继续构建的早期迭代。AI 作为一个领域,发展速度极快且充满不确定性,这意味着与相对稳定的 BSL 体系不同,快速的迭代与路线修正几乎肯定是必要的。</p>
+<p>完整文件可以在<strong>这里</strong>阅读。我们希望它能为政策制定者、第三方非营利组织,以及其他面临类似部署决策的公司提供有益的启发。</p>
+<p>我们感谢 <strong>ARC Evals</strong> 在 RSP 承诺(尤其是自主能力评估方面)的开发过程中提供的关键洞察与专业支持。在设计评估流程时,他们在 AI 风险评估方面的专业知识发挥了重要作用。我们也感谢 ARC Evals 率先提出并推动其更宏观的 ARC 负责任扩展政策框架,这启发了我们的方法。</p>
+<blockquote>
+<p>注 1:总体而言,Anthropic 一直发现,与前沿 AI 模型共事是开发降低 AI 风险新方法的一个关键要素。</p>
+</blockquote>
+<h2 id="_3">要点速览</h2>
+<ul>
+<li><strong>RSP 是什么</strong>:Anthropic 的负责任扩展政策(2023-10)——一套把"模型能力等级"与"必须先达标的安全措施"绑定的框架,灵感来自生物安全等级(BSL)与核安全监管。</li>
+<li><strong>核心机制</strong>:能力达到某个 <strong>AI 安全等级(ASL)</strong> 门槛时,必须先满足该等级的安全要求才能继续训练/部署;安全措施未跟上则暂停更强模型的训练。</li>
+<li><strong>能力评估由能力阈值驱动</strong>:灾难性滥用潜力(CBRN 信息)、自主复制与绕过关机(RSP 评估中最接近"存在性风险"的能力)、 Prompt 胁迫与欺骗等,由专门的 Resposibility 团队与第三方(ARC Evals)执行红队式评估。</li>
+<li><strong>ASL 阶梯</strong>:ASL-1(无实质风险,如棋类引擎)→ ASL-2(当前大模型所处等级,对应白宫承诺水平的安保)→ ASL-3(灾难性滥用风险实质性增加或出现低水平自主性;要求更强的安保 + "红队测出有意义风险就不部署"的承诺)→ ASL-4+(待定义,可能需要可解释性等尚未解决的研究)。</li>
+<li><strong>治理设计</strong>:RSP 经董事会批准,修改须与长期利益信托(LTBT)协商——把安全承诺嵌入公司治理而非仅靠自律。</li>
+<li><strong>战略意图</strong>:创造"竞相向上"(race to the top)的行业动态,让竞争激励指向解决安全问题;商业上不改变 Claude 现有用途。</li>
+<li><strong>与课程关联</strong>:第 8 周「安全与护栏」的政策/治理侧读本——与 PrivacyLens(泄露评测)、提示注入(攻击面)、攻防搜索(技术对抗)互补,展示"能力扩展与安全保障如何制度化地同步演进"。</li>
+</ul>
+      </div>
+    </article>
+    <nav class="pager"><a class="pager-prev" href="Zhu2026_AutoLibra_ICLR2026_arXiv2505.02820.html"><span>上一篇</span>&quot;AutoLibra:从开放式人类反馈归纳 Agent 评测指标&quot;</a><a class="pager-next" href="Li2026_Agentic_LLMs_Deanonymizers.html"><span>下一篇</span>&quot;智能体化 LLM 是强大的去匿名化工具:Anthropic 访谈数据集参与者的重识别&quot;</a></nav>
+  </main>
+</div>
+<script src="../assets/site.js"></script>
+</body>
+</html>

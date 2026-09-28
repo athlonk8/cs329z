@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>&quot;tinyBenchmarks:用更少样本评测大语言模型&quot; · CS 329Z 中文学习站</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html"><span class="brand-mark">CS</span>329Z<span class="brand-sub">中文学习站</span></a>
+    <nav class="topnav">
+      <a href="../index.html#syllabus">课程表</a>
+      <a href="../index.html#dates">重要日期</a>
+      <a href="../index.html#about">关于本站</a>
+    </nav>
+    <div class="searchbox"><input id="search-input" type="search" placeholder="搜索材料 / 主题…" autocomplete="off"><div id="search-results" class="search-results" hidden></div></div>
+  </div>
+</header>
+<div class="read-layout">
+  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">论文精读</a><ul><li><a href="#abstract">摘要(Abstract)</a></li><li><a href="#1-introduction">1 引言(Introduction)</a></li><li><a href="#2-problem-statement">2 问题设定(Problem Statement)</a></li><li><a href="#3-selecting-evaluation-examples">3 选择评测示例(Selecting Evaluation Examples)</a></li><li><a href="#4-irt">4 用 IRT 改进性能估计</a></li><li><a href="#5-assessing-evaluation-strategies">5 评测策略的评估(Assessing Evaluation Strategies)</a></li><li><a href="#6-conclusion">6 结论、扩展与局限(Conclusion)</a></li><li><a href="#_3">附录速览</a></li></ul></li><li><a href="#_4">要点速览</a></li></ul></aside>
+  <main class="read-main">
+    <div class="crumb"><a href="../index.html">首页</a> / <a href="../index.html#week-week07b_evaluation">第7周 · 评测基础</a></div>
+    <article class="read-article">
+      <h1 class="read-title">&quot;tinyBenchmarks:用更少样本评测大语言模型&quot;</h1>
+      <p class="read-title-en">&quot;tinyBenchmarks: evaluating LLMs with fewer examples&quot;</p>
+      <p class="read-meta">&quot;Felipe Maia Polo et al.&quot; · &quot;ICML 2024 · U. Michigan / IBM Research&quot;</p>
+      <p class="read-badges"><span class="badge badge-recommended">推荐</span><span class="badge badge-kind">论文精读</span><button class="lang-toggle" id="lang-toggle" type="button">仅看中文</button><a class="orig-link" href="../originals/week07b_evaluation/Polo2024_tinyBenchmarks_ICML2024.pdf" target="_blank" rel="noopener">查看原文(PDF) ↗</a></p>
+      <div class="markdown-body">
+<h2 id="_1">导读</h2>
+<p>本文属于第 7 周「评测基础」单元,讨论一个非常现实的问题:基准越来越大,评测越来越贵——Liang 等人报告在 HELM 上评测一个 LLM 花费超过 4,000 GPU 小时(API 则超 1 万美元),而预训练期间的检查点监控、提示策略与超参探索又要求反复评测。作者 Felipe Maia Polo 等(密歇根大学统计系、IBM Research、MIT 等,ICML 2024)给出的答案是:借助心理测量学(psychometrics)中几十年成熟的<strong>项目反应理论(Item Response Theory, IRT)</strong>——GRE、SAT 等标准化考试背后的统计模型——把 LLM 视为「考生」、基准题目视为「试题」,从历史评测数据中学习每道题的难度与所需能力,进而选出少数最有信息量的「锚点」题目。</p>
+<p>核心结论令人印象深刻:估计一个 LLM 在 MMLU(约 14,000 题)上的真实准确率,只需在 100 道精选题上评测,平均误差约 2%——评测成本降低 140 倍。论文发布了 Open LLM Leaderboard、MMLU、HELM、AlpacaEval 2.0 的 tiny 版本与基于 IRT 的估计工具(CPU 数秒即可运行),对频繁评测场景(微调、提示工程、基准加速)极其实用。它与 Press 的基准设计帖互补:一个讲「怎么造好基准」,一个讲「怎么便宜地用好基准」,也为理解后续 Agent 基准的成本问题提供了统计工具箱。</p>
+<h2 id="_2">论文精读</h2>
+<h3 id="abstract">摘要(Abstract)</h3>
+<p>大语言模型(LLM)的多才多艺催生了多样的基准(benchmark),用以全面测试各种语言模型的能力。这些基准由数万个示例组成,使得 LLM 评测非常昂贵。本文研究减少在若干关键基准上评估 LLM 性能所需评测次数的策略。例如,我们证明:要准确估计一个 LLM 在流行选择题问答基准 MMLU(14K 题)上的性能,只需在该 LLM 上评测 100 道精选示例即可。我们发布了评测工具与流行基准的 tiny 版本:Open LLM Leaderboard、MMLU、HELM 与 AlpacaEval 2.0。实证分析表明,这些工具与 tiny 基准足以可靠、高效地复现原始评测结果。</p>
+<h3 id="1-introduction">1 引言(Introduction)</h3>
+<p>量化与比较 LLM 能力催生了 MMLU、Open LLM Leaderboard、HELM、AlpacaEval 等关键基准,但它们动辄数百上千乃至上万示例,使评测在算力、环境与财务上都非常昂贵;AlpacaEval 还需要商用 LLM 当裁判,进一步推高成本。而评测往往不止做一次:预训练期间监控检查点、探索提示策略与超参数,都要求反复评测。</p>
+<p>作者重新审视「必须在大基准上全量评测」的必要性。图 1 展示了最佳策略的效果:用 100 道精选示例(不到 MMLU 的 1%)估计 2023 年 12 月 30 日至 2024 年 1 月 18 日之间发布的新 LLM 的准确率,与全量 14K 题的真实准确率相比,平均误差不到 1.9%。论文考虑三类评测策略:(1)<strong>分层随机抽样</strong>(Perlitz et al. 为 HELM 提出,以子场景为层)——最简单但误差可能较大;(2)<strong>基于正确性(correctness)的聚类</strong>——受 Anchor Points 方法启发,寻找「答对(错)它就大概率答对(错)一批题」的代表性示例,在某些设定下表现好,但当正确性模式是伪相关时会失效(如评测领域特化 LLM);(3)<strong>基于 IRT 的新策略</strong>——用 IRT 学习编码「做对该题需要何种潜在能力」的示例表示,聚类这些表示得到更鲁棒的评测集,并开发工具改进用任意示例集得到的准确率估计。相关工作综述指出:IRT 已被用于研究基准饱和、题目分类与模型排序,甚至自适应测试,但此前<strong>未被用于高效基准评测中的性能估计</strong>,本文开辟了这条新路径。</p>
+<h3 id="2-problem-statement">2 问题设定(Problem Statement)</h3>
+<p>基准由若干场景(scenario)组成,场景下可能有子场景(如 MMLU 是 Open LLM Leaderboard 的一个场景,其下有「市场营销」「初等数学」等 57 个子场景);每个场景/子场景由示例(example,对应 IRT 文献中的「项目/item」)构成。最终目标是估计 LLM 在整个基准上的性能——各场景性能的平均(Leaderboard、MMLU、AlpacaEval 2.0)或平均胜率(mean-win-rate,HELM)。</p>
+<p>当 LLM l 与示例 i 交互时,基准系统产生「正确性」得分 Y_il,取值为二值 {0,1} 或有界 <a href="如 AlpacaEval 的连续偏好">0,1</a>。场景得分通常是其全部示例正确率的(加权)平均。问题归结为:为每个场景 j 选一个小子集 Î_j ⊂ I_j 及非负权重 {w_i}(和为 1),使得用 Î_j 上的正确性即可估计全场景得分,即 Σ w_i Y_il ≈ (1/|I_j|) Σ Y_il。选择 Î_j 时,假设能拿到一组历史上已在整个基准上评测过的 LLM 的正确性数据——这类数据对许多流行基准是免费公开的。</p>
+<h3 id="3-selecting-evaluation-examples">3 选择评测示例(Selecting Evaluation Examples)</h3>
+<p><strong>3.1 分层随机抽样</strong>:以子场景为层,均匀概率随机抽取,使任意两个子场景被抽到的示例数之差不超过 1,权重均为 1/|Î_j|。理由是有效评测应让各子场景被平等代表。</p>
+<p><strong>3.2 聚类(锚点)</strong>:随机子集有额外的抽样不确定性。替代思路是选「代表性示例」:若示例 i 是锚点(anchor point),则应存在一大组示例,模型们「当且仅当答对 i 才答对那组」。做法一(correctness 聚类):把每个示例 i 表示为向量 E_i ∈ R^{|L_tr|},各维是训练集各 LLM 在 i 上的正确性;跑 K-Means(K 为锚点数),取离每个质心最近的示例组成 Î_j;新 LLM 的估计用式 3.1,权重 w_i 取分配给该锚点簇的示例比例。该方法简单直接,但有两处隐患:正确性模式可能随时间漂移(分布偏移),且 |L_tr| 大时遭遇维度灾难。</p>
+<p>做法二(IRT 聚类,本文主打):用 IRT 模型产生的示例表示作嵌入 E_i(见第 4 节)。IRT 基于题目难度与所需能力为每道题构建有意义的低维表示(实验中维度 ≤ 16),直接消除维度问题;若 IRT 模型合理描述现实且表示稳定,也缓解分布偏移——锚点恰好代表「难度相近、所需能力相近」的题目,正是我们要找的。</p>
+<h3 id="4-irt">4 用 IRT 改进性能估计</h3>
+<p><strong>4.1 IRT 模型</strong>:采用两参数多维 IRT 模型,LLM l 答对示例 i 的概率为 p_il = 1/(1+exp(−α_i^⊤θ_l + β_i)),其中 θ_l ∈ R^d 是 LLM l 的不可观测能力向量,α_i ∈ R^d 指示答对示例 i 需要 l 的哪些能力维度,β_i 为偏置项(θ_l = 0 时调节答对概率,可理解为难度)。示例表示取点估计 E_i = (α̂_i, β̂_i)。</p>
+<p><strong>4.2 基于 IRT 的性能估计</strong>:
+- <strong>p-IRT 估计器</strong>:在新模型 l 于 Î_j 上作答后,固定题目参数、最大化观测数据的对数似然估计 θ̂_l(等价于拟合逻辑回归)。由于全场景得分 Z_jl 是随机变量,用均方误差意义下最优的条件期望逼近:E[Z_jl | 观测] = λ̂·(Î_j 上的平均实测正确率) + (1−λ̂)·(其余题目上 IRT 预测概率 p̂_il 的平均),其中 λ̂ = |Î_j|/|I_j|。p-IRT 的妙处在于:θ̂_l 可以用<strong>多个场景</strong>的数据联合拟合,即使每场景只见少量样本,也能借用全部观测得到更好的估计;论文证明了在 θ̂_l 相合、题目参数已知且 α 有界的条件下,p-IRT 依概率收敛到 Z_jl 的最优逼近(命题 4.1)。两个局限:不便对样本加权(难以直接用锚点);若 IRT 模型错设、预测概率失准,性能会退化。
+- <strong>gp-IRT 估计器(generalized p-IRT)</strong>:为克服上述局限,把「加权的锚点/随机抽样估计(式 3.1)」与 p-IRT 做凸组合:Ẑ_gp-IRT = λ·Σw_iY_il + (1−λ)·Ẑ_p-IRT。直觉:抽样型估计无偏但小样本时方差大、随 |Î_j| 增大而减小;p-IRT 条件方差小但模型错设时偏差不随样本消失。因此好用的 λ 应随 |Î_j| 增大而增大。λ 的选取基于 Song (1988) 推论 2(两估计器最优线性组合依赖其偏差、方差与协方差):取 λ = b̂²/(σ̂²/|Î_j| + b̂²),其中 σ̂² 由训练集 LLM 正确率的平均样本方差估计,b̂² 通过把训练集一分为二、用一半拟合 IRT、另一半的一半示例估计能力、预测未观测示例后与真实得分比较,得到 IRT 偏差的估计再平方。若第一估计器来自方差更小的锚点法,则将 σ̂² 除以常数 4(等价于标准差减半)。</p>
+<p><strong>4.3 Y 非二值时</strong>:定义二值化变量 Ỹ_il = 1[Y_il ≥ c],对每个场景选 c 使 ΣY_il ≈ Σ1<a href="即平均值近似不变">Y_il≥c</a>,再套用标准 IRT 工具。AlpacaEval 2.0 的连续胜率、HELM 部分场景的 [0,1] 得分均如此处理。</p>
+<p><strong>4.4 模型拟合</strong>:用变分推断拟合分层贝叶斯 IRT(借助 py-irt 库),对 θ_l、α_i、β_i 施加正态先验并配 Gamma 超先验;点估计取变分分布均值;模型维度从 {2, 5, 10, 15} 中以训练集验证择优。</p>
+<h3 id="5-assessing-evaluation-strategies">5 评测策略的评估(Assessing Evaluation Strategies)</h3>
+<p><strong>流水线</strong>:对每个基准,先收集历史上已全量评测过的 LLM 的公开正确性数据;划「训练」模型集(用于找锚点、拟合 IRT 参数)与「测试」模型集(用于量化估计误差——在锚点上作答,估计其全基准性能,与真实值比较)。考虑两种划分:随机划分与<strong>按日期划分</strong>(最新模型做测试)——后者更贴近实际且更难,因为模型能力随时间进步带来训练/测试间的分布偏移。</p>
+<p><strong>四个基准</strong>:
+- <strong>Open LLM Leaderboard</strong>:6 个场景(ARC、HellaSwag、MMLU、TruthfulQA、Winogrande、GSM8K),共约 29K 示例;收集 395 个 LLM 的结果,75% 训练、25% 测试;
+- <strong>MMLU</strong>:57 个学科、约 14K 题的选择题问答,按学科平均;用同一批 395 个 LLM(因其极流行,单独考察);
+- <strong>HELM Lite v1.0.0</strong>:10 个核心场景、约 10K 示例、30 个模型,指标为跨场景平均胜率;因模型加入日期不可得,改按<strong>训练组织</strong>划分(如所有 OpenAI 模型要么全在训练要么全在测试)以制造更难的分split,随机划分用 11 折交叉验证;
+- <strong>AlpacaEval 2.0</strong>:100 个 LLM 在 805 个示例上由 GPT-4 裁判与基线对比,平均胜率为指标;虽小但评测昂贵(每题要调 GPT-4);按日期取最近 25% 做测试,随机划分用 4 折交叉验证。</p>
+<p><strong>六种策略</strong>:三种选例方法(random / correctness / IRT)各配两个变体——朴素版(直接用所选(加权)示例上的性能)与「++」版(用式 4.4 的 gp-IRT 校正)。结果取 5 次重启平均。</p>
+<p><strong>关键发现</strong>(图 3):
+- <strong>降本有效</strong>:最佳策略以每场景 100 题或更少,在所有基准上把估计误差控制在 2% 以内。MMLU 从 14K 降到 100 题,成本降 140 倍;Open LLM Leaderboard 甚至每场景 30 题就够(29K → 180,降 160 倍);HELM 为 1,000/10K,AlpacaEval 为 100/805。
+- <strong>抗时间偏移</strong>:按日期划分(用最新模型测试)下多数策略依然表现良好,说明方法在评测更强的新模型时仍然实用,可为预训练期间的检查点评测省下 GPU 时。
+- <strong>IRT 系最稳</strong>:IRT 与 IRT++ 在各基准、各划分下一致表现好;「++」变体总是持平或优于朴素版,且只增加几秒计算。据此作者用 IRT 锚点构建了每个基准的 tiny 版本(每场景 100 题),连同 gp-IRT 工具(代码+预训练 IRT 模型)一起发布。</p>
+<p><strong>领域特化 LLM 测试</strong>:先前的测试集以基座/指令模型为主,作者另收集 40 个领域特化模型(代码、生物、金融等)在 MMLU 上手工组成新测试集——这类模型在某些学科强、另一些弱,正确性模式与训练集不同。结果(图 5):正如预期,correctness 锚点在此显著退化,而 IRT 锚点仅受轻微影响,证明其鲁棒性,也支撑了 tinyBenchmarks 采用 IRT 锚点的选择。</p>
+<p><strong>误差剖析</strong>(图 6):MMLU 上 100 题 IRT++ 对 99 个随机测试 LLM 的估计误差几乎都 ≤ 4%(仅一个性能极低的模型例外),平均 2%;对更强模型的估计略好,但依赖不强。</p>
+<h3 id="6-conclusion">6 结论、扩展与局限(Conclusion)</h3>
+<p><strong>结论</strong>:借助心理测量学的教育测评模型,用常见基准数据集一小部分(有时低两个数量级)的示例即可准确评估 LLM 能力,直接节省评测的财务、算力与环境成本;对从业者尤其实用——微调与提示工程期间可以更频繁地评测。作者发布 tinyBenchmarks(直接可用的精选小子集)与 IRT 估计工具(CPU 数秒完成)。</p>
+<p><strong>扩展一:提示评测</strong>。提示设定对模型预测影响很大。作者把方法迁移到提示维度:在 Weber et al. 的数据(8 个 LLaMA 系模型在 ANLI 750 个数据点 × 15 个指令模板的评测)上训练 IRT,测试了跨模型规模(7B/13B/30B 训练、65B 测试)与跨模板(2 折轮换、上下文示例模板一致/不一致)的分布偏移。结果表明用少量评测即可估计新提示集或新模型的性能(图 7)。</p>
+<p><strong>扩展二:自适应测试</strong>。与其预先固定示例子集,不如在评测过程中自适应选题(标准化机考的常用思路)。在 MMLU 上的初步实验(自适应 IRT 变体,图 8)显示估计性能进一步提升,但当前实现要跑 5 分钟以上,实用性欠佳。</p>
+<p><strong>局限</strong>:主要威胁是严重的分布偏移。以 MMLU 为例,若某模型「简单题答错、难题反而答对」而颠覆正确性模式,估计误差会变大;这可能由架构或预训练数据的重大变化引起;LLM 能力的快速跃升也可能造成外推误差。缓解办法:定期用更新的 LLM 数据更新精选示例与 IRT 参数估计。</p>
+<h3 id="_3">附录速览</h3>
+<p>附录 A 处理子场景样本数不等时的「平衡权重」;附录 B 分析 tinyMMLU:其示例权重比 correctness 版更均匀(以有效样本量 ESS 度量),这解释了它在正确性模式各异的模型(如特化 LLM)上更鲁棒;57 个学科中获得最高总权重的是「高中心理学」「初等数学」「专业法律」。附录 C 给命题 4.1 的证明(利用 σ 的 1/4-Lipschitz 性与 Cauchy-Schwarz 不等式)。附录 D 补充基准细节(Leaderboard 数据共覆盖 428 个 LLM,含第二批 40 个特化模型)。附录 E 展示把测试集扩到 75% 最新数据(Leaderboard/MMLU 相当于 3 个月、AlpacaEval 相当于 6 个月未来数据)的鲁棒性检验,结论与正文一致。</p>
+<h2 id="_4">要点速览</h2>
+<ul>
+<li><strong>动机</strong>:基准数万示例使评测极贵(HELM 全量评测一个模型 &gt;4K GPU 小时 / &gt;$10K API 费),而检查点监控与提示/超参探索需要反复评测——需要「用更少示例估计全基准性能」的方法。</li>
+<li><strong>方法总览</strong>:三类选例策略(分层随机抽样、correctness 聚类锚点、IRT 聚类锚点)× 两个估计变体(朴素加权平均、gp-IRT 校正),共六种;历史全量评测数据用于找锚点与拟合 IRT。</li>
+<li><strong>IRT 建模</strong>:把 LLM 当考生、题目当试题,p_il = σ(α_iᵀθ_l − β_i);θ_l 是模型能力、α_i 是题目所需能力、β_i 是难度偏置;题目表示 (α̂_i, β̂_i) 低维(≤16),天然适合聚类找锚点。</li>
+<li><strong>gp-IRT 估计器</strong>:加权的锚点估计(低偏差、高方差)与 p-IRT 预测(低方差、可能有偏)的凸组合,权重 λ = b̂²/(σ̂²/|Î_j|+b̂²) 由估计偏差与样本量自动决定;非二值得分先按阈值 c 二值化再建模。</li>
+<li><strong>核心数字</strong>:每场景 100 题即可把估计误差压到约 2%——MMLU 14K→100(降本 140 倍)、Open LLM Leaderboard 每场景 30 题就够(29K→180,降 160 倍)、HELM 10K→1,000、AlpacaEval 805→100。</li>
+<li><strong>鲁棒性</strong>:按日期用最新模型测试(时间偏移)依然有效;40 个领域特化 LLM 上 correctness 锚点明显退化而 IRT 锚点几乎不受影响;单模型误差几乎都 ≤4%;把测试集扩到 6 个月未来数据结论不变。</li>
+<li><strong>发布物</strong>:Open LLM Leaderboard、MMLU、HELM、AlpacaEval 2.0 的 tiny 版本(每场景 100 题)+ gp-IRT 工具(代码与预训练 IRT 参数,CPU 数秒),配合 HuggingFace 数据与 Colab 演示。</li>
+<li><strong>扩展</strong>:方法可迁移到提示评测(跨模板、跨模型规模偏移下仍准)与自适应选题(误差更低但当前实现需 5 分钟以上)。</li>
+<li><strong>局限与对策</strong>:严重分布偏移(如「简单题错、难题对」的异常模式)与模型能力快速跃升会损害外推;应定期用新模型数据更新精选题目与 IRT 参数。</li>
+<li><strong>课程关联</strong>:与 Press 的基准设计帖(怎么造)、Zhu2025 的严谨性检查清单(怎么查)构成评测单元三步曲;本文回答「怎么便宜可靠地评」,其「锚点+统计模型」思路也可迁移到 Agent 基准的成本控制。</li>
+</ul>
+      </div>
+    </article>
+    <nav class="pager"><a class="pager-prev" href="Zhou2023_LIMA_NeurIPS2023.html"><span>上一篇</span>&quot;LIMA:对齐中的「少即是多」&quot;</a><a class="pager-next" href="Press2024_How_to_Build_Good_LM_Benchmarks.html"><span>下一篇</span>&quot;如何构建好的语言建模基准&quot;</a></nav>
+  </main>
+</div>
+<script src="../assets/site.js"></script>
+</body>
+</html>

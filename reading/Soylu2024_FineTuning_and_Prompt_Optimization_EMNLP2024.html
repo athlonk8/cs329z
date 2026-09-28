@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>&quot;微调与提示优化:单打都不如组合拳(BetterTogether)&quot; · CS 329Z 中文学习站</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html"><span class="brand-mark">CS</span>329Z<span class="brand-sub">中文学习站</span></a>
+    <nav class="topnav">
+      <a href="../index.html#syllabus">课程表</a>
+      <a href="../index.html#dates">重要日期</a>
+      <a href="../index.html#about">关于本站</a>
+    </nav>
+    <div class="searchbox"><input id="search-input" type="search" placeholder="搜索材料 / 主题…" autocomplete="off"><div id="search-results" class="search-results" hidden></div></div>
+  </div>
+</header>
+<div class="read-layout">
+  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">论文精读</a><ul><li><a href="#_3">摘要(全译)</a></li><li><a href="#1">1. 引言</a></li><li><a href="#2">2. 问题陈述</a></li><li><a href="#3-bettertogether">3. BetterTogether 算法</a></li><li><a href="#4">4. 实验设置</a></li><li><a href="#5-1">5. 结果与讨论(表 1 主结果)</a></li><li><a href="#6">6. 局限</a></li></ul></li><li><a href="#_4">要点速览</a></li></ul></aside>
+  <main class="read-main">
+    <div class="crumb"><a href="../index.html">首页</a> / <a href="../index.html#week-week05b_optimization">第5周 · 优化:测试时计算与提示优化</a></div>
+    <article class="read-article">
+      <h1 class="read-title">&quot;微调与提示优化:单打都不如组合拳(BetterTogether)&quot;</h1>
+      <p class="read-title-en">&quot;Fine-Tuning and Prompt Optimization: Two Great Steps that Work Better Together&quot;</p>
+      <p class="read-meta">Dilara Soylu, Christopher Potts, Omar Khattab · &quot;EMNLP 2024 · Stanford University&quot;</p>
+      <p class="read-badges"><span class="badge badge-recommended">推荐</span><span class="badge badge-kind">论文精读</span><button class="lang-toggle" id="lang-toggle" type="button">仅看中文</button><a class="orig-link" href="../originals/week05b_optimization/Soylu2024_FineTuning_and_Prompt_Optimization_EMNLP2024.pdf" target="_blank" rel="noopener">查看原文(PDF) ↗</a></p>
+      <div class="markdown-body">
+<h2 id="_1">导读</h2>
+<p>"该微调还是该优化提示?"是每个 LLM 应用团队都会遇到的问题,而本讲(第 5 周·优化)三篇论文恰好构成三种答案:GEPA 说提示优化够强、MIPRO 说提示要联合优化指令与示例、本文(BetterTogether)则说<strong>两个都要、交替着做</strong>。这是 DSPy 系列的实证研究:在模块化 LM 流水线(RAG 式程序)缺少中间标签与梯度的现实约束下,作者提出"提示优化 → 自举微调 → 再提示优化"的交替框架,让同一个 LM 用自举(program traces)生成的数据教自己。在 HotPotQA(多跳问答)、GSM8K(数学)、Iris(特征分类)× mistral-7b / llama-2-7b / llama-3-8b 的 9 个组合中,7 个的最佳策略都是"提示+权重联合"——提示优化在所有任务上都不可省略,而联合优化比任何单一手段都强。这为"提示工程 vs 微调"之争给出了工程答案:<strong>不是二选一,是流水线</strong>。</p>
+<h2 id="_2">论文精读</h2>
+<h3 id="_3">摘要(全译)</h3>
+<p>NLP 系统正日益采取复杂模块化流水线的形式,例如检索增强生成(RAG),其中每个模块可能涉及不同的语言模型(LM)及关联的提示模板。这些复合系统通常缺少中间标签或梯度流来优化各模块,使其端到端优化颇具挑战。我们寻求同时优化此类系统的模块级 LM 权重与提示模板以最大化下游任务指标的策略。我们首次提出将权重优化与提示优化策略<strong>组合</strong>起来,通过在两者之间交替,让同一个 LM 教自己,来优化模块化 LM 流水线。在使用 mistral-7b、llama-2-7b 和 llama-3-8b 进行的多跳问答、数学推理与基于特征的分类实验中,这些"BetterTogether"策略(联合优化流水线的权重与提示)在跨 LM 与任务平均上,分别比仅优化权重、仅优化提示高出最多 60% 和 6%。BetterTogether 优化器已在 DSPy 中发布(dspy.ai)。</p>
+<h3 id="1">1. 引言</h3>
+<ul>
+<li>LM 程序(把 LLM 多种能力组合成流水线:RAG、多跳推理、信息抽取等)把问题拆成模块化子任务,可控性强;若能让各 LM 既准确完成子任务、又在多阶段流水线中有效沟通,可靠 NLP 系统的范围将大大扩展。</li>
+<li>DSPy 框架把程序 Φ 定义为语言模块 M 的组合;每模块靠<strong>提示 π</strong> 调用权重为 <strong>θ</strong> 的 LM;优化目标就是更新各模块的 π 与 θ 最大化下游指标 μ。既有工作(Khattab et al. 2024; Opsahl-Ong et al. 2024)分别研究了提示优化与简单微调;本文研究<strong>同时更新两者</strong>。</li>
+<li>挑战:Φ 不可微、模块缺标签、模块间依赖复杂;训练集小、LM 调用预算有限。</li>
+<li>核心假设:(1) <strong>微调前先做提示优化,能为微调自举出更成功的训练数据点</strong>;(2) <strong>微调后再做提示优化,可对 LM 程序行为做精细调整,提升输出质量</strong>——即使微调常被视为更强的工具,这一组合效果也令人惊讶,尤其两者最终用的都是同一批训练输入。</li>
+</ul>
+<h3 id="2">2. 问题陈述</h3>
+<ul>
+<li>程序 Φ: X→Y 如黑盒函数,执行中调用 |M|≥1 个语言模块(如多跳检索问答管线:拆子问题→迭代检索→作答)。每模块 Mi 完全由 (1) 提示字符串 πi(槽位填入模块输入)与 (2) LM 权重 θi 指定。</li>
+<li>给定小训练集 X(输入 + 可选元数据如标签)与指标 μ,目标:argmax over Θ,Π of E[μ(Φ⟨Θ,Π⟩(x), m)]。</li>
+<li>问题不可行(搜索空间大、无梯度、无中间标签),故求近似策略。</li>
+</ul>
+<h3 id="3-bettertogether">3. BetterTogether 算法</h3>
+<p><strong>总体框架(算法 1)</strong>:三步走——
+1. <strong>OPTIMIZE_PROMPTS</strong>:先优化提示;
+2. <strong>FINETUNE_WEIGHTS</strong>:用优化后提示自举出的数据微调权重;
+3. 再次 <strong>OPTIMIZE_PROMPTS</strong>:用微调后的权重重新优化提示。
+返回 Φ⟨Θ′, Π′′⟩。每步原则上可选,由此衍生出 8 种待评组合:vanilla、仅 Π、仅 Θ、Π→Π、Θ→Θ、Π→Θ、Θ→Π、<strong>Π→Θ→Π</strong>。</p>
+<p><strong>实例化(算法 2,DSPy Bootstrap-∗ 家族)</strong>——关键:提示与权重优化的训练数据都来自<strong>自生成的程序轨迹(program traces)</strong>,而非人工标注:</p>
+<ul>
+<li><strong>BootstrapFewshotRS(BFRS,提示优化)</strong>:把 X 分成训练/验证 split;在训练输入上执行 Φ,记录每个模块的输入-输出对(trace);只保留最终输出正确(μ≥λ)的 trace;多次随机抽样若干 trace 子集构造各模块的少样本提示,在验证集上评分,选最高分子集。该简单搜索在 LM 程序上持续带来大幅提升,常胜过手工或自动优化指令。</li>
+<li><strong>BootstrapFinetune(BFT,权重微调)</strong>:在全部训练例上跑 Φ,保留正确 trace;提取每模块的"提示-补全"对;再用 vanilla 提示替换 Φ 生成的提示构造新对(让微调数据不绑定特定提示);合并为单一数据集,以隐式<strong>多任务目标</strong>(子任务=各模块角色)微调 LM 权重(LoRA);返回权重更新后的 Φ。</li>
+<li>与既有工作的差别:Khattab et al. (2024) 只在窄场景用 BFT(大模型 Llama2-13b 给 T5-Large 造数据),既没让模型<strong>自己教自己</strong>,也没让 BFRS 在微调后的程序里扮演角色;本文首次通过交替组合两者实现 LM 自我改进。</li>
+</ul>
+<h3 id="4">4. 实验设置</h3>
+<ul>
+<li><strong>任务/程序</strong>:HotPotQA(fullwiki,3 模块:两跳查询生成 + 作答,CoT,冻结 ColBERTv2 检索器,精确匹配;1000 训/500 开发/1500 测)、GSM8K(单模块 CoT 数学;1000/500/全量 1319 测)、Iris(单模块 CoT 分类,150 例均分三份;专门检验"纯梯度方法是否在特征分类上碾压提示方法")。</li>
+<li><strong>模型</strong>:mistral-7b-instruct-v0.2、llama-2-7b-chat、llama-3-8b-instruct;同一实验中提示优化、自举、微调用同一个模型(自我教学)。提示优化内部子采样:HotPotQA/GSM8K 100 训 + 250 验,Iris 15 训 + 35 验。微调用 LoRA。每设定 3 个随机种子取平均。</li>
+</ul>
+<h3 id="5-1">5. 结果与讨论(表 1 主结果)</h3>
+<p>9 个(任务×模型)组合中 <strong>7 个的最佳策略都是联合优化</strong>(虽然 Π→Θ、Θ→Π、Π→Θ→Π 之间无明确赢家)。要点:</p>
+<ul>
+<li><strong>提示优化在所有任务上都至关重要</strong>:仅 Π 就把 vanilla 大幅拉高(如 mistral HotPotQA 17.2→33.8;llama-3 Iris 48.0→79.3)。</li>
+<li><strong>仅 Θ(微调)经常不如仅 Π</strong>:如 mistral HotPotQA 22.9 vs 33.8;llama-3 Iris 37.3 vs 79.3。且<strong>冷启动问题</strong>——若模型在 vanilla 下几乎产不出正确输出,llama-2 的 GSM8K(24.0)与 Iris(0.0)无足够自举数据,Θ 起步的设定直接失败(表中 "–")。</li>
+<li><strong>联合策略的胜例</strong>:llama-2 Iris 上 Θ→Π=66.7 / Π→Θ→Π=65.3,远超仅 Π 的 56.7;mistral Iris 上 Θ→Π 达 66.7(vs 仅 Π 57.3);GSM8K 上 Π→Θ(mistral 47.3)或 Θ→Π(48.3)常为列内最佳。</li>
+<li><strong>对称的互补机制</strong>:提示优化为微调提供更好数据(Π→Θ),微调后的权重又让提示优化站上更高起点(Θ→Π)。</li>
+<li>汇总:相对"仅权重/仅提示"的最佳设定,联合策略在 HotPotQA 提升 5-78%、GSM8K 提升 2.5-10%、Iris 提升 3.5-88%(摘要口径:平均高出最多 60% 与 6%)。</li>
+</ul>
+<h3 id="6">6. 局限</h3>
+<ul>
+<li>仅 9 个组合(3 任务 × 3 模型),其他任务/程序/模型或有不同模式;权重优化只用 LoRA,或许存在强到不再需要提示优化的微调方法。</li>
+<li>尚不理解<strong>为什么</strong>两者都重要——提示优化与微调在多阶段 LM 程序中的角色都是新事物,理解不足可能带来意料之外的组件交互风险(相比已研究数十年的标准梯度下降)。</li>
+</ul>
+<h2 id="_4">要点速览</h2>
+<ul>
+<li>BetterTogether = <strong>提示优化 → 自举微调 → 再提示优化</strong> 的交替框架,数据全部来自自举 program traces,同一模型自我教学。</li>
+<li>9 个设定中 7 个:联合 &gt; 单一手段;<strong>提示优化是处处不可省略的基线</strong>。</li>
+<li>仅微调的两大坑:常不敌提示优化;vanilla 冷启动失败时连微调数据都自举不出来(llama-2 GSM8K/Iris 直接 "–")。</li>
+<li>机制互补:好提示 → 更好的微调数据;好权重 → 提示优化的更高起点。</li>
+<li>与课程关联:与 MIPRO(提示侧)、GEPA(反思侧)、Snell 测试时计算(推理侧)同讲对照——优化可以发生在<strong>提示、权重、推理时</strong>三个层面,且可组合。</li>
+<li>工程启示:别问"微调还是提示工程",先做提示优化建立强基线,再自举微调,最后回到提示;全程用 DSPy 抽象管理。</li>
+</ul>
+      </div>
+    </article>
+    <nav class="pager"><a class="pager-prev" href="Snell2025_Scaling_Test_Time_Compute_ICLR2025.html"><span>上一篇</span>&quot;优化地扩展 LLM 测试时计算,可以比扩展模型参数更有效&quot;</a><a class="pager-next" href="Shankar2024_Data_Flywheels_blog.html"><span>下一篇</span>LLM 应用的数据飞轮</a></nav>
+  </main>
+</div>
+<script src="../assets/site.js"></script>
+</body>
+</html>

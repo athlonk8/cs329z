@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>&quot;OSWorld:在真实计算机环境中评测多模态智能体的开放式任务能力&quot; · CS 329Z 中文学习站</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html"><span class="brand-mark">CS</span>329Z<span class="brand-sub">中文学习站</span></a>
+    <nav class="topnav">
+      <a href="../index.html#syllabus">课程表</a>
+      <a href="../index.html#dates">重要日期</a>
+      <a href="../index.html#about">关于本站</a>
+    </nav>
+    <div class="searchbox"><input id="search-input" type="search" placeholder="搜索材料 / 主题…" autocomplete="off"><div id="search-results" class="search-results" hidden></div></div>
+  </div>
+</header>
+<div class="read-layout">
+  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">论文精读</a><ul><li><a href="#_3">摘要</a></li><li><a href="#1-introduction">1 Introduction(引言)</a></li><li><a href="#2-osworld-environmentosworld">2 OSWorld Environment(OSWorld 环境)</a></li><li><a href="#3-osworld-benchmarkosworld">3 OSWorld Benchmark(OSWorld 基准)</a></li><li><a href="#4-benchmarking-llm-and-vlm-agent-baselines">4 Benchmarking LLM and VLM Agent Baselines(基线评测)</a></li><li><a href="#5-analysis">5 Analysis(分析)</a></li><li><a href="#6-related-work">6 Related Work(相关工作)</a></li><li><a href="#7-conclusion-and-future-work">7 Conclusion and Future Work(结论与未来工作)</a></li></ul></li><li><a href="#_4">要点速览</a></li></ul></aside>
+  <main class="read-main">
+    <div class="crumb"><a href="../index.html">首页</a> / <a href="../index.html#week-week11b_open_problems">第11周 · 开放问题</a></div>
+    <article class="read-article">
+      <h1 class="read-title">&quot;OSWorld:在真实计算机环境中评测多模态智能体的开放式任务能力&quot;</h1>
+      <p class="read-title-en">&quot;OSWorld: Benchmarking Multimodal Agents for Open-Ended Tasks in Real Computer Environments&quot;</p>
+      <p class="read-meta">&quot;Tianbao Xie et al.&quot; · &quot;NeurIPS 2024 D&amp;B · HKU, CMU, Salesforce Research &amp; U. Waterloo&quot;</p>
+      <p class="read-badges"><span class="badge badge-recommended">推荐</span><span class="badge badge-kind">论文精读</span><button class="lang-toggle" id="lang-toggle" type="button">仅看中文</button><a class="orig-link" href="../originals/week11b_open_problems/Xie2024_OSWorld_NeurIPSD&amp;B2024.pdf" target="_blank" rel="noopener">查看原文(PDF) ↗</a></p>
+      <div class="markdown-body">
+<h2 id="_1">导读</h2>
+<p>本文属于 CS 329Z 第 11 周"开放问题"专题。前三周的课程从记忆、工具使用讲到多智能体系统,而这一讲把问题拉回一个更根本的尺度:如果智能体的终极目标是在我们的电脑上替我们干活,它们现在到底行不行?OSWorld 给出了第一份系统的答卷。</p>
+<p>在此之前的智能体基准存在两大空白:要么只有演示数据、没有可执行环境(Mind2Web、AITW 等),其非执行式评估假设每个任务只有一种解法,会错误惩罚其他正确路径;要么环境被限制在单一应用或领域(WebArena 限于网页、InterCode 限于代码),无法反映真实计算机使用的多样与复杂——真实工作流经常横跨多个应用、同时使用 GUI 与 CLI。OSWorld 是第一个<strong>可扩展的真实计算机环境</strong>:基于虚拟机技术支持 Ubuntu、Windows、macOS,允许自由的原始键鼠控制,支持任务初始状态配置、基于执行的评估与交互式学习。在其上构建的基准包含 369 个(另有 43 个 Windows 补充任务)来自真实用户场景的计算机任务,每个都配初始状态配置与定制评估脚本(共 134 个独特评估函数)。对 GPT-4V、Gemini、Claude-3、CogAgent 等一众 LLM/VLM 智能体的评测结果触目惊心:人类 72.36% vs 最好模型 12.24%,差距主要在 GUI 定位(grounding)与操作知识。对任何关心计算机使用智能体、基准设计或"评估如何驱动领域进步"的人,OSWorld 都是必知的工作——后来的 Anthropic Computer Use、OpenAI Operator 等系统都以它为标准评测场之一。</p>
+<h2 id="_2">论文精读</h2>
+<h3 id="_3">摘要</h3>
+<p>能在极少人工干预下完成复杂计算机任务的自主智能体,有望变革人机交互、显著提升可访问性与生产力。然而,既有基准要么缺乏交互式环境,要么局限于特定应用或领域,无法反映真实世界计算机使用的多样性与复杂性,从而限制了任务范围与智能体的可扩展性。为此,作者引入 OSWorld——首个可扩展的、面向多模态智能体的真实计算机环境,支持跨 Ubuntu、Windows、macOS 等操作系统的任务配置、基于执行的评估与交互式学习。OSWorld 可作为评估涉及任意应用的开放式计算机任务的统一集成环境。在 OSWorld 之上,作者构建了包含 369 个计算机任务的基准:涉及真实网页与桌面应用、开放域、操作系统文件 I/O 以及跨多应用的工作流。每个任务都源自真实世界计算机使用案例,并配有详细的初始状态配置与定制的执行式评估脚本,保证评估可靠、可复现。对最先进 LLM/VLM 智能体的广泛评估揭示了其作为计算机助手的严重不足:人类可完成 72.36% 以上的任务,而最好的模型只达到 12.24% 的成功率,主要困于 GUI 定位(grounding)与操作知识。基于 OSWorld 的综合分析提供了以往基准无法提供的、开发多模态通用智能体的重要洞察。代码、环境、基线模型与数据全部开源。</p>
+<h3 id="1-introduction">1 Introduction(引言)</h3>
+<p>人类通过计算机完成数字世界中的核心任务:浏览网页、剪辑视频、管理文件、数据分析、软件开发,这些工作流往往通过图形界面(GUI)与命令行界面(CLI)横跨多个应用。由大型视觉-语言模型(VLM)驱动的自主数字智能体有望革命化我们与计算机环境的交互方式:跟随高层自然语言指令,让数字交互更易用、大幅提升生产力。但开发这类多模态智能体的一个主要障碍,是<strong>缺乏基于真实交互环境、覆盖跨操作系统/界面/应用多样性与复杂性的基准</strong>,这限制了任务范围与智能体的可扩展性。</p>
+<p>既有基准的问题有三层:(1) 只提供演示数据集、无可执行环境(Mind2Web、AITW、OmniAct 等),非执行式评估假设单一解法,错误惩罚替代正确解,也错失了交互式学习、真实世界探索等关键开发手段;(2) 已有的可执行环境把人机交互的观察与动作空间过度简化,并限制在特定应用或领域——少数域的网页导航(WebShop、WebArena)、编程(InterCode)或其组合(AgentBench);(3) 这些受限环境中开发出的智能体无法覆盖"在开放域中跨应用、跨界面导航"的复杂真实场景(例如:用表格软件与文件夹里的收据更新记账表;修改贪吃蛇游戏代码让蛇能吃到食物)。</p>
+<p>OSWorld 的目标正是补上这一缺口:一个可扩展的真实计算机环境,支持对真实计算机应用的自由原始键鼠控制、初始任务状态配置、基于执行的评估与交互式学习,跨主流操作系统。在其上,作者用 369 个真实世界计算机任务构建基准,由 9 位计算机背景作者逐一标注初始状态配置(模拟"人类工作进行到一半"的状态)与定制执行式评估脚本;基准共 134 个独特评估函数,数量级超过以往工作。人类性能研究表明 OSWorld 任务比既有基准更耗时、更有挑战。</p>
+<p>基线评测覆盖 GPT-4V 系列、Gemini 系列、Claude-3 Opus、Qwen-Max 及开源的 Mixtral、Llama-3、CogAgent,成绩从 0.99% 到 12.24% 不等,某些应用子集甚至为 0%;多应用工作流任务上最好基线也只有 6.57%——当前 LLM/VLM 远不足以胜任计算机助手。分析进一步揭示:无障碍树(a11y tree)与 Set-of-Mark 等额外信息有帮助但也可能误导,效果因模型而异;VLM 智能体难以在截图上定位精确坐标、倾向重复动作、无法处理意外窗口噪声、缺乏基本 GUI 交互常识与应用领域知识;更高分辨率与更多轨迹历史可把性能提升甚至翻倍,但需要更长上下文与高效建模。</p>
+<h3 id="2-osworld-environmentosworld">2 OSWorld Environment(OSWorld 环境)</h3>
+<h4 id="21">2.1 任务定义</h4>
+<p>自主数字智能体任务被形式化为部分可观察马尔可夫决策过程(POMDP)(S, O, A, T, R):给定观察 ot(自然语言指令 + 截图/无障碍树或其组合),智能体生成可执行动作 at(如点击屏幕某像素 <code>.click(300, 540, button='right')</code>、按组合键 <code>.hotkey('ctrl', 'alt', 't')</code>),环境转移到新状态并返回新观察。循环持续到生成终止动作(DONE 或 FAIL)或达到最大步数(实验中为 15 步)。本版 OSWorld 实现基于执行的奖励函数 R: S×A → [0,1]:若最终状态转移满足任务目标(完全或部分达成),或智能体对不可行任务准确预测失败,则在最后一步给 1 或 1 以下的正小数;其余情形返回 0。</p>
+<h4 id="22">2.2 真实计算机环境基础设施</h4>
+<p>OSWorld 是可执行、可控的环境,用<strong>虚拟机</strong>技术在真实操作系统(Ubuntu、Windows、macOS)上支持任务初始化、执行式评估与交互式学习。选择虚拟机而非 Docker 的原因:虚拟机运行自己的内核与系统,兼容不同 CPU 架构上的多种操作系统。虚拟机提供安全隔离(防止智能体对宿主机造成不可逆破坏),快照功能支持高效重置。整个环境由配置文件驱动,覆盖四个阶段:初始化阶段的界面初始化(下载文件、打开软件、调整布局)、评估阶段的后处理(激活窗口、保存文件)、评估所需文件与信息的获取(如最终的表格文件、Chrome 的 cookies)、以及评估函数与参数。</p>
+<p><strong>2.2.1 总览</strong>:环境运行在宿主机上,Coordinator 接收配置文件后自动创建虚拟机实例,经 Task Manager 初始化所需状态。配置文件指定所用虚拟机快照及设置信息。环境就绪后智能体开始交互:接收截图、无障碍树及终端输出等观察,生成可执行动作(以代码字符串输入,由 Simulator 在虚拟机中执行)。任务完成后,Task Manager 按 post-config 做后处理、把数据取回宿主机,然后运行评估脚本。单台宿主机可同时运行多个虚拟机,实现训练与评估的并行,支持无头(headless)运行。</p>
+<p><strong>2.2.2 初始任务环境设置</strong>:许多需要帮助的真实场景并非发生在数字活动的起点(刚开机、刚启动应用),而是中间阶段(某些软件已打开、电脑刚崩溃过)。OSWorld 尽可能模拟这些中间状态以复刻真实场景——这自然也给智能体的建模与探索带来更大挑战。配置采用混合方式而非逐例快照(后者会存储大量无关硬件状态,每例需数 GB 空间):流程分三步——启动虚拟机模拟器、准备文件(从云端下载文件或脚本,可选)、执行预处理命令(打开文件或标签页、改变窗口大小等,可选)。提供便捷 API 标准化初始条件配置,易于扩展规模化。</p>
+<p><strong>2.2.3 基于执行的评估</strong>:通用计算机任务无法归结为统一模式或用单一度量衡量,因此 OSWorld 为每个例子设计专属评估指标:针对所用软件与任务需求定制的前置设置、后处理与专用函数。这涉及解读软件内部文件、使用特定软件包、依据软件权限预置脚手架(如为 Chrome 与 VLC 打开远程调试端口、为 VS Code 创建扩展),偶尔还需逆向工程工具辅助(如解密 Thunderbird 的账户信息)。由此构建了庞大的函数库:从云端与虚拟机软件中获取不同类型、类别、粒度的文件与数据信息,以及覆盖不同侧面及其组合的评估函数。表 1 给出三个示例:(1) 清除 Amazon cookies——从虚拟机取 cookie 数据,按域名规则判断是否删除;(2) LibreOffice Calc 重命名工作表并复制——分别从虚拟机与云端取结果文件与金标准文件,按工作表名/数据规则比较表格;(3) 从缴费记录查邮件地址补全收件人——取当前界面无障碍树,按选择器规则检查收件人栏是否包含指定邮箱。对具有实时性的任务(论文引用数、博客内容等),getter 内置动态函数(如爬虫脚本)在评估时刻取真值再与智能体结果比对。</p>
+<h4 id="23">2.3 观察空间</h4>
+<p>观察空间包含<strong>完整桌面截图</strong>(含鼠标位置与形状、各应用窗口、以不同大小与顺序打开的文件/文件夹),与人感知一致;同时提供 XML 格式的<strong>无障碍(a11y)树</strong>(Ubuntu 经 ATSPI 2、Windows 经 PyWinAuto 获取),对齐以往网页/移动智能体研究提供 DOM 与视图层级的做法。原始观察允许跨应用富交互,但也带来挑战:高分辨率图像(如 4K 截图)与长结构化文本下的长程决策。附录还实现了终端输出观察与视频录制,并支持观察的重构与扩展。</p>
+<h4 id="24">2.4 动作空间</h4>
+<p>动作空间涵盖<strong>所有鼠标与键盘动作</strong>:移动、点击(左/右/多击)、拖拽、按键、组合键等,覆盖全部人机动作空间。实现采用广泛使用的键鼠控制库 <strong>pyautogui</strong>:智能体必须生成语法正确的 pyautogui Python 代码作为动作;基础动作(如 press、moveTo)还可嵌入 for 循环等程序结构,大幅提升动作表达力。鉴于时机判断与"任务是否不可行/已完成"判断的重要性,额外加入三个特殊动作:<strong>WAIT</strong>(决定等待)、<strong>FAIL</strong>(判定任务不可行)、<strong>DONE</strong>(判定任务完成)。以往领域专用智能体(MiniWoB++、CC-Net、WebArena)的动作空间只含点击、输入及网页专用动作,无法建模右键、Ctrl+点击选择等计算机上可能的全部动作,给智能体的学习能力设了上限。(附录中另提供 computer_13 动作空间变体:把 pyautogui 封装为 13 类带参数枚举的有限动作类,便于强化学习使用。)</p>
+<h3 id="3-osworld-benchmarkosworld">3 OSWorld Benchmark(OSWorld 基准)</h3>
+<p>基准包含在 Ubuntu 上定义与执行的 <strong>369 个真实计算任务</strong>,以及基于 OSWorld 环境的 <strong>43 个 Windows 任务</strong>(因版权问题需用户自行激活)。</p>
+<h4 id="31">3.1 操作系统与软件环境</h4>
+<p>OSWorld 支持 Windows、macOS、Ubuntu。开发上以 Ubuntu 及其开源应用为主(开源性质带来更易用的任务设置与评估 API),Windows 提供标注好的测试样例。真实的 OS 环境首次使"各类计算机任务"皆可定义,包括跨应用(如 Chrome + 文件管理器)与跨界面(GUI + CLI)的任务。综合考虑可用性、社区与多样性,主要聚焦八个代表性应用及系统自带基础应用:Chrome(网页浏览)、VLC(媒体播放)、Thunderbird(邮件)、VS Code(编码 IDE)、LibreOffice Calc/Writer/Impress(表格/文档/幻灯片)、GIMP(图像编辑),以及终端、文件管理器、图片查看器、PDF 查看器等 OS 基础应用。这些应用的单独或组合使用展现不同的操作逻辑,需要的技能包括常识知识、高分辨率感知、软件快捷键掌握与键鼠精确控制。</p>
+<h4 id="32">3.2 任务</h4>
+<p>369 个任务来自作者经历与多样外部来源,每个任务都精心标注:自然语言指令、初始状态配置(基于提供的 VM 镜像初始化所需文件与设置动作)、手工制作的评估脚本。总体投入:9 名计算机专业学生作者、超过 3 个月、约 <strong>1800 人时</strong>(单应用任务 650 小时、工作流任务 750 小时、复查 400 小时)。</p>
+<p><strong>任务指令与场景</strong>:为获得最多样、贴近现实的使用案例,来源包括官方指南与教程、视频教程(TikTok、YouTube)、how-to 网站(WikiHow)、问答论坛(Reddit、Quora、Superuser、StackOverflow)、正式视频课程(Coursera、Udemy)与公开个人博客;按浏览量与投票判断受欢迎度、实用性与多样性来筛选。互联网上难以找到足够的多软件协作示例,因此作者大量头脑风暴,组合现有示例或从日常生活场景取材。每例经另外两名作者交叉检查可行性、歧义性与对来源的忠实度。任务集合不仅包含可完成的任务,也包含<strong>不可行任务</strong>(因功能弃用或真实用户提出的幻觉功能而本质上无法完成),共 30 例;此外从 NL2Bash、Mind2Web、SheetCopilot、PPTC、GAIA 等单应用/领域基准整合 84 个例子,展示环境对开放式任务创建的统一能力。整合外例又耗时约 400 人时。</p>
+<p><strong>初始状态配置</strong>:任务所需文件尽量从任务来源获取,公开不可得则按场景尽可能真实地重建;基于软件与 OS 的 API 开发了控制窗口打开/调整大小的函数,API 难实现的用 pyautogui 重实现。每个例子的设置步骤约需 1 人时构建。</p>
+<p><strong>执行式评估</strong>:每个任务选择合适的 getter 函数(从最终状态提取关键组件,如修改后的文件、窗口元素显示的文本)、评估函数与参数组成配置。函数不存在则构建并加入环境函数库。每份评估完成后,标注者用自设计测试用例初测;在人类评估与实验阶段,每个例子再从"与指令对齐""不同解法下的正确性"角度被不同的人复查三轮。最终实现接近逐例的执行式评估脚本,共 <strong>134 个独特评估函数</strong>——显著多于以往基准(WebArena 为 5、MiniWoB++ 为 125)。每个例子的评估开发与检查平均约 2 人时。</p>
+<p><strong>质量控制</strong>:标注完成后,每个例子由两位未参与该例标注的作者充当智能体实际完成任务,评估质量并反馈(指令不清、无法完成、边角案例崩溃、严重的假阳/假阴等),共同修订补充。人类性能与基线实验期间又修复发现的问题,四轮检查投入超 400 人时。作者坦言:更多时间投入与红队测试可进一步减少假阳/假阴,留作未来工作。</p>
+<h4 id="33">3.3 数据统计</h4>
+<p>369 个任务中:单应用任务 268 个(72.6%),多应用工作流任务 101 个(27.4%);从其他基准整合 84 个(22.8%);不可行任务 30 个(8.1%)。另含 43 个 Windows 补充任务、<strong>302 个不同初始状态</strong>、<strong>134 个评估脚本</strong>。按应用域聚类为五类:OS、Office(LibreOffice 三件套)、Daily(Chrome、VLC、Thunderbird)、Professional(VS Code、GIMP)、Workflow(多应用)。与既有基准的对比表(Table 4)显示 OSWorld 是唯一同时满足"可控可执行环境、环境可扩展性、多模态支持、跨应用任务、中间初始状态"的基准,且 134 个执行式评估函数远超 GAIA(0)、Mind2Web(0)、WebArena(5)、MiniWoB++(125)、WebShop(1)等。</p>
+<h4 id="34">3.4 人类性能</h4>
+<p>每个例子都做人类评估:标注者为具备基础软件技能、但未接触过样例与软件的计算机专业大学生,记录完成时间与对错;同时从 WebArena 抽 100 例做同设置对比。OSWorld 任务明显更耗时:完成时间中位数 <strong>111.94 秒</strong>(WebArena 为 35.38 秒),大量例子分布在 900 秒甚至更久;人类准确率约 <strong>72.36%</strong>,显著低于纯网页任务的 88%。这说明 OSWorld 任务复杂度更高,需要更深的理解与熟练度。</p>
+<h3 id="4-benchmarking-llm-and-vlm-agent-baselines">4 Benchmarking LLM and VLM Agent Baselines(基线评测)</h3>
+<h4 id="41-llm-vlm">4.1 LLM 与 VLM 智能体基线</h4>
+<p>基线覆盖开源代表 Mixtral、CogAgent、Llama-3 与闭源的 GPT、Gemini、Claude、Qwen 家族,并探索 Set-of-Mark(SoM)辅助方法。早期按 VisualWebArena 采用 few-shot 提示((观察, 动作) 对为示例)效果很差(纯截图设置下成功率仅 2.79%),归因于缺少历史编码与提示方案差异,因此实验改为聊天模式:提供最近 3 轮观察与动作(user/assistant 交替),温度 1.0、top-p 0.9,超长则从头截断;最大步数限制 15。四种输入设置:</p>
+<ul>
+<li><strong>无障碍树</strong>:检验先进文本 LLM 能否在上下文中推理与定位。原始 XML 动辄百万 token,故按标签、可见性、可用性、有无文本/图像内容过滤非必要元素,压缩为制表符分隔的紧凑表格格式,只留标签、名称、文本、位置与大小;LLM 需把动作预测接地到准确坐标。</li>
+<li><strong>截图</strong>:最接近人类感知,原始 1920×1080 截图直接输入 VLM,由其理解并预测带精确坐标的动作;另以人工降采样做分辨率消融。</li>
+<li><strong>截图 + 无障碍树</strong>:检验组合能否改善 VLM 的空间定位。</li>
+<li><strong>Set-of-Mark</strong>:把过滤后的无障碍树元素以编号边界框标注在截图上(沿用 VisualWebArena 与 UFO 的做法并附文本元数据),VLM 只需指定编号索引而非精确坐标,再由后处理映射到动作空间。</li>
+</ul>
+<h4 id="42">4.2 结果</h4>
+<p>主表(Table 5)按五大类任务报告成功率,核心发现:</p>
+<ul>
+<li><strong>LLM/VLM 距离真实计算机上的数字智能体还很远</strong>:纯截图 + pyautogui 下,最强的 GPT-4V 与 Gemini-Pro-Vision 成功率也仅 5.26%–5.80%;最先进的语言模型用无障碍树输入为 2.37%–12.24%。与之对照,不熟悉这些软件的人类整体完成率 72.36%。按输入设置分:无障碍树下 GPT-4(文本)最高 12.24%、GPT-4o 11.36%、Qwen-Max 6.87%;纯截图下 Gemini-ProV 5.80%、GPT-4V 5.26%、Claude-3-Opus 仅 2.42%、CogAgent 1.11%;截图+无障碍树下 GPT-4V 达 12.17%、GPT-4o 11.21%;SoM 下 GPT-4V 11.77%、Gemini-Pro-1.5 7.79%。另一个意外发现:尽管 Claude-3 Opus 在常见基准上与 GPT-4V 相当,在 OSWorld 上作为数字智能体远落后。</li>
+<li><strong>智能体表现随任务类型的方差远大于人类</strong>:面向 CLI 的任务(如 OS 类)普遍好于基于 GUI 的任务(如 Office 类的表格/文档点击操作);不同模型与设置的偏好不一致,差距甚至超过 20%;涉及多软件的 workflow 任务普遍低于 5%(最好 6.57%)。而人类在各类任务上稳定在 70% 上下、波动不超过 5%——这暗示人类理解与完成任务的方式可能与当前基于 LLM/VLM 的逻辑差异巨大。</li>
+<li><strong>无障碍树与 SoM 的效果因模型而异</strong>:给 GPT-4V 增加无障碍树信息明显提升(5.26%→12.17%),说明其在精确感知与推理 GUI 元素上仍有很大改进空间;但对 Gemini-Pro 结论相反。SoM 对 GPT-4V 相比"截图+无障碍树"反而下降——与 SoM 在经典图像理解与网页智能体中的公认有效性相悖;作者推测是因为操作系统内任务分辨率更高、元素多得多(如表格单元格),大量噪声抵消了边界框的辅助作用,且部分任务需要坐标级精细操作,边界框无法建模。</li>
+<li><strong>纯截图设置虽弱,却应是长期终极配置</strong>:纯截图是唯一不需要额外信息的配置,简洁且与人类直观感知一致——无障碍树并非所有软件都支持良好、噪声条件下(如只许通过外围屏幕"看"电脑)可能拿不到,其海量 token(仅叶子节点即可达数万)也给模型带来额外推理负担。未来纯视觉智能体有望带来更强的泛化,乃至与物理世界在更大范围整合。值得注意的是纯截图设置在多应用 workflow 任务上反而有不错表现。</li>
+</ul>
+<h3 id="5-analysis">5 Analysis(分析)</h3>
+<p>除特别说明外,分析均用 GPT-4V + SoM 设置。要点:更高的截图分辨率通常提升性能;更多文本轨迹历史有效但对截图无效;当前 VLM 不擅长利用图像形式的轨迹历史;对 UI 布局与噪声不鲁棒;跨 OS 性能强相关;常见错误包括鼠标点击不准、领域知识有限等。</p>
+<h4 id="51">5.1 按任务难度、可行性与应用数划分的性能</h4>
+<p><strong>难度</strong>(按人类完成时长分:0–60s 易、60–180s 中、&gt;180s 难,分别占 28.72%/40.11%/30.17%):GPT-4V 成功率 16.78%/13.12%/4.59%,超 180 秒的任务几乎无法完成;人类对应 84.91%/81.08%/49.57%,趋势相同但远不至于不可为。<strong>可行性</strong>:不可行任务(8.13%)上智能体 16.67%,可行任务(91.87%)上 13.34%,整体都很低;某些设置下(如纯截图的 Gemini-Pro)智能体动辄输出 FAIL 拒绝尝试,在不可行任务上制造假阳性。<strong>应用数</strong>:单应用任务 13.74%,多应用工作流(27.37%)仅 6.57%;单应用中 GUI 密集的 Office 类最差,LibreOffice Calc 子集常得 0 分。</p>
+<h4 id="52">5.2 多模态观察差异下的性能</h4>
+<p><strong>分辨率</strong>:纯截图输入下性能随分辨率提高直接上升;SoM 设置下有趣地非单调——降到 768×432(0.4 倍)反而最好,再降到 0.2 倍则明显下降。<strong>轨迹历史</strong>:对无障碍树长度的统计显示,容纳约 90% 单次观察需要约 6000 token(第 90 百分位 6343.60)。只依赖当前观察会导致重复犯错;纳入过去 N 轮观察与动作后,SoM 设置性能随历史变长而上升,说明长上下文支持与高效记忆架构的重要性。但纯截图设置下增加历史并不提升——当前 VLM 从图像中提取鲁棒上下文信息的能力远弱于文本。<strong>UI 扰动</strong>:在 28 个智能体表现较好(50.79%)的任务上引入三种扰动(改变窗口位置、把窗口缩到最小、打开无关软件并最大化以遮挡),性能跌去 60% 到 80%;智能体能一定程度切换窗口,却不懂得先把窗口最大化作为中间步骤,缺乏管理窗口状态的完整策略。</p>
+<h4 id="53">5.3 跨操作系统性能</h4>
+<p>把 OSWorld 子集迁移到 Windows(逐例微调适配,环境支持 Windows 下的初始状态设置、最终评估与 a11y 树/截图观察),用 GPT-4V 纯截图评估:Ubuntu 4.88% vs Windows 2.55%,相关系数 0.7——尽管观察空间不同,在 OSWorld 上得到的洞察与方法可以较高可信度迁移到 Windows。</p>
+<h4 id="54">5.4 定性分析</h4>
+<p><strong>成功与失败案例</strong>:GPT-4V 能解决需要复杂问题求解或创造性思考的任务,例如"从《老友记》视频中去掉内嵌字幕并导出 subtitles.srt":智能体把屏幕分成左右两半(VLC 与终端),两次使用 ffmpeg——第一次提取字幕保存为 srt,第二次去除原视频字幕。失败方面:连"把文档标题居中对齐"这种简单任务都失败(选中无关词、打开无关菜单做大量无用动作);对专业软件缺乏先验,如 GIMP 的"降低亮度"不知道在哪个菜单,随机尝试直到耗尽步数。</p>
+<p><strong>GPT-4V 智能体的常见错误</strong>:抽样的 550 个失败例子中,超过 <strong>75% 存在鼠标点击不准</strong>——代码注释里规划得详细准确,却点不到正确坐标,"规划强、执行弱"。点击不准又派生两类高频错误:重复点击(反复误点、调整、失败,耗尽步数)与环境噪声困境(点到无关对象引发弹窗或打开无关应用,因缺乏先验陷入"动作与状态不匹配"且不知如何恢复)。此外还缺乏类人的网页常识(不会关真实网页弹窗、被广告内容吸引),以及指令误解与视觉疏漏。</p>
+<p><strong>人与智能体的难度错位</strong>:人觉得简单的任务(文本与设计类,如"加粗幻灯片字体并加备注""清除文档中所有高亮标记")对智能体很难——互联网缺乏软件操作过程的细粒度数据、训练不足、grounding 与 GUI 逻辑理解欠缺;反之"代码可解"的任务(监控 CPU 30 秒并输出、强制结束进程)对智能体容易,几乎不需 GUI 交互。值得注意,用代码完成有时会偏离指令——如"用 GIMP 剪辑视频 2 到 4 秒"的任务,智能体直接用 ffmpeg 完成,无视"用 GIMP"的要求。还发现智能体在机械重复任务(Excel 复制粘贴、批量编辑)上与人一样低效:人或犯粗心错误,智能体则因缺少 API 或 API 训练数据不足而无法批量高效处理,响应迟缓还会导致超时或超出步数上限。</p>
+<p><strong>Claude-3 vs GPT-4V 对比</strong>:Claude 在 GSM8K、HumanEval 等基准上超过 GPT-4,但在 OSWorld 上平均低 2.84%–7.76%。Claude 能给出令人满意的高层方案,但 grounding 细节存在幻觉:把双击文件理解为"选中"而非"打开";把 LibreOffice Calc 的 B 列当成 C 列;在 VS Code 替换框输入文本却不点全局替换。即"规划对齐人类,执行定位欠缺"。</p>
+<h3 id="6-related-work">6 Related Work(相关工作)</h3>
+<p><strong>多模态智能体基准</strong>:数字交互智能体测试主要横跨编码环境(InterCode、SWE-bench、DevBench 等)、网页场景(MiniWoB++、WebShop、WebArena、VisualWebArena、WorkArena、Mind2Web、WebLINX 等)与移动应用(AndroidEnv、AITW、OmniAct 等);也有连向真实计算机但无交互能力的数据集(AssistGUI、SeeClick、ScreenAgent 等)与综合任务评估(AgentBench、GAIA)。与以往"单一环境或缺可执行性"不同,OSWorld 集成了交互式设置,让智能体能开放式地与操作系统交互,配合多样任务与精确评估脚本、完全可控的环境。</p>
+<p><strong>面向多模态智能体的视觉-语言模型</strong>:既有 GUI 交互工作多用结构化数据(HTML、无障碍树、视图层级)作接地来源,但源码冗长、不直观、充满噪声,有时无法获取,因此多模态乃至纯视觉感知是必须。网页(ScreenAI、Pix2Struct)与移动(CogAgent、AppAgent)上已有专用优化的多模态模型,通用基础模型(GPT-4V/4o、Gemini、Qwen、LLaVA 等)也展现潜力;提示方法与视觉推理范式进一步提升表现。本文评测文本、视觉与多模态输入及多种方法,证明现有多模态模型远非合格的计算机智能体,长程规划、截图细节感知、像素坐标定位与世界知识均有巨大改进空间。</p>
+<h3 id="7-conclusion-and-future-work">7 Conclusion and Future Work(结论与未来工作)</h3>
+<p>OSWorld 的推出标志着自主数字智能体发展的关键一步:提供横跨多操作系统、界面与应用的丰富真实环境,既拓宽了数字智能体可执行的任务范围,也提升了其实用潜力。评测揭示智能体在 GUI 理解与操作知识上的显著不足。作者为社区指出四个方向:(1) <strong>增强 VLM 的 GUI 交互能力</strong>——更长上下文与高效推理(类比机器人领域的 RT-1/RT-2)、对窗口变化鲁棒的 GUI 定位、以图像形式理解上下文(以在此之上构建记忆与反思),需要上游预训练、下游微调乃至模型结构层面的努力;(2) <strong>推进探索、记忆与反思的智能体方法论</strong>——高效编码长观察与动作历史、记忆与反思机制、知识接地,以及实用 GUI 助手所需的个性化(用户画像、长期交互记忆),近期还应为 GUI/CLI 数字智能体设计高效动作协议;(3) <strong>真实环境中的安全挑战</strong>——通用数字智能体未来可能被用于绕过 CAPTCHA、损害专利权、滥用账号、利用漏洞造病毒;当前实验因智能体能力有限未观察到有害破坏行为,虚拟机隔离也防住了对宿主的不可逆伤害,但尚缺乏评估智能体安全性的可靠指标——现有评估函数只看任务完成正确性,很少关注潜在的多余破坏动作,开放真实环境中如何通过环境约束与训练评估和控制潜在行为是重要课题;(4) <strong>扩展数据与环境</strong>——覆盖医疗、教育、工业、交通等专门领域与个性化需求,跨软硬件无缝部署,处理不同应用间 a11y 树质量参差、冗余元素过滤与潜在缺失,以及无痛的数据采集方法(把计算机操作数据便捷转化为智能体能力)。</p>
+<h2 id="_4">要点速览</h2>
+<ul>
+<li><strong>动机</strong>:已有智能体基准要么无可执行环境(非执行式评估惩罚替代正确解),要么局限于网页/代码等单一域;真实计算机使用是跨应用、跨 GUI/CLI 的,需要一个真实、可扩展的统一环境。</li>
+<li><strong>环境</strong>:首个基于虚拟机的真实计算机环境,支持 Ubuntu/Windows/macOS;配置文件驱动"初始状态设置→交互→后处理→取回数据→执行评估"全流程;VM 提供安全隔离与快照重置,单机可并行多 VM、支持无头运行。</li>
+<li><strong>任务形式化</strong>:POMDP;观察 = 截图/a11y 树/终端输出;动作 = pyautogui 代码(全部键鼠动作,可嵌入循环)+ WAIT/FAIL/DONE;奖励为执行式 <a href="成功 1、部分达成正小数、准确识别不可行任务也可得分">0,1</a>;实验最大 15 步。</li>
+<li><strong>基准构建</strong>:369 个 Ubuntu 任务 + 43 个 Windows 任务;来源覆盖教程、论坛、视频课程等真实场景;每例标注初始状态配置与定制评估脚本;9 名作者 3 个月约 1800 人时(另有约 400 人时整合外部 84 例、超 400 人时四轮复查)。</li>
+<li><strong>任务构成</strong>:单应用 268(72.6%)/ 多应用工作流 101(27.4%);不可行任务 30(8.1%);整合 NL2Bash、Mind2Web、SheetCopilot、PPTC、GAIA 共 84 例(22.8%);302 个初始状态、134 个独特评估函数(远超 WebArena 的 5、WebShop 的 1)。</li>
+<li><strong>人类基线</strong>:完成时间中位数 111.94 秒(WebArena 35.38 秒),准确率 72.36%(WebArena 88%)——任务更难更耗时。</li>
+<li><strong>主结果</strong>:全部基线成功率 0.99%–12.24%;最好为无障碍树输入的 GPT-4(12.24%);纯截图下 GPT-4V 仅 5.26%;多应用工作流最好仅 6.57%;LibreOffice Calc 子集经常 0 分;人类 72.36% 全面碾压且跨任务类型稳定(±5%),模型方差却极大。</li>
+<li><strong>输入法对比</strong>:a11y 树对 GPT-4V 大幅加分(5.26%→12.17%)但对 Gemini 反而减分;SoM 在 OS 上因高分辨率、元素过多、噪声大而失效;纯截图虽最弱,但因无需额外信息、贴近人类感知,应是长期终极配置。</li>
+<li><strong>关键分析</strong>:难度分组成功率 16.78%/13.12%/4.59%(人 84.91%/81.08%/49.57%);分辨率提升普遍涨分(SoM 在 0.4 倍降采样处最佳);文本历史越长越好但图像历史无效(90% 单观察约需 6000 token);窗口位置/大小/遮挡扰动使成功率从 50.79% 跌 60–80%;Ubuntu 4.88% vs Windows 2.55%,相关系数 0.7。</li>
+<li><strong>失败模式</strong>:550 个失败样本中 &gt;75% 有鼠标点击不准("规划强、执行弱"),派生重复点击与环境噪声困境;缺乏软件先验(GIMP 亮度菜单找不到);Claude-3 规划好但 grounding 幻觉多(双击当单击、B 列当 C 列);难度错位:人难的代码任务智能体易、人易的设计排版任务智能体难,且用 ffmpeg 替代"用 GIMP"这类偏离指令的行为值得警惕。</li>
+<li><strong>未来方向</strong>:更强 GUI 定位与长上下文 VLM、探索/记忆/反思架构与个性化、真实环境安全评估(现有评估只看任务结果、不管副作用)、数据与环境扩展——其中"智能体安全度量缺失"与"操作数据无痛采集"正是本讲两篇论文(与下一篇 WebShop)所代表的基准研究仍在推进的开放问题。</li>
+</ul>
+      </div>
+    </article>
+    <nav class="pager"><a class="pager-prev" href="Shaikh2026_Next_Action_Predictors.html"><span>上一篇</span>从人机交互中学习下一动作预测器</a><a class="pager-next" href="Yao2022_WebShop_NeurIPS2022.html"><span>下一篇</span>&quot;WebShop:面向可扩展真实网页交互的接地语言智能体&quot;</a></nav>
+  </main>
+</div>
+<script src="../assets/site.js"></script>
+</body>
+</html>

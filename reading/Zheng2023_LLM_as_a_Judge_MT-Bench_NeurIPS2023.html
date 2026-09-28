@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>&quot;评审 LLM-as-a-Judge:MT-Bench 与 Chatbot Arena&quot; · CS 329Z 中文学习站</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html"><span class="brand-mark">CS</span>329Z<span class="brand-sub">中文学习站</span></a>
+    <nav class="topnav">
+      <a href="../index.html#syllabus">课程表</a>
+      <a href="../index.html#dates">重要日期</a>
+      <a href="../index.html#about">关于本站</a>
+    </nav>
+    <div class="searchbox"><input id="search-input" type="search" placeholder="搜索材料 / 主题…" autocomplete="off"><div id="search-results" class="search-results" hidden></div></div>
+  </div>
+</header>
+<div class="read-layout">
+  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">全文对照翻译</a><ul><li><a href="#_3">摘要</a></li><li><a href="#1-introduction">1 引言(Introduction)</a></li><li><a href="#2-mt-bench-chatbot-arenamt-bench-and-chatbot-arena">2 MT-Bench 与 Chatbot Arena(MT-Bench and Chatbot Arena)</a></li><li><a href="#3-llm-llm-as-a-judge">3 LLM 作为评审(LLM as a Judge)</a></li><li><a href="#4-agreement-evaluation">4 一致性评测(Agreement Evaluation)</a></li><li><a href="#5-human-preference-benchmark-and-standardized-benchmark">5 人类偏好基准与标准化基准(Human Preference Benchmark and Standardized Benchmark)</a></li><li><a href="#6-discussion">6 讨论(Discussion)</a></li><li><a href="#7-conclusion">7 结论(Conclusion)</a></li><li><a href="#acknowledgement">致谢(Acknowledgement)</a></li><li><a href="#a-prompt-templates">附录 A 提示词模板(Prompt Templates)</a></li><li><a href="#b-case-study">附录 B 案例研究(Case Study)</a></li></ul></li><li><a href="#_4">要点速览</a></li></ul></aside>
+  <main class="read-main">
+    <div class="crumb"><a href="../index.html">首页</a> / <a href="../index.html#week-week08a_llm_as_judge">第8周 · LLM-as-Judge</a></div>
+    <article class="read-article">
+      <h1 class="read-title">&quot;评审 LLM-as-a-Judge:MT-Bench 与 Chatbot Arena&quot;</h1>
+      <p class="read-title-en">&quot;Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena&quot;</p>
+      <p class="read-meta">&quot;Lianmin Zheng et al.&quot; · &quot;NeurIPS 2023 (Datasets &amp; Benchmarks) · UC Berkeley / UCSD / CMU / Stanford / MBZUAI&quot;</p>
+      <p class="read-badges"><span class="badge badge-must">必读</span><span class="badge badge-kind">全译对照</span><button class="lang-toggle" id="lang-toggle" type="button">仅看中文</button><a class="orig-link" href="../originals/week08a_llm_as_judge/Zheng2023_LLM_as_a_Judge_MT-Bench_NeurIPS2023.pdf" target="_blank" rel="noopener">查看原文(PDF) ↗</a></p>
+      <div class="markdown-body">
+<h2 id="_1">导读</h2>
+<p>本文是第 8 周「LLM-as-Judge」主题的开篇之作,也是整个「用模型评模型」范式的奠基论文。此前课程讨论的基准(如 SWE-bench)大多依赖可自动验证的任务成功率;但开放式的多轮对话、写作等任务没有标准答案,只能诉诸人类偏好,而人类评测又慢又贵。本文第一次系统性地回答:能否用强 LLM(如 GPT-4)代替人类做评审?</p>
+<p>论文的两项核心贡献沿用到今天:其一,MT-Bench(80 道高质量多轮问题)与 Chatbot Arena(匿名对战众包平台,即今天流行的 Arena 排行榜前身)成为偏好评测的标准基础设施;其二,对 LLM 评审的三种用法(成对比较、单答案打分、参考引导打分)、四类局限(位置偏差、冗长偏差、自我增强偏差、数学/推理评审能力不足)及缓解手段(交换位置、思维链、参考答案)做了开创性分析。最关键的实验结论是:GPT-4 与人类偏好的一致率超过 80%,达到了人与人之间一致性的水平——这为后来几乎所有 LLM-as-a-Judge 工作提供了合法性依据。</p>
+<h2 id="_2">全文对照翻译</h2>
+<blockquote>
+<p><strong>译注</strong>:以下为全文中英对照,覆盖论文正文(标题、摘要、第 1-7 节、致谢)与全部实质附录 A-F(提示词模板、案例研究、数据收集、附加实验结果、Vicuna 训练细节、探索 Vicuna 作为评审),对应原文第 1-29 页;References(参考文献)按惯例不收录。图 1 与附录 B 的示例对话、附录 A 的提示词模板以代码块保留英文原文,块后附中文说明;表格均转为 Markdown 表格并保留全部数据。英文段落逐段取自 PDF 提取文本,个别分词断行等提取痕迹已按原论文校正。</p>
+</blockquote>
+<div class="en-orig"><span class="en-tag">EN</span><p>**Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena**<br><br>Lianmin Zheng¹∗ Wei-Lin Chiang¹∗ Ying Sheng⁴∗ Siyuan Zhuang¹ Zhanghao Wu¹ Yonghao Zhuang³ Zi Lin² Zhuohan Li¹ Dacheng Li¹³ Eric P. Xing³⁵ Hao Zhang¹² Joseph E. Gonzalez¹ Ion Stoica¹<br>¹ UC Berkeley ² UC San Diego ³ Carnegie Mellon University ⁴ Stanford ⁵ MBZUAI<br><br>∗Joint first authors. This paper is an extended version of our earlier blog post [8]. — 37th Conference on Neural Information Processing Systems (NeurIPS 2023) Track on Datasets and Benchmarks. arXiv:2306.05685v4 [cs.CL] 24 Dec 2023</p></div>
+
+<p><strong>《Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena(评审 LLM-as-a-Judge:用 MT-Bench 与 Chatbot Arena)》</strong> —— 作者:Lianmin Zheng、Wei-Lin Chiang、Ying Sheng(三人共同一作)、Siyuan Zhuang、Zhanghao Wu、Yonghao Zhuang、Zi Lin、Zhuohan Li、Dacheng Li、Eric P. Xing、Hao Zhang、Joseph E. Gonzalez、Ion Stoica;单位包括 UC Berkeley、UC San Diego、卡内基梅隆大学、斯坦福大学与 MBZUAI。本文是早期博客文章 [8] 的扩展版本,发表于 NeurIPS 2023 数据集与基准赛道(arXiv:2306.05685v4,2023 年 12 月 24 日)。</p>
+<h3 id="_3">摘要</h3>
+<div class="en-orig"><span class="en-tag">EN</span><p>Evaluating large language model (LLM) based chat assistants is challenging due to their broad capabilities and the inadequacy of existing benchmarks in measuring human preferences. To address this, we explore using strong LLMs as judges to evaluate these models on more open-ended questions. We examine the usage and limitations of LLM-as-a-judge, including position, verbosity, and self-enhancement biases, as well as limited reasoning ability, and propose solutions to mitigate some of them. We then verify the agreement between LLM judges and human preferences by introducing two benchmarks: MT-bench, a multi-turn question set; and Chatbot Arena, a crowdsourced battle platform. Our results reveal that strong LLM judges like GPT-4 can match both controlled and crowdsourced human preferences well, achieving over 80% agreement, the same level of agreement between humans. Hence, LLM-as-a-judge is a scalable and explainable way to approximate human preferences, which are otherwise very expensive to obtain. Additionally, we show our benchmark and traditional benchmarks complement each other by evaluating several variants of LLaMA and Vicuna. The MT-bench questions, 3K expert votes, and 30K conversations with human preferences are publicly available at https://github.com/lm-sys/FastChat/tree/main/fastchat/llm_judge.</p></div>
+
+<p><strong>摘要</strong> —— 评测基于大语言模型(LLM)的聊天助手十分困难:它们能力宽泛,而现有基准又无法充分度量人类偏好。为解决这一问题,我们探索使用强 LLM 作为评审(judge),在更开放式的问题上评测这些模型。我们考察了 LLM-as-a-judge 的用法与局限——包括位置偏差(position bias)、冗长偏差(verbosity bias)、自我增强偏差(self-enhancement bias)以及有限的推理能力——并提出缓解其中部分问题的方案。随后,我们通过引入两个基准来验证 LLM 评审与人类偏好之间的一致性:MT-bench(一个多轮问题集)与 Chatbot Arena(一个众包对战平台)。结果表明,GPT-4 等强 LLM 评审能够同时很好地匹配受控实验与众包环境中的人类偏好,一致率超过 80%,与人类彼此之间的一致性处于同一水平。因此,LLM-as-a-judge 是一种可扩展、可解释的人类偏好逼近方式——否则获取人类偏好的成本极高。此外,我们通过评测多个 LLaMA 与 Vicuna 变体,展示了新基准与传统基准互为补充。MT-bench 的 80 道问题、3K 专家投票以及 30K 带人类偏好的对话已在 https://github.com/lm-sys/FastChat/tree/main/fastchat/llm_judge 公开发布。</p>
+<h3 id="1-introduction">1 引言(Introduction)</h3>
+<div class="en-orig"><span class="en-tag">EN</span><p>There has been a proliferation of LLM-based chat assistants (chatbots) that leverage supervised instruction fine-tuning and reinforcement learning with human feedback (RLHF) to unlock new instruction following and conversational abilities [31, 2, 30, 8, 52, 48, 14]. Once aligned with humans, these chat models are strongly preferred by human users over the original, unaligned models on which they are built. However, the heightened user preference does not always correspond to improved scores on traditional LLM benchmarks – benchmarks like MMLU [19] and HELM [24] cannot effectively tell the difference between these aligned models and the base models. This phenomenon suggests that there is a fundamental discrepancy between user perceptions of the usefulness of chatbots and the criteria adopted by conventional benchmarks.</p></div>
+
+<p>基于 LLM 的聊天助手(chatbot)正在大量涌现,它们利用监督指令微调(supervised instruction fine-tuning)与人类反馈强化学习(reinforcement learning with human feedback,RLHF)解锁了新的指令遵循与对话能力 [31, 2, 30, 8, 52, 48, 14]。一旦与人类对齐,这些聊天模型便获得用户远强于其构建所基于的原始未对齐模型的偏好。然而,用户偏好的提升并不总是对应传统 LLM 基准分数的改善——MMLU [19]、HELM [24] 等基准无法有效区分这些对齐模型与其基座模型。这一现象表明,用户对聊天助手有用性的感知,与传统基准所采用的评判标准之间存在根本性分歧。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>We argue that this discrepancy primarily arises due to existing evaluation that only measures LLMs&#x27; core capability on a confined set of tasks (e.g., multi-choice knowledge or retrieval questions), without adequately assessing its alignment with human preference in open-ended tasks, such as the ability to accurately adhere to instructions in multi-turn dialogues. As a demonstration, we show conversation histories with two models on an MMLU question in Figure 1. The two models are LLaMA-13B [39], a pre-trained base model without fine-tuning, and Vicuna-13B, our fine-tuned model from LLaMA-13B on high-quality conversations (the training details are in Appendix E). Despite the base LLaMA models showing competitive performance on conventional benchmarks (Table 8), its answers to open-ended questions are often not preferred by humans. This misalignment of conventional benchmarks underscores the core problem driving this paper: the need for a robust and scalable automated method to evaluate LLM alignment with human preferences.</p></div>
+
+<p>我们论证,这一分歧主要源于现有评测只在有限的一组任务(如多项选择知识题或检索式问答)上度量 LLM 的核心能力,而没有充分评估其在开放式任务中与人类偏好的对齐程度——例如在多轮对话中准确遵循指令的能力。作为示范,我们在图 1 中展示了两个模型在同一道 MMLU 问题上的对话历史。这两个模型分别是 LLaMA-13B <a href="未经微调的预训练基座模型">39</a>与 Vicuna-13B(我们在高质量对话上从 LLaMA-13B 微调得到的模型,训练细节见附录 E)。尽管基座 LLaMA 模型在传统基准上表现颇具竞争力(表 8),其对开放式问题的回答却往往不受人类偏爱。传统基准的这种失调凸显了驱动本文的核心问题:需要一种稳健且可扩展的自动化方法,来评测 LLM 与人类偏好的对齐程度。</p>
+<pre><code class="language-text">Question: If the FED buys bonds in the secondary market
+(A) the money supply will increase. (B) the money supply will decrease. (C) the money supply will not be affected. (D) the discount rate would be affected. Output the answer only.
+
+Assistant B:
+(A) the money supply will increase.
+
+Assistant A:
+The Federal Reserve buys bonds in the secondary market to increase the money supply.
+
+Follow-up Question: How does it affect my daily life? Give 3 examples.
+
+Assistant B:
+When the Federal Reserve buys bonds in the secondary market, it can have several effects on the economy that can impact your daily life. Here are three examples:
+1. Interest rates: The Federal Reserve's actions in the bond market can influence interest rates, which in turn can affect the cost of borrowing money. For example, if the Federal Reserve buys bonds and drives up demand for them, interest rates on things like mortgages, car loans, and credit cards may go up, making it more expensive to borrow money.
+2. Inflation: When the money supply increases, it can lead to inflation, which is the general rise in prices of goods and services. This can impact your daily life by making it more expensive to buy things like groceries, gas, and other necessities.
+3. Employment: The Federal Reserve's actions in the bond market can also have an impact on employment. For example, if the Federal Reserve's actions lead to economic growth and increased demand for goods and services, it can create more job opportunities and boost employment.
+
+Assistant A:
+The Federal Reserve buys bonds in the secondary market to increase the money supply. This affects your daily life by:
+1. Increasing the money supply.
+2. Increasing the money supply and lowering the discount rate.
+3. Increasing the money supply and lowering the discount rate and increasing the money supply.
+
+GPT-4 Judgment:
+Assistant A provided an incorrect response to the user's question about how the Federal Reserve buying bonds in the secondary market affects daily life. The answer given is repetitive and lacks clear examples of how the action impacts daily life.
+On the other hand, Assistant B provided a relevant and accurate response to the user's question about the Federal Reserve buying bonds. The answer includes three clear examples of how the action impacts daily life, such as interest rates, inflation, and employment.
+Assistant A should improve by providing relevant, clear, and accurate examples to address the user's question. Assistant B's response is more helpful, relevant, and detailed.
+</code></pre>
+<p><strong>[图 1: Multi-turn dialogues between a user and two AI assistants—LLaMA-13B (Assistant A) and Vicuna-13B (Assistant B)—initiated by a question from the MMLU benchmark and a follow-up instruction. GPT-4 is then presented with the context to determine which assistant answers better.]</strong></p>
+<p>中文说明:图 1 展示用户与两个 AI 助手(助手 A = LLaMA-13B,助手 B = Vicuna-13B)的多轮对话,由一道 MMLU 基准的选择题及一个追问指令发起,随后把上下文交给 GPT-4 判定哪个助手回答更好。第一轮两模型都答对了选择题;但面对追问「这如何影响我的日常生活?给出 3 个例子」时,LLaMA-13B 的回答机械重复(三个「例子」只是同一句话的不断堆叠),而 Vicuna-13B 给出利率、通胀、就业三个清晰、准确的例子。GPT-4 的裁决指出:助手 A 的回答重复且缺乏清晰例子,助手 B 的回答更有帮助、更相关、更详细——这正是传统基准完全无法度量的质量差异,也正是「LLM 评审可解释性」的直接示范。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>To study this, we introduce two benchmarks with human ratings as the primary evaluation metric: MT-bench and Chatbot Arena. MT-bench is a series of open-ended questions that evaluate a chatbot&#x27;s multi-turn conversational and instruction-following ability – two critical elements for human preference. MT-bench is also carefully constructed to differentiate chatbots based on their core capabilities, such as reasoning and math. In addition, we develop Chatbot Arena, a crowdsourced platform featuring anonymous battles between chatbots in real-world scenarios – Users engage in conversations with two chatbots at the same time and rate their responses based on personal preferences.</p></div>
+
+<p>为研究这一问题,我们引入两个以人类评分作为主要评测指标的新基准:MT-bench 与 Chatbot Arena。MT-bench 是一系列开放式问题,用于评测聊天机器人的多轮对话能力与指令遵循能力——这是构成人类偏好的两个关键要素。MT-bench 还经过精心构造,可依据推理、数学等核心能力区分不同聊天机器人。此外,我们开发了 Chatbot Arena——一个以真实场景下聊天机器人匿名对战为特色的众包平台:用户同时与两个聊天机器人对话,并依据个人偏好对其回答进行评价。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>While human evaluation is the gold standard for assessing human preferences, it is exceptionally slow and costly. To automate the evaluation, we explore the use of state-of-the-art LLMs, such as GPT-4, as a surrogate for humans. Because these models are often trained with RLHF, they already exhibit strong human alignment. We call this approach &quot;LLM-as-a-judge&quot;. This approach has been tried in our earlier blog post [8] and other concurrent or follow-up work [5, 29, 14, 12, 52, 18, 33, 40, 7, 43]. However, there has not been a systematic study of this approach.</p></div>
+
+<p>人类评测虽是评估人类偏好的金标准,却异常缓慢且昂贵。为实现评测的自动化,我们探索使用最先进的 LLM(如 GPT-4)作为人类的替代。由于这些模型通常经过 RLHF 训练,它们已经表现出很强的与人类对齐的倾向。我们将这一方法称为「LLM-as-a-judge」(LLM 作为评审)。该做法此前已在我们早期的博客文章 [8] 以及其他同期或后续工作 [5, 29, 14, 12, 52, 18, 33, 40, 7, 43] 中尝试过,但一直缺少系统性的研究。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>In this paper, we study the LLM-as-a-judge approach by comparing it to the gold standard of human evaluation. We examine several potential limitations of the LLM-as-a-judge approach including position bias, verbosity bias, self-enhancement bias, and limited reasoning ability. We show that some of the biases are minor or can be mitigated. Once addressed, our results from 3K controlled expert votes and 3K crowdsourced human votes in the wild verify that GPT-4 judge match human evaluations at an agreement rate exceeding 80%, achieving the same level of human-human agreement (§4.2, Table 4). Consequently, this suggests LLM-as-a-judge is a scalable method to swiftly evaluate human preference, serving as a promising alternative to traditional human evaluations.</p></div>
+
+<p>本文通过将 LLM-as-a-judge 与人类评测这一金标准进行对比来研究该方法。我们考察了它的若干潜在局限,包括位置偏差、冗长偏差、自我增强偏差与有限的推理能力,并表明其中一些偏差影响轻微或可被缓解。在解决这些问题之后,我们用 3K 张受控专家投票与 3K 张真实场景下的众包人类投票验证:GPT-4 评审与人类评测的一致率超过 80%,达到了人与人之间一致性的同等水平(§4.2)。(译注:原文此句引用写作 Table 4,应系笔误;§4.2 的一致性结果实际对应表 5,表 4 为数学题评审失败率。)</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>This paper makes two contributions: (1) a systematic study of LLM-as-a-judge; and (2) human preference datasets with high-quality questions and diverse user interactions from MT-bench and Chatbot Arena. In addition, we argue for the adoption of a hybrid evaluation framework for future LLM benchmarks: by combining the existing capability-based benchmarks and the new preference-based benchmarks with LLM-as-a-judge, one can swiftly and automatically evaluate both the core capabilities and human alignment of models. We publicly release 80 MT-bench questions, 3K expert votes, and 30K conversations with human preferences for future study.</p></div>
+
+<p>本文有两项贡献:(1)对 LLM-as-a-judge 的系统性研究;(2)来自 MT-bench 与 Chatbot Arena 的人类偏好数据集,包含高质量问题与多样化的用户交互。此外,我们主张未来的 LLM 基准采用混合评测框架:将现有的能力型基准与新的、以 LLM-as-a-judge 为核心的偏好型基准相结合,即可快速且自动地评测模型的核心能力与人类对齐程度。我们公开发布了 80 道 MT-bench 问题、3K 专家投票和 30K 带人类偏好的对话,供后续研究使用。</p>
+<p><strong>表 1(原文 Table 1):MT-bench 中的多轮问题示例</strong>(问题原文保留英文,括号内为中文译文)</p>
+<table>
+<thead>
+<tr>
+<th>类别</th>
+<th>示例问题</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>写作 Writing</td>
+<td>第 1 轮:Compose an engaging travel blog post about a recent trip to Hawaii, highlighting cultural experiences and must-see attractions.(写一篇引人入胜的夏威夷近期旅行博客,突出文化体验与必看景点。)第 2 轮:Rewrite your previous response. Start every sentence with the letter A.(重写你上一轮的回答,让每个句子都以字母 A 开头。)</td>
+</tr>
+<tr>
+<td>数学 Math</td>
+<td>第 1 轮:Given that f(x) = 4x³ − 9x − 14, find the value of f(2).(已知 f(x) = 4x³ − 9x − 14,求 f(2) 的值。)第 2 轮:Find x such that f(x) = 0.(求满足 f(x) = 0 的 x。)</td>
+</tr>
+<tr>
+<td>知识 Knowledge</td>
+<td>第 1 轮:Provide insights into the correlation between economic indicators such as GDP, inflation, and unemployment rates. Explain how fiscal and monetary policies ...(阐述 GDP、通胀率、失业率等经济指标之间的相关性,并解释财政政策与货币政策如何……[原文截断])第 2 轮:Now, explain them again like I'm five.(现在,把它们重新解释一遍,就像我只有五岁一样。)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="2-mt-bench-chatbot-arenamt-bench-and-chatbot-arena">2 MT-Bench 与 Chatbot Arena(MT-Bench and Chatbot Arena)</h3>
+<h4 id="21-motivation">2.1 动机(Motivation)</h4>
+<div class="en-orig"><span class="en-tag">EN</span><p>With the recent advances of LLMs, LLM-based assistants start to exhibit artificial general intelligence across diverse tasks, from writing and chatting to coding [5, 30, 1, 37]. However, evaluating their broad capabilities also becomes more challenging. Despite the availability of numerous benchmarks for language models, they primarily focus on evaluating models on closed-ended questions with short responses. Given that these chat assistants can now precisely follow user instructions in multi-turn dialogues and answer open-ended questions in a zero-shot manner, current benchmarks are inadequate for assessing such capabilities. Existing benchmarks mostly fall into the following three categories.</p></div>
+
+<p>随着 LLM 的最新进展,基于 LLM 的助手开始在从写作、聊天到编程的多样任务上展现出通用人工智能的迹象 [5, 30, 1, 37]。然而,评测它们的宽泛能力也随之变得更困难。尽管已有大量面向语言模型的基准,它们主要聚焦于以简短回答作答的封闭式问题。鉴于这些聊天助手如今已能在多轮对话中精确遵循用户指令、并以零样本方式回答开放式问题,现有基准不足以评估此类能力。现有基准大多可归入以下三类。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>• Core-knowledge benchmarks, including MMLU [19], HellaSwag [50], ARC [9], WinoGrande [36], HumanEval [6], GSM-8K [10], and AGIEval [51], evaluate the core capabilities of pre-trained LLMs using zero-shot and few-shot benchmark sets. They typically require LLMs to generate a short, specific answer to benchmark questions that can be automatically validated.<br><br>• Instruction-following benchmarks, such as Flan [27, 46], Self-instruct [44], NaturalInstructions [28], Super-NaturalInstructions [45], expand to slightly more open-ended questions and more diverse tasks and are used to evaluate LLMs after instruction fine-tuning.<br><br>• Conversational benchmarks, like CoQA [35], MMDialog [15] and OpenAssistant [23], are closest to our intended use cases. However, the diversity and complexity of their questions often fall short in challenging the capabilities of the latest chatbots.</p></div>
+
+<ul>
+<li><strong>核心知识基准(core-knowledge benchmarks)</strong>,包括 MMLU [19]、HellaSwag [50]、ARC [9]、WinoGrande [36]、HumanEval [6]、GSM-8K [10] 与 AGIEval [51],使用零样本与少样本基准集评估预训练 LLM 的核心能力。它们通常要求 LLM 对基准问题生成简短、特定的答案,以便自动验证。</li>
+<li><strong>指令遵循基准(instruction-following benchmarks)</strong>,如 Flan [27, 46]、Self-instruct [44]、NaturalInstructions [28]、Super-NaturalInstructions [45],扩展到略微更开放式的问题与更多样的任务,用于评估指令微调后的 LLM。</li>
+<li><strong>对话基准(conversational benchmarks)</strong>,如 CoQA [35]、MMDialog [15] 与 OpenAssistant [23],与我们的目标用例最为接近;但其问题的多样性与复杂度往往不足以挑战最新聊天机器人的能力。</li>
+</ul>
+<div class="en-orig"><span class="en-tag">EN</span><p>While largely overlooked by existing LLM benchmarks, human preferences serve as a direct measure of a chatbot&#x27;s utility in open-ended, multi-turn human-AI interactions. To bridge this gap, we introduce two novel benchmarks expressly tailored to assess human preferences. Simultaneously, these benchmarks are designed to distinguish the core capabilities of state-of-the-art models.</p></div>
+
+<p>人类偏好是聊天机器人在开放式、多轮人机交互中效用的直接度量,却在现有 LLM 基准中普遍被忽视。为弥合这一缺口,我们引入两个专门为评估人类偏好而量身设计的新基准;同时,这些基准也被设计用来区分最先进模型的核心能力。</p>
+<h4 id="22-mt-bench">2.2 MT-Bench</h4>
+<div class="en-orig"><span class="en-tag">EN</span><p>We create MT-bench, a benchmark consisting of 80 high-quality multi-turn questions. MT-bench is designed to test multi-turn conversation and instruction-following ability, covering common use cases and focusing on challenging questions to differentiate models. We identify 8 common categories of user prompts to guide its construction: writing, roleplay, extraction, reasoning, math, coding, knowledge I (STEM), and knowledge II (humanities/social science). For each category, we then manually designed 10 multi-turn questions. Table 1 lists several sample questions.</p></div>
+
+<p>我们构建了 MT-bench——一个由 80 道高质量多轮问题组成的基准。MT-bench 旨在测试多轮对话与指令遵循能力,覆盖常见用例,并以有挑战性的问题来区分不同模型。我们归纳出 8 类常见的用户提示类别来指导基准的构建:写作(writing)、角色扮演(roleplay)、信息抽取(extraction)、推理(reasoning)、数学(math)、编码(coding)、知识 I(knowledge I,STEM)与知识 II(knowledge II,人文/社会科学)。对每个类别,我们手工设计了 10 道多轮问题。表 1 列出了若干示例问题。</p>
+<h4 id="23-chatbot-arena">2.3 Chatbot Arena</h4>
+<div class="en-orig"><span class="en-tag">EN</span><p>Our second approach is Chatbot Arena, a crowdsourcing benchmark platform featuring anonymous battles. On this platform, users can interact with two anonymous models simultaneously, posing the same question to both. They vote for which model provides the preferred response, with the identities of the models disclosed post-voting. After running Chatbot Arena for one month, we have collected around 30K votes. Since the platform does not use pre-defined questions, it allows gathering a wide range of unrestricted use cases and votes in the wild, based on the diverse interests of users. A screenshot of the platform can be found at Appendix C.2.</p></div>
+
+<p>我们的第二种做法是 Chatbot Arena——一个以匿名对战为特色的众包基准平台。在该平台上,用户可以同时与两个匿名模型交互,向两者提出相同的问题,并投票选出提供更受偏好回答的模型;投票后才揭示模型身份。Chatbot Arena 运行一个月后,我们收集了约 3 万张投票。由于平台不使用预设问题,它能够基于用户多样的兴趣,收集到真实场景(in the wild)下广泛且不受限制的用例与投票。平台截图见附录 C.2。</p>
+<h3 id="3-llm-llm-as-a-judge">3 LLM 作为评审(LLM as a Judge)</h3>
+<div class="en-orig"><span class="en-tag">EN</span><p>While our initial evaluations using MT-bench and Chatbot Arena rely on human ratings, collecting human preferences can be costly and laborious [44, 38, 31, 2, 13]. To overcome this, we aim to develop a more scalable and automated approach. Given that most questions in MT-bench and Chatbot Arena are open-ended without reference answers, devising a rule-based program to assess the outputs is extremely challenging. Traditional evaluation metrics based on the similarity between outputs and reference answers (e.g., ROUGE [25], BLEU [32]) are also ineffective for these questions.</p></div>
+
+<p>我们最初基于 MT-bench 与 Chatbot Arena 的评测依赖人类打分,但收集人类偏好成本高、费人力 [44, 38, 31, 2, 13]。为克服这一问题,我们希望开发更可扩展、更自动化的方法。鉴于 MT-bench 与 Chatbot Arena 中的大多数问题是开放式且没有参考答案的,设计一个基于规则的程序来评估输出极其困难;而基于输出与参考答案相似度的传统评测指标(如 ROUGE [25]、BLEU [32])对这些问题同样无效。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>As LLMs continue to improve, they show potential in replacing human annotators in many tasks [17, 20]. Specifically, we are interested in whether LLMs can effectively evaluate the responses of chat assistants and match human preferences. Next, we discuss the use and limitations of LLM-as-a-judge.</p></div>
+
+<p>随着 LLM 不断进步,它们已在许多任务中显示出取代人类标注者的潜力 [17, 20]。具体而言,我们关心 LLM 能否有效评估聊天助手的回答并匹配人类偏好。下面讨论 LLM-as-a-judge 的用法与局限。</p>
+<h4 id="31-llm-as-a-judge-types-of-llm-as-a-judge">3.1 LLM-as-a-Judge 的类型(Types of LLM-as-a-Judge)</h4>
+<div class="en-orig"><span class="en-tag">EN</span><p>We propose 3 LLM-as-a-judge variations. They can be implemented independently or in combination:<br><br>• Pairwise comparison. An LLM judge is presented with a question and two answers, and tasked to determine which one is better or declare a tie. The prompt used is given in Figure 5 (Appendix).<br><br>• Single answer grading. Alternatively, an LLM judge is asked to directly assign a score to a single answer. The prompt used for this scenario is in Figure 6 (Appendix).<br><br>• Reference-guided grading. In certain cases, it may be beneficial to provide a reference solution if applicable. An example prompt we use for grading math problems is in Figure 8 (Appendix).<br><br>These methods have different pros and cons. For example, the pairwise comparison may lack scalability when the number of players increases, given that the number of possible pairs grows quadratically; single answer grading may be unable to discern subtle differences between specific pairs, and its results may become unstable, as absolute scores are likely to fluctuate more than relative pairwise results if the judge model changes.</p></div>
+
+<p>我们提出 3 种 LLM-as-a-judge 变体,它们可以独立实现,也可以组合使用:</p>
+<ul>
+<li><strong>成对比较(pairwise comparison)</strong>。向 LLM 评审呈现一个问题与两个回答,任务是判定哪个更好或宣布平局(tie)。所用提示见附录图 5。</li>
+<li><strong>单答案打分(single answer grading)</strong>。或者,让 LLM 评审直接为单个回答打分。该场景所用提示见附录图 6。</li>
+<li><strong>参考引导打分(reference-guided grading)</strong>。某些情况下,若适用,提供参考解答可能有益。我们用于数学题打分的一个示例提示见附录图 8。</li>
+</ul>
+<p>这些方法各有优劣。例如,当参赛模型数量增加时,成对比较可能缺乏可扩展性,因为候选对的数量呈平方增长;单答案打分可能无法分辨特定成对组合之间的细微差异,而且一旦更换评审模型,绝对分数比相对的成对结果更易波动,导致结果不稳定。</p>
+<h4 id="32-llm-as-a-judge-advantages-of-llm-as-a-judge">3.2 LLM-as-a-Judge 的优势(Advantages of LLM-as-a-Judge)</h4>
+<div class="en-orig"><span class="en-tag">EN</span><p>LLM-as-a-judge offers two key benefits: scalability and explainability. It reduces the need for human involvement, enabling scalable benchmarks and fast iterations. Additionally, LLM judges provide not only scores but also explanations, making their outputs interpretable, as shown in Figure 1.</p></div>
+
+<p>LLM-as-a-judge 带来两个关键收益:<strong>可扩展性(scalability)</strong>与<strong>可解释性(explainability)</strong>。它减少了对人力投入的需求,使可扩展的基准与快速迭代成为可能。此外,LLM 评审不仅给出分数,还给出解释,使其输出可解释——如图 1 所示。</p>
+<h4 id="33-llm-as-a-judge-limitations-of-llm-as-a-judge">3.3 LLM-as-a-Judge 的局限(Limitations of LLM-as-a-Judge)</h4>
+<div class="en-orig"><span class="en-tag">EN</span><p>We identify certain biases and limitations of LLM judges. However, we will also present solutions later and show the agreement between LLM judges and humans is high despite these limitations.</p></div>
+
+<p>我们识别出 LLM 评审的若干偏差与局限。不过,我们后面也会给出解决方案,并表明尽管存在这些局限,LLM 评审与人类之间的一致性依然很高。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>Position bias is when an LLM exhibits a propensity to favor certain positions over others. This bias is not unique to our context and has been seen in human decision-making [3, 34] and other ML domains [22, 41].</p></div>
+
+<p><strong>位置偏差(position bias)</strong> 指 LLM 表现出偏爱特定位置、而非其他位置的倾向。该偏差并非我们这一场景所独有,在人类决策 [3, 34] 与其他机器学习领域 [22, 41] 中都曾出现。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>Figure 11 (Appendix) shows an example of position bias. GPT-4 is tasked to evaluate two responses from GPT-3.5 and Vicuna-13B to an open-ended question. When GPT-3.5&#x27;s answer is positioned first, GPT-4 considers GPT-3.5&#x27;s answer more detailed and superior. However, upon switching the positions of the two responses, GPT-4&#x27;s judgement flips, favoring Vicuna&#x27;s answer.</p></div>
+
+<p>附录图 11 给出了位置偏差的一个例子:GPT-4 受命评估 GPT-3.5 与 Vicuna-13B 对同一开放式问题的两个回答。当 GPT-3.5 的回答放在第一位时,GPT-4 认为 GPT-3.5 的回答更详尽、更优;而把两个回答的位置对调后,GPT-4 的裁决随即翻转,转而偏爱 Vicuna 的回答。</p>
+<p><strong>表 2(原文 Table 2):不同 LLM 评审的位置偏差</strong>。「一致性(Consistency)」指评审在交换两个助手顺序后仍给出一致结果的情形占比;「偏向第一个(Biased toward first)」指评审偏爱第一个回答的情形占比;「Error」表示错误的输出格式。每列中最大的两个数字以粗体标出。</p>
+<table>
+<thead>
+<tr>
+<th>评审</th>
+<th>提示</th>
+<th>一致性</th>
+<th>偏向第一个</th>
+<th>偏向第二个</th>
+<th>Error</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Claude-v1</td>
+<td>default</td>
+<td>23.8%</td>
+<td><strong>75.0%</strong></td>
+<td>0.0%</td>
+<td>1.2%</td>
+</tr>
+<tr>
+<td>Claude-v1</td>
+<td>rename</td>
+<td>56.2%</td>
+<td>11.2%</td>
+<td><strong>28.7%</strong></td>
+<td><strong>3.8%</strong></td>
+</tr>
+<tr>
+<td>GPT-3.5</td>
+<td>default</td>
+<td>46.2%</td>
+<td><strong>50.0%</strong></td>
+<td>1.2%</td>
+<td>2.5%</td>
+</tr>
+<tr>
+<td>GPT-3.5</td>
+<td>rename</td>
+<td>51.2%</td>
+<td>38.8%</td>
+<td>6.2%</td>
+<td><strong>3.8%</strong></td>
+</tr>
+<tr>
+<td>GPT-4</td>
+<td>default</td>
+<td><strong>65.0%</strong></td>
+<td>30.0%</td>
+<td>5.0%</td>
+<td>0.0%</td>
+</tr>
+<tr>
+<td>GPT-4</td>
+<td>rename</td>
+<td><strong>66.2%</strong></td>
+<td>28.7%</td>
+<td>5.0%</td>
+<td>0.0%</td>
+</tr>
+</tbody>
+</table>
+<div class="en-orig"><span class="en-tag">EN</span><p>To analyze the position bias, we construct two similar answers to each first-turn question in MT-bench by calling GPT-3.5 twice with a temperature of 0.7. We then try three LLMs with two different prompts: &quot;default&quot; is our default prompt in Figure 5 (Appendix). &quot;rename&quot; renames the assistants in our default prompt to see whether the bias is on positions or names. As in Table 2, we found all of them exhibit strong position bias. Most LLM judges favor the first position. Claude-v1 also shows a name bias which makes it favors &quot;Assistant A&quot;, as illustrated by the &quot;rename&quot; prompt. The position bias can be very significant. Only GPT-4 outputs consistent results in more than 60% of cases. Note that this test is challenging because the answers are very similar and occasionally indistinguishable even to humans. We will show that position bias is less prominent in some cases in Appendix D.1. As for the origin of this bias, we suspect that it could be rooted in the training data or inherent to the left-to-right architecture of causal transformers, but leave a deeper study as future work.</p></div>
+
+<p>为分析位置偏差,我们对 MT-bench 的每道首轮问题,以温度 0.7 两次调用 GPT-3.5,构造两个相似回答;再用两种不同提示测试三个 LLM:「default」是附录图 5 中的默认提示;「rename」把默认提示中的助手改名,以检验偏差究竟落在位置还是名字上。如表 2 所示,我们发现所有模型都表现出强烈的位置偏差,多数 LLM 评审偏爱第一个位置;Claude-v1 还表现出名字偏差(name bias),使其偏爱「Assistant A」,这一点由「rename」提示揭示。位置偏差可能非常显著:只有 GPT-4 在超过 60% 的情况下输出一致结果。注意,这项测试相当困难,因为两个回答非常相似,偶尔连人类也难以区分。附录 D.1 将说明,位置偏差在某些情形下并不那么突出。至于该偏差的来源,我们怀疑它可能根植于训练数据,或是因果 Transformer 从左到右架构的固有属性,更深入的研究留作未来工作。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>Verbosity bias is when an LLM judge favors longer, verbose responses, even if they are not as clear, high-quality, or accurate as shorter alternatives.</p></div>
+
+<p><strong>冗长偏差(verbosity bias)</strong> 指 LLM 评审偏爱更长的冗长回答,即使这些回答并不比更短的替代回答更清晰、质量更高或更准确。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>To examine this bias, we design a &quot;repetitive list&quot; attack with model answers from MT-bench. We first select 23 model answers from MT-bench that contain a numbered list. We then make them unnecessarily verbose by asking GPT-4 to rephrase the list without adding any new information and insert the rephrased new list to the beginning of the original list. For example, if the original response contains 5 items, then the new response will contain 10 items but the first 5 items are rephrased from the original 5 items. An example is shown in Figure 12 (Appendix). We define the attack is successful if an LLM judge thinks the new response is better than the old response. Table 3 shows the failure rate of LLM judges under this attack, demonstrating that all LLMs may be prone to verbosity bias though GPT-4 defends significantly better than others. As a calibration, we find LLM judges are able to correctly judge identical answers (i.e., they always return a tie for two identical answers) but cannot pass the more advanced &quot;repetitive list&quot; attack.</p></div>
+
+<p>为检验这一偏差,我们用 MT-bench 的模型回答设计了一种「重复列表」(repetitive list)攻击。首先从 MT-bench 中选出 23 个含编号列表的模型回答;然后让 GPT-4 在不添加任何新信息的前提下复述该列表,使回答变得不必要的冗长,并把复述出的新列表插入原列表之前。例如,原回答包含 5 项,则新回答包含 10 项,其中前 5 项由原来的 5 项复述而来。示例见附录图 12。若 LLM 评审认为新回答优于旧回答,则攻击成功。表 3 给出了各 LLM 评审在该攻击下的失败率,说明所有 LLM 都可能易受冗长偏差影响,不过 GPT-4 的防御显著好于其他模型。作为校准,我们发现 LLM 评审能够正确判断完全相同的回答(即对两个完全相同的回答总是给出平局),却通不过更高级的「重复列表」攻击。</p>
+<p><strong>表 3(原文 Table 3):不同 LLM 评审在 23 个回答上遭受「重复列表」攻击的失败率</strong></p>
+<table>
+<thead>
+<tr>
+<th>评审</th>
+<th>Claude-v1</th>
+<th>GPT-3.5</th>
+<th>GPT-4</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>失败率</td>
+<td>91.3%</td>
+<td>91.3%</td>
+<td>8.7%</td>
+</tr>
+</tbody>
+</table>
+<div class="en-orig"><span class="en-tag">EN</span><p>Self-enhancement bias. We adopt the term &quot;self-enhancement bias&quot; from social cognition literature [4] to describe the effect that LLM judges may favor the answers generated by themselves. We examine this effect statistically. Figure 3(b) shows the win rate (w/o tie) of six models under different LLM judges and humans. Compared to humans, we do observe that some judges favor certain models. For example, GPT-4 favors itself with a 10% higher win rate; Claude-v1 favors itself with a 25% higher win rate. However, they also favor other models and GPT-3.5 does not favor itself. Due to limited data and small differences, our study cannot determine whether the models exhibit a self-enhancement bias. Conducting a controlled study is challenging because we cannot easily rephrase a response to fit the style of another model without changing the quality.</p></div>
+
+<p><strong>自我增强偏差(self-enhancement bias)</strong>。我们借用社会认知文献 [4] 中的这一术语,来描述 LLM 评审可能偏爱由自己生成的回答的效应。我们从统计上检验了该效应。图 3(b) 展示了六个模型在不同 LLM 评审与人类下的(不含平局的)胜率。与人类相比,确实观察到部分评审偏爱某些模型:例如 GPT-4 给自己的胜率比人类高约 10%,Claude-v1 高约 25%。但它们也偏爱其他模型,而 GPT-3.5 并不偏爱自己。受限于数据量有限与差异幅度较小,我们的研究无法断定这些模型是否存在自我增强偏差。开展受控研究也很困难,因为我们很难在不改变回答质量的前提下,把某个回答改写成另一个模型的风格。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>Limited capability in grading math and reasoning questions. LLMs are known to have limited math and reasoning capability [10], which results in its failure of grading such questions because they do not know the correct answers. However, what is more intriguing is that it also shows limitations in grading basic math problems which it is capable of solving. For instance, in Figure 13 (Appendix), we present an example of an elementary math question in which GPT-4 makes an incorrect judgment. It&#x27;s worth noting that although GPT-4 can solve the problem (when asked separately), it was misled by the provided answers, ultimately resulting in incorrect judgment. This pattern can also be seen in a reasoning question example in Figure 14 (Appendix). Both GPT-3.5 and Claude-v1 show a similar weakness. In Section 3.4, we will introduce a reference-guided method to mitigate such issues.</p></div>
+
+<p><strong>数学与推理题评审能力不足(limited capability in grading math and reasoning questions)</strong>。众所周知,LLM 的数学与推理能力有限 [10],这导致它们因不知道正确答案而无法评审此类问题。但更有意思的是,即便是它们自己有能力解答的基础数学题,评审时也表现出局限。例如,附录图 13 给出了一道小学数学题的例子,GPT-4 做出了错误判断。值得注意的是,尽管 GPT-4 能解出这道题(单独提问时),它却被提供的候选答案误导,最终做出错误裁决。附录图 14 的推理题例子中也出现了同样的模式。GPT-3.5 与 Claude-v1 都表现出类似弱点。第 3.4 节将介绍缓解此类问题的参考引导方法。</p>
+<h4 id="34-addressing-limitations">3.4 应对局限(Addressing limitations)</h4>
+<div class="en-orig"><span class="en-tag">EN</span><p>We present a few methods to address position bias and the limited grading ability for math questions.<br><br>Swapping positions. The position bias can be addressed by simple solutions. A conservative approach is to call a judge twice by swapping the order of two answers and only declare a win when an answer is preferred in both orders. If the results are inconsistent after swapping, we can call it a tie. Another more aggressive approach is to assign positions randomly, which can be effective at a large scale with the correct expectations. In the following experiments, we use the conservative one.</p></div>
+
+<p>我们给出若干方法来应对位置偏差与数学题评审能力不足的问题。</p>
+<p><strong>交换位置(swapping positions)</strong>。位置偏差可以用简单的办法解决。保守做法是调用评审两次并交换两个回答的顺序,只有某回答在两种顺序下都被偏好才判其获胜;若交换后结果不一致,则记为平局。另一种更激进的做法是随机分配位置,在大规模使用并配合正确预期时可以奏效。后续实验中,我们采用保守做法。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>Few-shot judge. We assess whether few-shot examples can improve consistency in the position bias benchmark. We select three good judgment examples using MT-bench-like questions, GPT-3.5 and Vicuna for generating answers, and GPT-4 for generating judgments. The examples cover three cases: A is better, B is better, and tie. As shown in Table 12 (Appendix), the few-shot judge can significantly increase the consistency of GPT-4 from 65.0% to 77.5%. However, high consistency may not imply high accuracy and we are not sure whether the few-shot examples will introduce new biases. Besides, the longer prompts make API calls 4× more expensive. We use the zero-shot prompt by default in our following experiments but leave an additional study in Appendix D.2.</p></div>
+
+<p><strong>少样本评审(few-shot judge)</strong>。我们评估少样本示例能否提升位置偏差基准上的一致性。我们挑选了三个高质量判决示例:问题取自类 MT-bench 问题,回答由 GPT-3.5 与 Vicuna 生成,判决由 GPT-4 生成;三个示例分别覆盖 A 更好、B 更好、平局三种情形。如附录表 12 所示,少样本评审可将 GPT-4 的一致性从 65.0% 显著提升到 77.5%。但高一致性未必意味着高准确率,我们也不能确定少样本示例是否会引入新的偏差;此外,更长的提示使 API 调用贵 4 倍。后续实验默认使用零样本提示,补充研究见附录 D.2。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>Chain-of-thought and reference-guided judge. In Section 3.3, we have shown LLM&#x27;s limited capability in grading math and reasoning questions. We propose two simple methods to mitigate this issue: chain-of-thought judge and reference-guided judge. Chain-of-thought is a widely used technique to improve LLM&#x27;s reasoning capability [47]. We propose a similar technique to prompt an LLM judge to begin with answering the question independently and then start grading. Detailed prompt in Figure 7 (Appendix). However, even with the CoT prompt, we find that in many cases LLM makes exactly the same mistake as the given answers in its problem-solving process (See example in Figure 15 (Appendix)), suggesting that LLM judge may still be misled by the context. Hence, we propose a reference-guided method, in which we first generate LLM judge&#x27;s answer independently, and then display it as a reference answer in the judge prompt. In Table 4, we see a significant improvement in failure rate (from 70% to 15%) over the default prompt.</p></div>
+
+<p><strong>思维链与参考引导评审(chain-of-thought and reference-guided judge)</strong>。第 3.3 节已展示 LLM 在数学与推理题评审上的局限,我们提出两个简单的缓解方法:思维链评审与参考引导评审。思维链是提升 LLM 推理能力的常用技术 [47];我们提出类似的技术,提示 LLM 评审先独立解答问题,再开始评分,详细提示见附录图 7。然而即便使用 CoT 提示,我们发现在很多情况下,LLM 在解题过程中会犯与候选答案完全相同的错误(示例见附录图 15),说明 LLM 评审仍可能被上下文误导。因此我们提出参考引导方法:先独立生成 LLM 评审自己的答案,再把它作为参考答案放进评审提示。表 4 显示,失败率相对默认提示显著改善(从 70% 降到 15%)。</p>
+<p><strong>表 4(原文 Table 4):不同提示下评审在 10 道数学题上的失败率</strong>。测试 LLaMA-13B 对 Vicuna-13B 并交换位置;「失败」指 GPT-4 把错误答案判为正确。</p>
+<table>
+<thead>
+<tr>
+<th>提示</th>
+<th>Default(默认)</th>
+<th>CoT(思维链)</th>
+<th>Reference(参考引导)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>失败率</td>
+<td>14/20</td>
+<td>6/20</td>
+<td>3/20</td>
+</tr>
+</tbody>
+</table>
+<div class="en-orig"><span class="en-tag">EN</span><p>Fine-tuning a judge model. We try fine-tuning a Vicuna-13B on arena data to act as a judge and show some promising preliminary results in Appendix F.</p></div>
+
+<p><strong>微调评审模型(fine-tuning a judge model)</strong>。我们尝试在 Arena 数据上微调 Vicuna-13B 让它充当评审,并在附录 F 展示了有希望的初步结果。</p>
+<h4 id="35-multi-turn-judge">3.5 多轮评审(Multi-turn judge)</h4>
+<div class="en-orig"><span class="en-tag">EN</span><p>In MT-bench, every question involves two turns to evaluate conversational abilities. Therefore, when comparing two assistants, it becomes necessary to present a total of two questions and four responses, complicating the prompt design. We explore two possible designs, (1) breaking the two turns into two prompts or (2) displaying complete conversations in a single prompt. Our finding is the former one can cause the LLM judge struggling to locate the assistant&#x27;s previous response precisely. We illustrate a case in Figure 16 (Appendix) where GPT-4 makes an inaccurate judgment due to a faulty reference. This suggests the necessity of displaying a complete conversation to enable the LLM judge to better grasp the context. We then consider the alternative design that presents two full conversations in a single prompt in which we ask the LLM judge to focus on the second question (Figure 9 (Appendix)). This approach has been found to significantly alleviate the aforementioned referencing issue.</p></div>
+
+<p>在 MT-bench 中,每道问题包含两轮,以考察对话能力。因此,比较两个助手时需要呈现两问四答,使提示设计复杂化。我们探索了两种可能的设计:(1)把两轮拆成两个提示;(2)在单个提示中展示完整对话。我们发现,前者会使 LLM 评审难以精确定位助手此前的回答。附录图 16 给出了一个案例:GPT-4 因错误的引用而做出不准确裁决。这说明有必要展示完整对话,使 LLM 评审更好地把握上下文。于是我们采用另一种设计:在单个提示中呈现两段完整对话,并要求评审聚焦于第二个问题(附录图 9)。该设计被证明能显著缓解上述引用问题。</p>
+<h3 id="4-agreement-evaluation">4 一致性评测(Agreement Evaluation)</h3>
+<div class="en-orig"><span class="en-tag">EN</span><p>We study the agreement between different LLM judges and humans on MT-bench and Chatbot Arena datasets. On MT-bench, we also study the agreement among humans. MT-bench represents a small-scale study with controlled human evaluation, while Chatbot Arena represents a larger-scale study with crowdsourced human evaluation in the wild.</p></div>
+
+<p>我们研究不同 LLM 评审与人类在 MT-bench 与 Chatbot Arena 数据集上的一致性;在 MT-bench 上还研究人类彼此之间的一致性。MT-bench 代表一项使用受控人类评测的小规模研究,而 Chatbot Arena 代表一项在真实场景下使用众包人类评测的更大规模研究。</p>
+<h4 id="41-setup">4.1 设置(Setup)</h4>
+<div class="en-orig"><span class="en-tag">EN</span><p>MT-bench. We generate answers for all 80 questions with 6 models: GPT-4, GPT-3.5, Claude-V1, Vicuna-13B, Alpaca-13B [38], and LLaMA-13B [39]. We then use 2 kinds of judges: LLM judges and 58 expert-level human labelers. The labelers are mostly graduate students so they are considered experts and more skilled than average crowd workers. We let LLM judges evaluate all pairs and let each human evaluate at least 20 random multi-turn questions. This resulted in around 3K votes for all questions. The detailed data collection process is in Appendix C.<br><br>Chatbot Arena. We randomly sample 3K single-turn votes from 30K arena data, which covers models including GPT-4, GPT-3.5, Claude, Vicuna-7B/13B, Koala-13B [16], Alpaca-13B, LLaMA-13B, and Dolly-12B. We use two kinds of judges: LLM judges and collected crowd judges (2114 unique IPs).<br><br>Metrics. We define the agreement between two types of judges as the probability of randomly selected individuals (but not identical) of each type agreeing on a randomly selected question. See more explanation in Appendix D.3. Average win rate is the average of win rates against all other players. These metrics can be computed with or without including tie votes.</p></div>
+
+<p><strong>MT-bench。</strong> 我们用 6 个模型(GPT-4、GPT-3.5、Claude-V1、Vicuna-13B、Alpaca-13B [38] 与 LLaMA-13B [39])为全部 80 道问题生成回答,再使用两类评审:LLM 评审与 58 名专家级人类标注者。标注者多为研究生,因此被视为专家,技能高于普通众包工作者。我们让 LLM 评审评估所有模型对,让每名人类至少评估 20 道随机多轮问题,最终得到约 3K 张覆盖全部问题的投票。详细数据收集过程见附录 C。</p>
+<p><strong>Chatbot Arena。</strong> 我们从 3 万条 Arena 数据中随机抽取 3K 张单轮投票,覆盖模型包括 GPT-4、GPT-3.5、Claude、Vicuna-7B/13B、Koala-13B [16]、Alpaca-13B、LLaMA-13B 与 Dolly-12B。我们使用两类评审:LLM 评审与已收集的众包评审(2114 个独立 IP)。</p>
+<p><strong>指标。</strong> 我们将两类评审之间的一致性(agreement)定义为:从每类评审中随机抽取的个体(但不重复抽取同一个体)在随机抽取的问题上给出相同判断的概率,更多解释见附录 D.3。平均胜率(average win rate)指对其他所有选手的胜率的平均值。这些指标的计算可以包含或不包含平局投票。</p>
+<h4 id="42-gpt-4-high-agreement-between-gpt-4-and-humans">4.2 GPT-4 与人类的高度一致(High agreement between GPT-4 and humans)</h4>
+<div class="en-orig"><span class="en-tag">EN</span><p>We compute agreement on MT-bench data. In Table 5, GPT-4 with both pairwise comparison and single answer grading show very high agreements with human experts. The agreement under setup S2 (w/o tie) between GPT-4 and humans reaches 85%, which is even higher than the agreement among humans (81%). This means GPT-4&#x27;s judgments closely align with the majority of humans. We also show that GPT-4&#x27;s judgments may help humans make better judgments. During our data collection, when a human&#x27;s choice deviated from GPT-4, we presented GPT-4&#x27;s judgments to humans and ask if they are reasonable (details in Appendix C.1). Despite different views, humans deemed GPT-4&#x27;s judgments reasonable in 75% of cases and are even willing to change their choices in 34% of cases.</p></div>
+
+<p>我们在 MT-bench 数据上计算一致性。表 5 中,无论采用成对比较还是单答案打分,GPT-4 与人类专家都表现出很高的一致性。在 S2 口径(不含平局)下,GPT-4 与人类的一致率达 85%,甚至高于人类彼此之间的一致率(81%)。这意味着 GPT-4 的判断与人类多数意见高度对齐。我们还表明,GPT-4 的判断或许能帮助人类做出更好的判断。数据收集期间,当人类的选择与 GPT-4 不同时,我们把 GPT-4 的判断展示给人类,并询问其是否合理(细节见附录 C.1)。尽管观点不同,人类在 75% 的情况下认为 GPT-4 的判断合理,甚至有 34% 的情况愿意改变自己的选择。</p>
+<p><strong>表 5(原文 Table 5):MT-bench 上两类评审之间的一致性</strong>。「G4-Pair」与「G4-Single」分别表示采用成对比较与单答案打分的 GPT-4;单答案打分可转换为成对比较结果以计算一致性。报告两种口径:「S1」包含非平局、平局及(因位置偏差导致的)不一致投票,并把不一致计为平局;「S2」只包含非平局投票。每种口径下两个随机评审之间的一致性记为「R=」。每格上方数值为一致率,下方灰色数值为投票数(此处合并写作「一致率(票数)」)。</p>
+<p>(a) 首轮(S1 口径 R = 33%,S2 口径 R = 50%)</p>
+<table>
+<thead>
+<tr>
+<th>评审</th>
+<th>G4-Single(S1)</th>
+<th>Human(S1)</th>
+<th>G4-Single(S2)</th>
+<th>Human(S2)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>G4-Pair</td>
+<td>70%(1138)</td>
+<td>66%(1343)</td>
+<td>97%(662)</td>
+<td>85%(859)</td>
+</tr>
+<tr>
+<td>G4-Single</td>
+<td>—</td>
+<td>60%(1280)</td>
+<td>—</td>
+<td>85%(739)</td>
+</tr>
+<tr>
+<td>Human</td>
+<td>—</td>
+<td>63%(721)</td>
+<td>—</td>
+<td>81%(479)</td>
+</tr>
+</tbody>
+</table>
+<p>(b) 次轮(S1 口径 R = 33%,S2 口径 R = 50%)</p>
+<table>
+<thead>
+<tr>
+<th>评审</th>
+<th>G4-Single(S1)</th>
+<th>Human(S1)</th>
+<th>G4-Single(S2)</th>
+<th>Human(S2)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>G4-Pair</td>
+<td>70%(1161)</td>
+<td>66%(1325)</td>
+<td>95%(727)</td>
+<td>85%(864)</td>
+</tr>
+<tr>
+<td>G4-Single</td>
+<td>—</td>
+<td>59%(1285)</td>
+<td>—</td>
+<td>84%(776)</td>
+</tr>
+<tr>
+<td>Human</td>
+<td>—</td>
+<td>67%(707)</td>
+<td>—</td>
+<td>82%(474)</td>
+</tr>
+</tbody>
+</table>
+<div class="en-orig"><span class="en-tag">EN</span><p>The data from Arena shows a similar trend, as illustrated by Table 6. Comparing GPT-4 and other LLM judges, we find they reach a similar non-tie agreement ratio between humans but the number of non-tied votes from GPT-4 is much larger. This means that GPT-4 is more affirmative and less suffered from position bias but other models also perform well when they give an affirmative answer.<br><br>In both tables, GPT-4 with single-answer grading matches both pairwise GPT-4 and human preferences very well. This means GPT-4 has a relatively stable internal rubric. Although it may sometimes perform slightly worse than pairwise comparison and give more tie votes, it is a more scalable method.</p></div>
+
+<p>Arena 数据也呈现类似趋势,见表 6。比较 GPT-4 与其他 LLM 评审,我们发现它们与人类的非平局一致率相近,但 GPT-4 给出的非平局投票数量大得多。这说明 GPT-4 更果断、受位置偏差影响更小;而其他模型一旦给出明确(非平局)裁决,表现同样不错。</p>
+<p>在两张表中,单答案打分的 GPT-4 与成对比较的 GPT-4 以及人类偏好都匹配得很好。这说明 GPT-4 拥有相对稳定的内部评分标准。尽管它有时比成对比较略逊一筹并给出更多平局票,却是一种更可扩展的方法。</p>
+<p><strong>表 6(原文 Table 6):Chatbot Arena 上两类评审之间的一致性</strong>。「G4-S」表示采用单答案打分的 GPT-4;「G4」「G3.5」「C」分别表示采用成对比较的 GPT-4、GPT-3.5 与 Claude;「H」表示人类。其余格式同表 5(S1 口径 Random = 33%,S2 口径 Random = 50%)。</p>
+<table>
+<thead>
+<tr>
+<th>评审</th>
+<th>G4-S(S1)</th>
+<th>G3.5(S1)</th>
+<th>C(S1)</th>
+<th>H(S1)</th>
+<th>G4-S(S2)</th>
+<th>G3.5(S2)</th>
+<th>C(S2)</th>
+<th>H(S2)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>G4</td>
+<td>72%(2968)</td>
+<td>66%(3061)</td>
+<td>66%(3062)</td>
+<td>64%(3066)</td>
+<td>95%(1967)</td>
+<td>94%(1788)</td>
+<td>95%(1712)</td>
+<td>87%(1944)</td>
+</tr>
+<tr>
+<td>G4-S</td>
+<td>—</td>
+<td>60%(2964)</td>
+<td>62%(2964)</td>
+<td>60%(2968)</td>
+<td>—</td>
+<td>89%(1593)</td>
+<td>91%(1538)</td>
+<td>85%(1761)</td>
+</tr>
+<tr>
+<td>G3.5</td>
+<td>—</td>
+<td>—</td>
+<td>68%(3057)</td>
+<td>54%(3061)</td>
+<td>—</td>
+<td>—</td>
+<td>96%(1497)</td>
+<td>83%(1567)</td>
+</tr>
+<tr>
+<td>C</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>53%(3062)</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>84%(1475)</td>
+</tr>
+</tbody>
+</table>
+<div class="en-orig"><span class="en-tag">EN</span><p>We then perform a breakdown analysis by computing agreement on different model pairs and categories. We only include non-tied votes. In Figure 2, we observe the agreement between GPT-4 and human progressively increases in line with the performance disparity of the model pairs (i.e., larger win rate difference), from 70% to nearly 100%. This suggests that GPT-4 aligns with humans better when significant performance differences exist between the models.</p></div>
+
+<p>随后我们按不同模型对与不同类别做细分分析,只统计非平局投票。图 2 中观察到:随着模型对性能差距(即胜率差)增大,GPT-4 与人类的一致率从 70% 逐步提升至接近 100%。这表明当模型间存在显著性能差距时,GPT-4 与人类对齐得更好。</p>
+<p><strong>[图 2: Agreement and win rate difference. Each point corresponds to a model pair and counts only the non-tie votes between the two models. The x-axis value is the win rate difference between the two models. The y-axis value is the GPT-4 and human agreement.]</strong></p>
+<p>中文说明:图 2 为一致性与胜率差的关系散点图。横轴是两个模型之间的胜率差,纵轴是 GPT-4 与人类的一致率;每个点对应一个模型对,只计入两模型间的非平局投票。可以看到模型差距越大(胜率差越接近 1),一致率越高,从约 70% 升至接近 100%——评审「难分高下」的强强对话才是真正的挑战。</p>
+<h4 id="43-win-rates-under-different-judges">4.3 不同评审下的胜率(Win rates under different judges)</h4>
+<p><strong>[图 3: Average win rate of six models under different judges on MT-bench.]</strong>(子图:(a) All votes, first turn 全部投票·首轮;(b) Non-tied votes, first turn 非平局投票·首轮;(c) All votes, second turn 全部投票·次轮;(d) Non-tied votes, second turn 非平局投票·次轮。)</p>
+<p>中文说明:图 3 绘制六个模型(GPT-4、Claude、GPT-3.5、Vicuna-13B、Alpaca-13B、LLaMA-13B)在 MT-bench 上不同评审下的平均胜率,四种口径分别为全部/非平局投票 × 首轮/次轮。GPT-4 评审、GPT-3.5 评审、Claude 评审与人类评审得出的胜率曲线高度吻合。</p>
+<p><strong>[图 4: Average win rate of nine models under different judges on Chatbot Arena.]</strong>(子图:(a) All votes 全部投票;(b) Non-tied votes 非平局投票。)</p>
+<p>中文说明:图 4 绘制九个模型(GPT-4、Claude、GPT-3.5、Vicuna-13B、Vicuna-7B、Koala-13B、Alpaca-13B、Dolly-12B、LLaMA-13B)在 Chatbot Arena 上不同评审下的平均胜率。GPT-4 评审、GPT-3.5 评审、人类评审以及 GPT-4 单答案打分评审的胜率曲线彼此高度一致,再次印证 LLM 评审可以复现人类偏好下的相对排名。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>We plot the average win rate of models under different judges on MT-bench and Chatbot Arena in Figure 3 and Figure 4, respectively. The win rate curves from LLM judges closely match the curves from humans. On MT-bench second turn, proprietary models like Claude and GPT-3.5 are more preferred by the humans compared to the first turn, meaning that a multi-turn benchmark can better differentiate some advanced abilities of models. We also list the per-category win rate of representative models in Table 7 to show how MT-bench differentiates models, in which we see GPT-4 is significantly better than others. Vicuna-13B is noticeably worse than GPT-3.5/4 in reasoning, math, and coding categories. Note that in math/coding category, GPT-3.5 and GPT-4 have similar overall win-rate because they both failed to answer some hard questions, but GPT-4 is still significantly better than GPT-3 in the direct pairwise comparison or single-answer grading. Please see a performance breakdown of MT-bench score for each category in Appendix D.4.</p></div>
+
+<p>我们分别在图 3 与图 4 中绘制了 MT-bench 与 Chatbot Arena 上各模型在不同评审下的平均胜率。LLM 评审得到的胜率曲线与人类的曲线高度吻合。在 MT-bench 第二轮,人类比第一轮更偏爱 Claude、GPT-3.5 等专有模型,说明多轮基准能更好地区分模型的部分高级能力。我们还把代表性模型的分类别胜率列于表 7,以展示 MT-bench 如何区分模型:GPT-4 显著优于其他模型;Vicuna-13B 在推理、数学与编码类别上明显弱于 GPT-3.5/4。注意在数学/编码类别,GPT-3.5 与 GPT-4 的总体胜率接近,因为二者都答错了一些难题;但在直接成对比较或单答案打分中,GPT-4 仍显著强于 GPT-3。各类别 MT-bench 分数的详细分解见附录 D.4。</p>
+<p><strong>表 7(原文 Table 7):模型的分类别胜率</strong></p>
+<table>
+<thead>
+<tr>
+<th>模型</th>
+<th>写作</th>
+<th>角色扮演</th>
+<th>推理</th>
+<th>数学</th>
+<th>编码</th>
+<th>信息抽取</th>
+<th>STEM</th>
+<th>人文</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GPT-4</td>
+<td>61.2%</td>
+<td>67.9%</td>
+<td>49.3%</td>
+<td>66.1%</td>
+<td>56.3%</td>
+<td>66.2%</td>
+<td>76.6%</td>
+<td>72.2%</td>
+</tr>
+<tr>
+<td>GPT-3.5</td>
+<td>50.9%</td>
+<td>60.6%</td>
+<td>32.6%</td>
+<td>63.8%</td>
+<td>55.0%</td>
+<td>48.8%</td>
+<td>52.8%</td>
+<td>53.8%</td>
+</tr>
+<tr>
+<td>Vicuna-13B</td>
+<td>39.7%</td>
+<td>39.2%</td>
+<td>20.1%</td>
+<td>18.0%</td>
+<td>36.9%</td>
+<td>29.2%</td>
+<td>47.0%</td>
+<td>47.5%</td>
+</tr>
+<tr>
+<td>LLaMA-13B</td>
+<td>15.1%</td>
+<td>15.1%</td>
+<td>7.8%</td>
+<td>7.5%</td>
+<td>2.1%</td>
+<td>9.3%</td>
+<td>6.8%</td>
+<td>10.1%</td>
+</tr>
+</tbody>
+</table>
+<h3 id="5-human-preference-benchmark-and-standardized-benchmark">5 人类偏好基准与标准化基准(Human Preference Benchmark and Standardized Benchmark)</h3>
+<div class="en-orig"><span class="en-tag">EN</span><p>Human preference benchmarks such as MT-bench and Chatbot Arena serve as valuable additions to the current standardized LLM benchmarks. They focus on different aspects of a model and the recommended way is to comprehensively evaluate models with both kinds of benchmarks.</p></div>
+
+<p>MT-bench 与 Chatbot Arena 等人类偏好基准,是对现有标准化 LLM 基准的有益补充。二者关注模型的不同侧面,推荐的做法是用两类基准对模型进行综合评测。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>We evaluate several model variants derived from LLaMA on MMLU [19], Truthful QA [26] (MC1), and MT-bench (GPT-4 judge). The training details are in Appendix E. Since we have shown that GPT-4 single-answer grading also performs well in Section 4.2, we use GPT-4 single-answer grading for MT-bench in favor of its scalability and simplicity. We ask GPT-4 to give a score for each turn on a scale of 10 by using our prompt templates (Figure 6, Figure 10) and report an average score of 160 = 80 × 2 turns. Table 8 shows the results. We find that fine-tuning on high-quality dialog datasets (i.e., ShareGPT) can consistently improve the model performance on MMLU and the improvement scales with fine-tuning data size. On the other hand, a small high-quality conversation dataset can quickly teach the model a style preferred by GPT-4 (or approximately human) but cannot improve MMLU significantly, as shown by the Vicuna-7B (selected) which is trained with only 4.8M tokens or 3K conversations. In Table 8, no single benchmark can determine model quality, meaning that a comprehensive evaluation is needed. Our results indicate that using LLM-as-a-judge to approximate human preferences is highly feasible and could become a new standard in future benchmarks. We are also hosting a regularly updated leaderboard with more models. Notably, DynaBench [21], a research platform dedicated to dynamic data collection and benchmarking, aligns with our spirit. DynaBench addresses the challenges posed by static standardized benchmarks, such as saturation and overfitting, by emphasizing dynamic data with human-in-the-loop. Our LLM-as-a-judge approach can automate and scale platforms of this nature.</p></div>
+
+<p>我们在 MMLU [19]、TruthfulQA <a href="MC1">26</a>与 MT-bench(GPT-4 评审)上评测了多个由 LLaMA 派生的模型变体,训练细节见附录 E。由于第 4.2 节已表明 GPT-4 单答案打分同样表现良好,考虑到可扩展性与简洁性,MT-bench 上采用 GPT-4 单答案打分:我们用提示模板(图 6、图 10)让 GPT-4 对每轮回答按 10 分制打分,并报告 160 次(= 80 题 × 2 轮)打分的平均分。结果见表 8。我们发现,在高质量对话数据集(即 ShareGPT)上微调能持续提升 MMLU 表现,且提升幅度随微调数据量增长;另一方面,小规模高质量对话数据能迅速教会模型被 GPT-4(近似人类)偏好的风格,却无法显著提高 MMLU——只用 4.8M token(约 3K 段对话)训练的 Vicuna-7B(selected)即是例证。表 8 中没有任何单一基准能判定模型质量,说明需要综合评测。我们的结果表明,用 LLM-as-a-judge 逼近人类偏好高度可行,有望成为未来基准的新标准。我们还在维护一个定期更新、覆盖更多模型的排行榜(https://huggingface.co/spaces/lmsys/chatbot-arena-leaderboard)。值得注意的是,致力于动态数据收集与基准构建的研究平台 DynaBench [21] 与我们的理念相通:它通过强调带人类在环(human-in-the-loop)的动态数据,应对静态标准化基准的饱和与过拟合等挑战;而我们的 LLM-as-a-judge 方法恰好可以自动化、规模化此类平台。</p>
+<p><strong>表 8(原文 Table 8):若干模型变体的评测结果</strong></p>
+<table>
+<thead>
+<tr>
+<th>模型</th>
+<th>训练 Token 数</th>
+<th>MMLU(5-shot)</th>
+<th>TruthfulQA(0-shot)</th>
+<th>MT-bench 分数(GPT-4)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>LLaMA-7B</td>
+<td>1T</td>
+<td>35.2</td>
+<td>0.22</td>
+<td>2.74</td>
+</tr>
+<tr>
+<td>LLaMA-13B</td>
+<td>1T</td>
+<td>47.0</td>
+<td>0.26</td>
+<td>2.61</td>
+</tr>
+<tr>
+<td>Alpaca-7B</td>
+<td>4.4M</td>
+<td>40.1</td>
+<td>0.26</td>
+<td>4.54</td>
+</tr>
+<tr>
+<td>Alpaca-13B</td>
+<td>4.4M</td>
+<td>48.1</td>
+<td>0.30</td>
+<td>4.53</td>
+</tr>
+<tr>
+<td>Vicuna-7B(selected)</td>
+<td>4.8M</td>
+<td>37.3</td>
+<td>0.32</td>
+<td>5.95</td>
+</tr>
+<tr>
+<td>Vicuna-7B(single)</td>
+<td>184M</td>
+<td>44.1</td>
+<td>0.30</td>
+<td>6.04</td>
+</tr>
+<tr>
+<td>Vicuna-7B(all)</td>
+<td>370M</td>
+<td>47.1</td>
+<td>0.32</td>
+<td>6.00</td>
+</tr>
+<tr>
+<td>Vicuna-13B(all)</td>
+<td>370M</td>
+<td>52.1</td>
+<td>0.35</td>
+<td>6.39</td>
+</tr>
+<tr>
+<td>GPT-3.5</td>
+<td>—</td>
+<td>70.0</td>
+<td>—</td>
+<td>7.94</td>
+</tr>
+<tr>
+<td>GPT-4</td>
+<td>—</td>
+<td>86.4</td>
+<td>—</td>
+<td>8.99</td>
+</tr>
+</tbody>
+</table>
+<h3 id="6-discussion">6 讨论(Discussion)</h3>
+<div class="en-orig"><span class="en-tag">EN</span><p>Limitations. This paper emphasizes helpfulness but largely neglects safety. Honesty and harmlessness are crucial for a chat assistant as well [2]. We anticipate similar methods can be used to evaluate these metrics by modifying the default prompt. Additionally, within helpfulness, there are multiple dimensions like accuracy, relevance, and creativity, but they are all combined into a single metric in this study. A more comprehensive evaluation can be developed by analyzing and separating these dimensions. We propose preliminary solutions to address the limitations and biases of LLM-as-a-judge in Section 3.4, but we anticipate more advanced methods can be developed.</p></div>
+
+<p><strong>局限(limitations)。</strong> 本文强调有用性(helpfulness)而基本忽视安全性(safety)。诚实与无害对聊天助手同样至关重要 [2]。我们预计,通过修改默认提示,类似方法也可用于评测这些指标。此外,有用性内部还有准确性、相关性、创造性等多个维度,本研究把它们合并成了单一指标;通过分析并分离这些维度,可以发展出更全面的评测。第 3.4 节提出了应对 LLM-as-a-judge 局限与偏差的初步方案,但我们期待未来出现更先进的方法。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>Data collection and release. Appendix C describes the detailed data collection and release processes, which include the instructions we give to users, the screenshots of the data collection interface, the information about participated users, and the content of the released data.</p></div>
+
+<p><strong>数据收集与发布。</strong> 附录 C 描述了详细的数据收集与发布流程,包括我们给用户的说明、数据收集界面的截图、参与用户的信息以及发布数据的内容。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>Societal impacts. The societal impact of this study is multi-faceted. Our evaluation methods can help enhance chatbot quality and user experiences. However, addressing biases in these methods is crucial. Our dataset enables better studies of human preferences and model behavior. Advanced chat assistants may replace certain human tasks, resulting in job displacements and new opportunities.</p></div>
+
+<p><strong>社会影响。</strong> 本研究的社会影响是多方面的:我们的评测方法有助于提升聊天机器人质量与用户体验,但解决这些方法中的偏差至关重要;我们的数据集使对人类偏好与模型行为的更深入研究成为可能;先进的聊天助手可能取代某些人类任务,带来岗位替代,也带来新的机会。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>Future directions. 1) Benchmarking chatbots at scale with a broader set of categories 2) Open-source LLM judge aligned with human preference 3) Enhancing open models&#x27; math/reasoning capability.</p></div>
+
+<p><strong>未来方向。</strong> 1)以更广的类别大规模评测聊天机器人;2)与人类偏好对齐的开源 LLM 评审;3)增强开源模型的数学/推理能力。</p>
+<h3 id="7-conclusion">7 结论(Conclusion)</h3>
+<div class="en-orig"><span class="en-tag">EN</span><p>In this paper, we propose LLM-as-a-judge for chatbot evaluation and systematically examine its efficacy using human preference data from 58 experts on MT-bench, as well as thousands of crowd-users on Chatbot Arena. Our results reveal that strong LLMs can achieve an agreement rate of over 80%, on par with the level of agreement among human experts, establishing a foundation for an LLM-based evaluation framework.</p></div>
+
+<p>本文提出了用于聊天机器人评测的 LLM-as-a-judge,并利用 MT-bench 上 58 名专家与 Chatbot Arena 上数千名众包用户的人类偏好数据,系统检验了其有效性。结果表明,强 LLM 可以取得超过 80% 的一致率,与人类专家之间的一致性水平相当,为基于 LLM 的评测框架奠定了基础。</p>
+<h3 id="acknowledgement">致谢(Acknowledgement)</h3>
+<div class="en-orig"><span class="en-tag">EN</span><p>This project is partly supported by gifts from Anyscale, Astronomer, Google, IBM, Intel, Lacework, Microsoft, MBZUAI, Samsung SDS, Uber, and VMware. Lianmin Zheng is supported by a Meta Ph.D. Fellowship. We extend our thanks to Xinyang Geng, Hao Liu, Eric Wallace, Xuecheng Li, Tianyi Zhang, Qirong Ho, and Kevin Lin for their insightful discussions.</p></div>
+
+<p>本项目部分得到 Anyscale、Astronomer、Google、IBM、Intel、Lacework、Microsoft、MBZUAI、Samsung SDS、Uber 与 VMware 的捐赠支持;Lianmin Zheng 获 Meta PhD Fellowship 资助。感谢 Xinyang Geng、Hao Liu、Eric Wallace、Xuecheng Li、Tianyi Zhang、Qirong Ho 与 Kevin Lin 的深入讨论。</p>
+<blockquote>
+<p><strong>参考文献(References)</strong>:原文第 10-13 页为 52 条参考文献,按本站惯例不收录;正文中的 [n] 编号引用均指该文献列表。</p>
+</blockquote>
+<h3 id="a-prompt-templates">附录 A 提示词模板(Prompt Templates)</h3>
+<div class="en-orig"><span class="en-tag">EN</span><p>We list the prompt templates for LLM judges. Please refer to our github repository for full details.</p></div>
+
+<p>我们在此列出 LLM 评审的提示词模板,完整细节请参考我们的 GitHub 仓库(https://github.com/lm-sys/FastChat/tree/main/fastchat/llm_judge)。</p>
+<pre><code class="language-text">[System]
+Please act as an impartial judge and evaluate the quality of the responses provided by two AI assistants to the user question displayed below. You should choose the assistant that follows the user's instructions and answers the user's question better. Your evaluation should consider factors such as the helpfulness, relevance, accuracy, depth, creativity, and level of detail of their responses. Begin your evaluation by comparing the two responses and provide a short explanation. Avoid any position biases and ensure that the order in which the responses were presented does not influence your decision. Do not allow the length of the responses to influence your evaluation. Do not favor certain names of the assistants. Be as objective as possible. After providing your explanation, output your final verdict by strictly following this format: &quot;[[A]]&quot; if assistant A is better, &quot;[[B]]&quot; if assistant B is better, and &quot;[[C]]&quot; for a tie.
+[User Question]
+{question}
+[The Start of Assistant A's Answer]
+{answer_a}
+[The End of Assistant A's Answer]
+[The Start of Assistant B's Answer]
+{answer_b}
+[The End of Assistant B's Answer]
+</code></pre>
+<p><strong>[图 5: The default prompt for pairwise comparison.]</strong></p>
+<p>中文说明:成对比较的默认提示(即正文的「default」提示)。系统指令要求评审以公正裁判的身份比较两个助手的回答,考量有用性、相关性、准确性、深度、创造性与详细程度;先比较并给出简短解释,再严格按「<a href="A 更好">[A]</a>/<a href="B 更好">[B]</a>/<a href="平局">[C]</a>」的格式输出最终裁决;并显式要求避免位置偏差、不受回答长度与助手名字影响。问题与两个回答分别以占位符 {question}、{answer_a}、{answer_b} 填入。</p>
+<pre><code class="language-text">[System]
+Please act as an impartial judge and evaluate the quality of the response provided by an AI assistant to the user question displayed below. Your evaluation should consider factors such as the helpfulness, relevance, accuracy, depth, creativity, and level of detail of the response. Begin your evaluation by providing a short explanation. Be as objective as possible. After providing your explanation, please rate the response on a scale of 1 to 10 by strictly following this format: &quot;[[rating]]&quot;, for example: &quot;Rating: [[5]]&quot;.
+[Question]
+{question}
+[The Start of Assistant's Answer]
+{answer}
+[The End of Assistant's Answer]
+</code></pre>
+<p><strong>[图 6: The default prompt for single answer grading.]</strong></p>
+<p>中文说明:单答案打分的默认提示。评审先给出简短解释,再按 1-10 分制为单个回答打分,输出格式严格如「Rating: [[5]]」。表 8 的 MT-bench 分数即用此模板(多轮时用图 10 模板)生成。</p>
+<pre><code class="language-text">[System]
+Please act as an impartial judge and evaluate the quality of the responses provided by two AI assistants to the user question displayed below. Your evaluation should consider correctness and helpfulness. You will be given assistant A's answer, and assistant B's answer. Your job is to evaluate which assistant's answer is better. You should independently solve the user question step-by-step first. Then compare both assistants' answers with your answer. Identify and correct any mistakes. Avoid any position biases and ensure that the order in which the responses were presented does not influence your decision. Do not allow the length of the responses to influence your evaluation. Do not favor certain names of the assistants. Be as objective as possible. After providing your explanation, output your final verdict by strictly following this format: &quot;[[A]]&quot; if assistant A is better, &quot;[[B]]&quot; if assistant B is better, and &quot;[[C]]&quot; for a tie.
+[User Question]
+{question}
+[The Start of Assistant A's Answer]
+{answer_a}
+[The End of Assistant A's Answer]
+[The Start of Assistant B's Answer]
+{answer_b}
+[The End of Assistant B's Answer]
+</code></pre>
+<p><strong>[图 7: The chain-of-thought prompt for math and reasoning questions.]</strong></p>
+<p>中文说明:用于数学与推理题的思维链(chain-of-thought)提示。评审标准聚焦正确性与有用性,并要求评审<strong>先逐步独立解题</strong>,再拿自己的答案与两个候选答案对比、识别并纠正错误,最后输出裁决。3.4 节指出:即便如此,评审的解题过程仍常被候选答案带偏(见图 15)。</p>
+<pre><code class="language-text">[System]
+Please act as an impartial judge and evaluate the quality of the responses provided by two AI assistants to the user question displayed below. Your evaluation should consider correctness and helpfulness. You will be given a reference answer, assistant A's answer, and assistant B's answer. Your job is to evaluate which assistant's answer is better. Begin your evaluation by comparing both assistants' answers with the reference answer. Identify and correct any mistakes. Avoid any position biases and ensure that the order in which the responses were presented does not influence your decision. Do not allow the length of the responses to influence your evaluation. Do not favor certain names of the assistants. Be as objective as possible. After providing your explanation, output your final verdict by strictly following this format: &quot;[[A]]&quot; if assistant A is better, &quot;[[B]]&quot; if assistant B is better, and &quot;[[C]]&quot; for a tie.
+[User Question]
+{question}
+[The Start of Reference Answer]
+{answer_ref}
+[The End of Reference Answer]
+[The Start of Assistant A's Answer]
+{answer_a}
+[The End of Assistant A's Answer]
+[The Start of Assistant B's Answer]
+{answer_b}
+[The End of Assistant B's Answer]
+</code></pre>
+<p><strong>[图 8: The prompt for reference-guided pairwise comparison.]</strong></p>
+<p>中文说明:参考引导成对比较提示。在问题之后先给出参考答案({answer_ref}),要求评审从对照参考答案开始比较两个助手的回答、识别并纠正错误,再输出裁决。这是 3.4 节将数学题评审失败率从 70% 降到 15% 的关键设计。</p>
+<pre><code class="language-text">[System]
+Please act as an impartial judge and evaluate the quality of the responses provided by two AI assistants to the user question displayed below. You should choose the assistant that follows the user's instructions and answers the user's question better. Your evaluation should consider factors such as the helpfulness, relevance, accuracy, depth, creativity, and level of detail of their responses. Begin your evaluation by comparing the two responses and provide a short explanation. Avoid any position biases and ensure that the order in which the responses were presented does not influence your decision. Do not allow the length of the responses to influence your evaluation. Do not favor certain names of the assistants. Be as objective as possible. After providing your explanation, output your final verdict by strictly following this format: &quot;[[A]]&quot; if assistant A is better, &quot;[[B]]&quot; if assistant B is better, and &quot;[[C]]&quot; for a tie.
+&lt;|The Start of Assistant A's Conversation with User|&gt;
+### User:
+{question 1}
+### Assistant A:
+{answer 1}
+### User:
+{question 2}
+### Assistant A:
+{answer 2}
+&lt;|The End of Assistant A's Conversation with User|&gt;
+&lt;|The Start of Assistant B's Conversation with User|&gt;
+### User:
+{question 1}
+### Assistant B:
+{answer 1}
+### User:
+{question 2}
+### Assistant B:
+{answer 2}
+&lt;|The End of Assistant B's Conversation with User|&gt;
+</code></pre>
+<p><strong>[图 9: The prompt for multi-turn pairwise comparison.]</strong></p>
+<p>中文说明:多轮成对比较提示。系统指令与图 5 相同,但输入改为在<strong>单个提示</strong>中呈现两段完整对话(各含两问两答),让评审基于完整上下文比较两个助手。这正是 3.5 节推荐的「单提示完整对话」设计,可显著缓解拆分提示导致的引用错位问题。</p>
+<pre><code class="language-text">[System]
+Please act as an impartial judge and evaluate the quality of the response provided by an AI assistant to the user question. Your evaluation should consider correctness and helpfulness. You will be given a reference answer and the assistant's answer. You evaluation should focus on the assistant's answer to the second question. Begin your evaluation by comparing the assistant's answer with the reference answer. Identify and correct any mistakes. Be as objective as possible. After providing your explanation, you must rate the response on a scale of 1 to 10 by strictly following this format: &quot;[[rating]]&quot;, for example: &quot;Rating: [[5]]&quot;.
+&lt;|The Start of Reference Answer|&gt;
+### User:
+{question_1}
+### Reference answer:
+{ref_answer_1}
+### User:
+{question_2}
+### Reference answer:
+{ref_answer_2}
+&lt;|The End of Reference Answer|&gt;
+&lt;|The Start of Assistant A's Conversation with User|&gt;
+### User:
+{question_1}
+### Assistant A:
+{answer_1}
+### User:
+{question_2}
+### Assistant A:
+{answer_2}
+&lt;|The End of Assistant A's Conversation with User|&gt;
+</code></pre>
+<p><strong>[图 10: The prompt for reference-guided multi-turn single-answer grading.]</strong></p>
+<p>中文说明:参考引导的多轮单答案打分提示。给出两轮问题与各自的参考答案({ref_answer_1}、{ref_answer_2}),要求评审聚焦助手对<strong>第二个问题</strong>的回答,对照参考答案识别并纠正错误后按 1-10 打分。</p>
+<h3 id="b-case-study">附录 B 案例研究(Case Study)</h3>
+<div class="en-orig"><span class="en-tag">EN</span><p>We list several case studies. The examples are generated by gpt-4-0314. They may not be fully reproducible with future GPT-4 versions.</p></div>
+
+<p>我们列出若干案例研究。这些示例由 gpt-4-0314 生成,未来版本的 GPT-4 未必能完全复现。</p>
+<pre><code class="language-text">Question: What are some business etiquette norms when doing business in Japan?
+
+Assistant B:
+When doing business in Japan, it is important to be aware of and respect the country's business etiquette norms. Some of these norms include:
+1. Greetings: A handshake and bow is the standard greeting in Japan. It is important to bow deeply and to offer a firm handshake.
+2. Business cards: In Japan, business cards are exchanged after the initial greeting. It is important to handle the card with respect and to read it carefully before placing it on the table.
+3. Meetings: Meetings in Japan are typically formal and conducted in a hierarchical manner. It is important to address people by their titles and to avoid direct eye contact.
+4. Punctuality: Punctuality is highly valued in Japan. It is important to arrive on time for meetings and to be prepared in advance.
+5. Gift giving: Gift giving is a common practice in Japan, but it is important to be mindful of the occasion and the relationship. Avoid giving gifts that are considered too personal or extravagant.
+6. Dining: Dining is an important part of doing business in Japan. It is important to be aware of the proper table manners and to avoid slurping or making loud noises while eating.
+7. Communication: Communication in Japan is typically indirect and reserved. It is important to listen carefully and to avoid confrontational language.
+Overall, it is important to be respectful, punctual, and mindful of hierarchy when doing business in Japan.
+
+Assistant A:
+Here are some business etiquette norms to keep in mind when doing business in Japan:
+1. Bowing: Bowing is a common greeting in Japan. It is a sign of respect and should be reciprocated.
+2. Business cards: Business cards are exchanged at the beginning of a meeting. It is important to receive and give business cards with both hands and to take a moment to read the card before putting it away.
+3. Punctuality: Being on time is important in Japan. Arrive a few minutes early to show respect for your colleagues.
+4. Dress code: Dress conservatively and professionally. Men should wear dark suits and ties, while women should wear conservative business attire.
+5. Language: Learn a few basic Japanese phrases to show respect for the culture. It is also important to speak clearly and avoid using slang or idioms.
+6. Gift giving: Gift giving is a common practice in Japan. Bring a small gift, such as a box of chocolates or a small souvenir from your home country.
+7. Dining etiquette: When dining with colleagues, wait for the host to begin eating before you start. Use chopsticks correctly and avoid leaving food on your plate.
+Remember, showing respect for Japanese culture and customs is key to building strong business relationships in Japan.
+
+GPT-4 Judgment (when A is placed in the first position):
+Both Assistant A and Assistant B provide helpful and relevant information about business etiquette norms in Japan. However, Assistant A's answer is more detailed and organized, covering a wider range of topics such as dress code and language, which are not mentioned in Assistant B's response. Assistant A also provides more specific advice on how to handle certain situations, such as exchanging business cards and dining etiquette. Therefore, Assistant A's answer is more comprehensive and useful for someone looking to understand Japanese business etiquette.
+
+GPT-4 Judgment (when B is placed in the first position):
+Both Assistant A and Assistant B provide helpful and relevant information about business etiquette norms in Japan. However, Assistant B's answer is more detailed and covers a wider range of topics, such as addressing people by their titles, avoiding direct eye contact, and being mindful of communication styles. Assistant A's answer is more concise but lacks some of the depth found in Assistant B's response. Therefore, Assistant B's answer is better in this case.
+</code></pre>
+<p><strong>[图 11: An example of position bias. When Assistant A is placed in the first position, GPT-4 thinks A is better, but its verdict changes when we swap the position of A and B. We observe similar pattern from other LLM judges such as Claude/GPT-3.5.]</strong></p>
+<p>中文说明:图 11 是位置偏差的典型案例。两个助手对「在日本经商有哪些商务礼仪规范」的回答质量相当、各有覆盖面。当 A 排在第一位时,GPT-4 认为 A「更详细、更有条理、覆盖面更广」而判 A 胜;交换 A、B 位置后,同样的两个回答,GPT-4 又认为 B「更详细、更有深度」而判 B 胜——裁决完全随位置翻转。Claude、GPT-3.5 等其他 LLM 评审也观察到类似模式。这正是正文表 2 中「交换位置后一致性」要度量的现象。</p>
+<pre><code class="language-text">Question: What is the central dogma of molecular biology? What processes are involved? Who named this?
+
+Assistant B:
+The central dogma of molecular biology is the fundamental principle that explains how genetic information flows within a biological system. It states that DNA is transcribed into RNA, which is then translated into proteins. This means that the genetic information stored in DNA is first copied into RNA, which then serves as a template for the synthesis of proteins.
+The processes involved in the central dogma are:
+1. Transcription: The process by which the genetic information in DNA is copied into RNA.
+2. Translation: The process by which the genetic information in RNA is used to synthesize proteins.
+The term &quot;central dogma&quot; was coined by Francis Crick, one of the co-discoverers of the structure of DNA, in 1958.
+
+Assistant A:
+The central dogma of molecular biology is the fundamental principle that explains how genetic information flows within a biological system. It states that DNA is transcribed into RNA, which is then translated into proteins. This means that the genetic information stored in DNA is first copied into RNA, which then serves as a template for the synthesis of proteins.
+The processes involved in the central dogma are:
+1. Transcription rephrased: The act of copying genetic information from DNA to RNA.
+2. Translation rephrased: The act of using genetic information in RNA to create proteins.
+3. Transcription: The process by which the genetic information in DNA is copied into RNA.
+4. Translation: The process by which the genetic information in RNA is used to synthesize proteins.
+The term &quot;central dogma&quot; was coined by Francis Crick, one of the co-discoverers of the structure of DNA, in 1958.
+
+GPT-3.5 Judgment:
+Assistant A provides a more detailed and accurate response to the user's question. While both assistants correctly state the central dogma of molecular biology and who coined the term, Assistant A provides a more comprehensive explanation of the processes involved in the central dogma, including the rephrased definitions of transcription and translation. Therefore, I choose A as the better assistant.
+
+Claude-v1 Judgment:
+Both assistants answer the question by defining the central dogma and detailing the two processes involved, transcription and translation. However, assistant A provides a more in-depth and detailed explanation by briefly rephrasing and elaborating on these processes. Assistant A also mentions who coined the term &quot;central dogma&quot;, which provides useful context and shows a more comprehensive understanding of the topic. Overall, assistant A gives a fuller and more insightful response, so I have chosen it as the better assistant for this question.
+
+GPT-4 Judgment:
+Both Assistant A and Assistant B provide accurate and relevant information about the central dogma of molecular biology, the processes involved, and who named it. However, Assistant A's answer contains a minor redundancy by rephrasing transcription and translation twice. Assistant B's answer is more concise and avoids this redundancy. Therefore, Assistant B's answer is better.
+</code></pre>
+<p><strong>[图 12: An example of "repetitive list" attack to examine verbosity bias. Except for the two rephrased items (highlighted in red), Assistant A's answer is exactly the same as Assistant B. Both GPT-3.5 and Claude-v1 show a verbosity bias towards the longer and repetitive answer. Only GPT-4 successfully detected this attack.]</strong></p>
+<p>中文说明:图 12 是检验冗长偏差的「重复列表」攻击实例。助手 A 的回答与助手 B 完全相同,只是把「转录」「翻译」两条各复述了一遍(复述项在原文中以红色标出),没有任何新信息,却更长。GPT-3.5 与 Claude-v1 都偏爱这个更长、更重复的回答而判 A 胜;只有 GPT-4 识破了攻击,指出 A「存在轻微冗余」、B「更简洁且避免了冗余」,判 B 胜。</p>
+<pre><code class="language-text">Question: Benjamin went to a bookstore and purchased a variety of books. He bought 5 copies of a sci-fi novel, each priced at $20, 3 copies of a history book priced at $30 each, and 2 copies of a philosophy book for $45 each. What was the total cost of his purchases?
+
+Assistant B:
+The total cost of his purchases is $295.
+
+Assistant A:
+The total cost of Benjamin's purchases was $115.
+
+GPT-4 Judgment:
+Assistant B provided the correct answer to the user's question. Assistant A's response was incorrect. To calculate the total cost of Benjamin's purchases, we need to multiply the number of books by their respective prices and then add the results:
+5 sci-fi novels * $20 = $100
+3 history books * $30 = $90
+2 philosophy books * $45 = $90
+Total cost = $100 + $90 + $90 = $295
+Assistant B's response is accurate and directly answers the user's question. Therefore, my final verdict is: [[B]]
+
+GPT-4's Answer (if asked separately):
+The cost of the sci-fi novels is 5 * $20 = $&lt;&lt;5*20=100&gt;&gt;100.
+The cost of the history books is 3 * $30 = $&lt;&lt;3*30=90&gt;&gt;90.
+The cost of the philosophy books is 2 * $45 = $&lt;&lt;2*45=90&gt;&gt;90.
+The total cost of his purchases is $100 + $90 + $90 = $&lt;&lt;100+90+90=280&gt;&gt;280. Answer: \boxed{280}.
+</code></pre>
+<p><strong>[图 13: With a default prompt, GPT-4 shows limited capability in grading math questions. Despite being able to answer the question itself, its judgment was influenced by the given answers, leading to arithmetic mistakes highlighted in yellow.]</strong></p>
+<p>中文说明:图 13 展示默认提示下 GPT-4 评审数学题的局限。这道题的正确答案是 5×20 + 3×30 + 2×45 = 100 + 90 + 90 = <strong>280 美元</strong>;助手 B 答 295(错)、助手 A 答 115(错)。GPT-4 在评审中虽然列出了 100、90、90 三个正确的分项,却在求和时照抄了助手 B 的「295」(原文中以黄色标出的算术错误),并判 B 正确;而单独解题时(下方「GPT-4's Answer」)它给出的恰是正确的 \boxed{280}——说明评审语境中的候选答案会把它带偏。</p>
+<pre><code class="language-text">Question: Each problem consists of three statements. Based on the first two statements, the third statement may be true, false, or uncertain.
+1. Oranges cost more than apples.
+2. Oranges cost less than bananas.
+3. Bananas cost more than apples and bananas cost more than orange.
+If the first two statements are true, then the third statement is
+
+Assistant B:
+False.
+If the first two statements are true, then the third statement is false. The first statement says that oranges cost more than apples, and the second statement says that oranges cost less than bananas. This means that oranges cost less than bananas, which contradicts the third statement that bananas cost more than apples and more than oranges. Therefore, the third statement must be false.
+
+Assistant A:
+false.
+If oranges cost more than apples (statement 1) and oranges cost less than bananas (statement 2), then it is not possible for bananas to cost less than oranges and also cost more than both apples and oranges (statement 3). Therefore, statement 3 is false.
+
+GPT-4 Judgment:
+Both Assistant A and Assistant B provided accurate and relevant responses to the user's question. They both concluded that the third statement is false based on the first two statements. However, Assistant B's response is slightly clearer and more concise in explaining the contradiction between the statements. Therefore, I choose Assistant B as the better response.
+[[B]]
+
+GPT-4's Answer (if asked separately):
+True.
+If oranges cost more than apples (statement 1) and oranges cost less than bananas (statement 2), it logically follows that bananas cost more than apples and bananas cost more than oranges, which is the third statement. So, if the first two statements are true, the third one is also true.
+</code></pre>
+<p><strong>[图 14: An example of GPT-4's limited capability in grading reasoning question. Despite GPT-4 knows how to solve the question (if asked separately), it made a wrong judgement saying both assistants' wrong answers are correct.]</strong></p>
+<p>中文说明:图 14 是 GPT-4 评审推理题能力不足的例子。由「橙子比苹果贵」「橙子比香蕉便宜」可推出「香蕉比苹果贵且比橙子贵」,故第三个陈述为<strong>真</strong>——GPT-4 单独解题时也正确回答了「True」。但两个助手都答「false」(错),GPT-4 在评审中却称两者「都准确且相关」,还比较起谁的解释更清晰,判 B 更好——被候选答案带偏,把错误答案当成了正确答案。</p>
+<pre><code class="language-text">Question: How many integers are in the solution of the inequality |x + 5| &lt; 10?
+
+Assistant B:
+To solve the inequality |x + 5| &lt; 10, we need to consider two cases:
+Case 1: x + 5 is positive or zero
+In this case, the inequality becomes x + 5 &lt; 10, which simplifies to x &lt; 5.
+Case 2: x + 5 is negative
+In this case, the inequality becomes -(x + 5) &lt; 10, which simplifies to -x - 5 &lt; 10. Adding 5 to both sides gives -x &lt; 15, and multiplying by -1 (and flipping the inequality) gives x &gt; -15.
+So the solution to the inequality is -15 &lt; x &lt; 5. The integers in this range are -14, -13, -12, ..., 4, for a total of 20 integers. Therefore, there are 20 integers in the solution of the inequality.
+
+Assistant A:
+There are 19 integers in the solution of the inequality |x + 5| &lt; 10.
+
+GPT-4 Judgment:
+To solve the inequality |x + 5| &lt; 10, we need to consider two cases:
+Case 1: x + 5 is positive or zero
+In this case, the inequality becomes x + 5 &lt; 10, which simplifies to x &lt; 5.
+Case 2: x + 5 is negative
+In this case, the inequality becomes -(x + 5) &lt; 10, which simplifies to -x - 5 &lt; 10. Adding 5 to both sides gives -x &lt; 15, and multiplying by -1 (and flipping the inequality) gives x &gt; -15.
+So the solution to the inequality is -15 &lt; x &lt; 5. The integers in this range are -14, -13, -12, ..., 4, for a total of 20 integers. Therefore, there are 20 integers in the solution of the inequality.
+Comparing the answers provided by the two AI assistants:
+Assistant A: 19 integers
+Assistant B: 20 integers
+The correct answer is 20 integers, so Assistant B provided the correct and more helpful response.
+Final verdict: [[B]]
+
+GPT-4's Answer (if asked separately):
+We can split the inequality into two cases:
+1) If $x+5\ge0$, then $|x+5|=x+5$. So, we have $x+5&lt;10$, which means $x&lt;5$. Since $x+5\ge0$, we have $x\ge-5$. So in this case, $x$ can be any integer from $-5$ to $4$, inclusive, which gives us $5-(-5)+1=10$ integers.
+2) If $x+5&lt;0$, then $|x+5|=-(x+5)$. So, we have $-(x+5)&lt;10$, which means $x+5&gt;-10$, which means $x&gt;-15$. Since $x+5&lt;0$, we have $x&lt;-5$. So in this case, $x$ can be any integer from $-14$ to $-6$, inclusive, which gives us $-6-(-14)+1=9$ integers.
+In total, there are $10+9=\boxed{19}$ integers in the solution.
+</code></pre>
+<p><strong>[图 15: An example of GPT-4's wrong judgment with chain-of-thought prompt. We can see GPT-4 exactly copied Assistant B's answer (which contains arithmetic errors) and determined Assistant A's answer is incorrect. This suggest GPT-4's chain-of-thought process can be significantly influenced by the given answers despite we ask it to think independently.]</strong></p>
+<p>中文说明:图 15 是即便用思维链提示、GPT-4 仍被带偏的例子。不等式 |x+5|&lt;10 的解为 -15 &lt; x &lt; 5,其中整数共 <strong>19 个</strong>(助手 A 的答案正确)。但在评审中,GPT-4 的「独立解题」逐字复制了助手 B 的推理(包括把 -14 到 4 之间的整数数成 20 个这一数数错误),宣称「正确答案是 20」,判 B 胜([[B]]);而它单独解题时(下方)用分段讨论得出了正确的 \boxed{19}。这说明 CoT 提示要求「先独立思考」并不保险——上下文中的候选答案仍会显著影响其思维链。</p>
+<pre><code class="language-text">Question: Share ideas for adapting art masterpieces into interactive experiences for children. List 5 specific artworks and associated ideas.
+
+Assistant B:
+(omitted)
+
+Assistant A:
+Sure, here are five ideas for adapting art masterpieces into interactive experiences for children:
+1. &quot;The Starry Night&quot; by Vincent van Gogh - Create a virtual reality experience where children can explore the night sky and see the stars and constellations as van Gogh saw them. They can also create their own starry night scenes using different colors and brush strokes.
+2. &quot;The Persistence of Memory&quot; by Salvador Dali - Create a sensory experience where children can touch, feel, and smell different objects to explore the surrealist themes of Dali's painting. They can also create their own surreal landscapes using different materials and textures.
+3. ...
+(omitted)
+
+Follow-up Question: Write a concrete plan for your second example. Include budget estimates.
+
+Assistant B:
+(omitted)
+
+Assistant A:
+Sure, here is a concrete plan for adapting &quot;The Persistence of Memory&quot; by Salvador Dali into an interactive experience for children:
+1. Budget: $5,000
+2. Objectives:
+- To create a sensory experience that allows children to explore the surrealist themes of Dali's painting.
+- To encourage children to create their own surreal landscapes using different materials and textures.
+...
+
+GPT-4 Judgment:
+Assistant A provided a concrete plan for adapting &quot;The Persistence of Memory&quot; by Salvador Dali into an interactive experience for children, while Assistant B provided a plan for the &quot;Mona Lisa Interactive Experience for Children.&quot; The user's follow-up question specifically asked for a concrete plan for the second example, which was the &quot;Mona Lisa&quot; experience provided by Assistant B. Therefore, Assistant B's answer is more relevant and directly addresses the user's request.
+My final verdict is: [[B]]
+</code></pre>
+<p><strong>[图 16: In this example, despite Assistant A correctly followed user's instruction to generate a concrete plan for the second example of its previous response, GPT-4 wrongly referred to the second example in Assistant B's response, resulting in a wrong judgment. This suggests the prompt design that breaks the questions into two prompts may cause LLM judge struggle to locate assistants' previous responses.]</strong></p>
+<p>中文说明:图 16 说明多轮评审中「拆分提示」的风险。追问要求「为你上一轮回答中的第二个例子写具体方案」:助手 A 上一轮的第二个例子是达利《记忆的永恒》,其追问回答确实针对该画作——正确遵循了指令。但 GPT-4 错误地去对照了<strong>助手 B</strong> 上一轮回答中的第二个例子(「蒙娜丽莎互动体验」),进而指责 A 答非所问、判 B 胜。评审没能精确定位「该助手自己上一轮的回答」,这正是 3.5 节改用「单提示完整对话」设计(图 9)所要解决的问题。(代码块中的 (omitted) 为原文即有的省略标记。)</p>
+<h2 id="_4">要点速览</h2>
+<ul>
+<li>LLM-as-a-Judge 首次被系统性研究:用 GPT-4 等强 LLM 替代人类评审开放式的多轮对话任务,与人类偏好一致率超过 80%,达到人与人一致性的同等水平。</li>
+<li>两种基准形态:MT-bench(80 道、8 类、每类 10 道的两轮问题)测受控能力;Chatbot Arena(匿名对战、一个月 3 万票)测真实用户偏好,二者构成今天 Arena 类评测的源头。</li>
+<li>三种评审形态各有取舍:成对比较分辨力强但规模平方爆炸;单答案打分可扩展但绝对分数易波动;参考引导打分适合数学等有标准答案的任务。</li>
+<li>四类已量化的偏差:位置偏差(仅 GPT-4 一致性超 60%)、冗长偏差(「重复列表攻击」下 GPT-3.5/Claude 失败率 91.3%,GPT-4 仅 8.7%)、自我增强偏差(证据不足)、数学推理评审能力不足(会被候选答案带偏)。</li>
+<li>实用缓解手段:交换位置取交集、CoT 独立解题、参考引导(数学题评审失败率 70%→15%)、few-shot 示例(一致性 65%→77.5% 但成本 4 倍)。</li>
+<li>关键洞察:两模型差距越大,LLM 评审与人类一致率越高(70%→近 100%);评审不仅给分还给理由,兼具可扩展性与可解释性。</li>
+<li>人类偏好基准与传统能力基准互补:小量高质量对话微调能大幅提升 MT-bench 分(2.61→6.39)却几乎不提升 MMLU,反之亦然。</li>
+<li>遗产:MT-bench 问题、3K 专家投票、30K 人类偏好对话全部开源;论文的偏差分析与缓解协议成为后续所有 LLM-as-Judge 工作(包括本周后两篇)的对照基线。</li>
+</ul>
+      </div>
+    </article>
+    <nav class="pager"><a class="pager-prev" href="Ryan2026_AutoMetrics_ICLR2026.html"><span>上一篇</span>&quot;AutoMetrics:用自动生成的评估器逼近人类判断&quot;</a><a class="pager-next" href="Zhu2026_AutoLibra_ICLR2026_arXiv2505.02820.html"><span>下一篇</span>&quot;AutoLibra:从开放式人类反馈归纳 Agent 评测指标&quot;</a></nav>
+  </main>
+</div>
+<script src="../assets/site.js"></script>
+</body>
+</html>

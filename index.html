@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CS 329Z · Engineering AI Agents 中文学习站</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html"><span class="brand-mark">CS</span>329Z<span class="brand-sub">中文学习站</span></a>
+    <nav class="topnav">
+      <a href="../index.html#syllabus">课程表</a>
+      <a href="../index.html#dates">重要日期</a>
+      <a href="../index.html#about">关于本站</a>
+    </nav>
+    <div class="searchbox"><input id="search-input" type="search" placeholder="搜索材料 / 主题…" autocomplete="off"><div id="search-results" class="search-results" hidden></div></div>
+  </div>
+</header>
+<div class="hero">
+  <div class="hero-inner">
+    <p class="hero-kicker">Stanford CS 329Z · Fall 2026 · https://cs329z.stanford.edu/</p>
+    <h1>Engineering AI Agents<br><span class="hero-cn">AI 智能体工程 · 中文学习站</span></h1>
+    <p class="hero-desc">本站收录该课程全部 <b>50</b> 篇阅读材料(35 篇论文 + 15 篇博客/规范)的中文版:论文提供逐章<b>精读笔记</b>(摘要全译 + 方法与实验详解),博客/规范提供<b>全文中译</b>,全部支持在线阅读,并可跳转原文。</p>
+    <div class="hero-stats"><div class="stat"><b>17</b><span>讲次主题</span></div><div class="stat"><b>50</b><span>篇材料</span></div><div class="stat"><b>21</b><span>篇必读</span></div><div class="stat"><b>100%</b><span>中文覆盖</span></div></div>
+  </div>
+</div>
+<main class="index-main">
+  <h2 class="sec-title" id="syllabus">课程表与阅读材料</h2>
+  <div class="bi-progress">📖 论文逐段全译对照进度:<b>6 / 35</b> 篇已完成——完成篇带 <span class="badge badge-kind">全译对照</span> 徽章(正文每段英文原文+中文全译,页内可切换仅看中文);其余论文暂为 <span class="badge badge-kind">论文精读</span>(逐章精读笔记),博客类为 <span class="badge badge-kind">全文中译</span>。全译对照持续更新中。</div>
+    <section class="topic" id="week-week01_introduction">
+      <div class="topic-head">
+        <div class="topic-date">9/23</div>
+        <h2>课程导论 <span class="topic-week">第1周</span></h2>
+        <div class="topic-count">3 篇材料</div>
+      </div>
+      <ul class="mat-list">
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Ng2024_Agentic_Design_Patterns_TheBatch.html">
+            <span class="badge badge-recommended">推荐</span>
+            <span class="badge badge-kind">全文中译</span>
+            <span class="mat-title">Agentic 设计模式(一):四种提升 GPT-4 与 GPT-3.5 表现的 AI Agent 策略</span>
+          </a>
+          <div class="mat-sub">&quot;Agentic Design Patterns Part 1: Four AI Agent Strategies That Improve GPT-4 and GPT-3.5 Performance&quot;</div>
+          <div class="mat-summary">吴恩达提出反思、工具使用、规划、多智能体协作四大 Agentic 设计模式,并指出迭代式 Agent 工作流的提升远超模型换代。</div>
+        </li>
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Si2026_Execution-Grounded_Automated_AI_Research.html">
+            <span class="badge badge-recommended">推荐</span>
+            <span class="badge badge-kind">论文精读</span>
+            <span class="mat-title">迈向执行接地的自动化 AI 研究</span>
+          </a>
+          <div class="mat-sub">&quot;Towards Execution-Grounded Automated AI Research&quot;</div>
+          <div class="mat-summary">斯坦福团队构建自动化想法执行器,用进化搜索与 RL 从执行反馈中学习,发现搜索高效而 RL 因多样性坍缩难以提升上界。</div>
+        </li>
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Zaharia2024_Compound_AI_Systems_BAIR_blog.html">
+            <span class="badge badge-must">必读</span>
+            <span class="badge badge-kind">全文中译</span>
+            <span class="mat-title">从模型到复合 AI 系统的转变</span>
+          </a>
+          <div class="mat-sub">&quot;The Shift from Models to Compound AI Systems&quot;</div>
+          <div class="mat-summary">伯克利 BAIR 博客指出最先进 AI 结果越来越来自多组件复合系统而非单一模型,并分析其动因、设计挑战与新兴工具范式。</div>
+        </li>
+      </ul>
+    </section>
+    <section class="topic" id="week-week02a_llms_for_builders">
+      <div class="topic-head">
+        <div class="topic-date">9/28</div>
+        <h2>给开发者的 LLM <span class="topic-week">第2周</span></h2>
+        <div class="topic-count">2 篇材料</div>
+      </div>
+      <ul class="mat-list">
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Rajasekaran2025_Effective_Context_Engineering_Anthropic.html">
+            <span class="badge badge-recommended">推荐</span>
+            <span class="badge badge-kind">全文中译</span>
+            <span class="mat-title">为 AI Agent 做高效的上下文工程</span>
+          </a>
+          <div class="mat-sub">&quot;Effective Context Engineering for AI Agents&quot;</div>
+          <div class="mat-summary">Anthropic 提出「上下文工程」是提示工程的演进:上下文是有限资源,需为 Agent 策展最小高信号 token 集合并配合检索、压缩与记忆。</div>
+        </li>
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Schluntz2024_Building_Effective_Agents_Anthropic.html">
+            <span class="badge badge-must">必读</span>
+            <span class="badge badge-kind">全文中译</span>
+            <span class="mat-title">构建高效的 AI Agent</span>
+          </a>
+          <div class="mat-sub">&quot;Building Effective Agents&quot;</div>
+          <div class="mat-summary">Anthropic 基于数十个客户项目的经验,总结增强型 LLM、五种工作流与自主 Agent 等可组合模式,主张从最简单方案做起。</div>
+        </li>
+      </ul>
+    </section>
+    <section class="topic" id="week-week02b_rag">
+      <div class="topic-head">
+        <div class="topic-date">9/30</div>
+        <h2>检索增强生成 RAG <span class="topic-week">第2周</span></h2>
+        <div class="topic-count">2 篇材料</div>
+      </div>
+      <ul class="mat-list">
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Khattab2020_ColBERT_SIGIR2020.html">
+            <span class="badge badge-recommended">推荐</span>
+            <span class="badge badge-kind">论文精读</span>
+            <span class="mat-title">ColBERT：基于 BERT 上下文化延迟交互的高效段落检索</span>
+          </a>
+          <div class="mat-sub">&quot;ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT&quot;</div>
+          <div class="mat-summary">提出&quot;延迟交互&quot;范式：查询与文档各自编码为 token 级嵌入后用 MaxSim 聚合打分，以 BERT 级效果换来数量级更低的延迟，并支持端到端检索。</div>
+        </li>
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Lewis2020_RAG_NeurIPS2020.html">
+            <span class="badge badge-must">必读</span>
+            <span class="badge badge-kind">论文精读</span>
+            <span class="mat-title">面向知识密集型 NLP 任务的检索增强生成</span>
+          </a>
+          <div class="mat-sub">Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks</div>
+          <div class="mat-summary">RAG 开山之作：把预训练 seq2seq 生成器与 DPR 神经检索器端到端联合微调，在开放域问答等知识密集型任务上刷新纪录。</div>
+        </li>
+      </ul>
+    </section>
+    <section class="topic" id="week-week03a_tool_use_mcp">
+      <div class="topic-head">
+        <div class="topic-date">10/5</div>
+        <h2>工具调用与 MCP <span class="topic-week">第3周</span></h2>
+        <div class="topic-count">1 篇材料</div>
+      </div>
+      <ul class="mat-list">
+        <li class="mat-row">
+          <a class="mat-link" href="reading/MCP_Specification_2025-06-18.html">
+            <span class="badge badge-must">必读</span>
+            <span class="badge badge-kind">全文中译</span>
+            <span class="mat-title">模型上下文协议（MCP）规范（2025-06-18 版）</span>
+          </a>
+          <div class="mat-sub">&quot;Model Context Protocol Specification (Version 2025-06-18)&quot;</div>
+          <div class="mat-summary">MCP 官方规范概览页全文中译：开放协议以 JSON-RPC 2.0 连接 Host/Client/Server 三角色，定义 Server 与 Client 双方能力及安全信任原则。</div>
+        </li>
+      </ul>
+    </section>
+    <section class="topic" id="week-week03b_frameworks">
+      <div class="topic-head">
+        <div class="topic-date">10/7</div>
+        <h2>框架与编排 <span class="topic-week">第3周</span></h2>
+        <div class="topic-count">1 篇材料</div>
+      </div>
+      <ul class="mat-list">
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Khattab2024_DSPy_ICLR2024.html">
+            <span class="badge badge-must">必读</span>
+            <span class="badge badge-kind">论文精读</span>
+            <span class="mat-title">DSPy：将声明式语言模型调用编译为自我改进的流水线</span>
+          </a>
+          <div class="mat-sub">&quot;DSPy: Compiling Declarative Language Model Calls into Self-Improving Pipelines&quot;</div>
+          <div class="mat-summary">DSPy 把 LM 流水线抽象为文本变换图，用&quot;签名 + 模块 + 优化器&quot;替代手写提示模板，自动编译出超越人工提示工程的系统。</div>
+        </li>
+      </ul>
+    </section>
+    <section class="topic" id="week-week04a_agent_patterns">
+      <div class="topic-head">
+        <div class="topic-date">10/12</div>
+        <h2>Agent 设计模式 <span class="topic-week">第4周</span></h2>
+        <div class="topic-count">1 篇材料</div>
+      </div>
+      <ul class="mat-list">
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Yao2023_ReAct_ICLR2023.html">
+            <span class="badge badge-must">必读</span>
+            <span class="badge badge-kind">全译对照</span>
+            <span class="mat-title">&quot;ReAct:在语言模型中协同推理与行动&quot;</span>
+          </a>
+          <div class="mat-sub">&quot;ReAct: Synergizing Reasoning and Acting in Language Models&quot;</div>
+          <div class="mat-summary">让 LLM 交错生成&quot;思考&quot;与&quot;动作&quot;:推理引导行动、行动回馈证据。在 HotpotQA/FEVER 上克服幻觉与错误传播,在 ALFWorld/WebShop 上以 1-2 个示例分别超出模仿/强化学习 34% 与 10%。</div>
+        </li>
+      </ul>
+    </section>
+    <section class="topic" id="week-week04b_memory">
+      <div class="topic-head">
+        <div class="topic-date">10/14</div>
+        <h2>Agent 记忆 <span class="topic-week">第4周</span></h2>
+        <div class="topic-count">4 篇材料</div>
+      </div>
+      <ul class="mat-list">
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Chhikara2025_Mem0.html">
+            <span class="badge badge-recommended">推荐</span>
+            <span class="badge badge-kind">论文精读</span>
+            <span class="mat-title">&quot;Mem0：构建具备可扩展长期记忆的生产级 AI Agent&quot;</span>
+          </a>
+          <div class="mat-sub">&quot;Mem0: Building Production-Ready AI Agents with Scalable Long-Term Memory&quot;</div>
+          <div class="mat-summary">提出 Mem0 及图记忆变体 Mem0g：从对话中动态抽取、整合与检索记忆，在 LOCOMO 上全面领先并大幅降低延迟与 token 开销。</div>
+        </li>
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Letta2025_Agent_Memory_blog.html">
+            <span class="badge badge-recommended">推荐</span>
+            <span class="badge badge-kind">全文中译</span>
+            <span class="mat-title">&quot;Agent 记忆：如何构建能学习与记忆的 Agent&quot;</span>
+          </a>
+          <div class="mat-sub">&quot;Agent Memory: How to Build Agents That Learn and Remember&quot;</div>
+          <div class="mat-summary">Letta 团队系统讲解 Agent 记忆的分类（消息缓冲、核心/召回/归档记忆）与构建技术，并给出&quot;记忆即上下文工程&quot;的统一视角。</div>
+        </li>
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Packer2023_MemGPT.html">
+            <span class="badge badge-must">必读</span>
+            <span class="badge badge-kind">论文精读</span>
+            <span class="mat-title">&quot;MemGPT：让 LLM 走向操作系统&quot;</span>
+          </a>
+          <div class="mat-sub">&quot;MemGPT: Towards LLMs as Operating Systems&quot;</div>
+          <div class="mat-summary">借鉴操作系统虚拟内存与分层存储思想，为固定上下文 LLM 构建可自我管理的记忆层级，实现长对话与长文档分析。</div>
+        </li>
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Park2023_Generative_Agents_UIST2023.html">
+            <span class="badge badge-recommended">推荐</span>
+            <span class="badge badge-kind">论文精读</span>
+            <span class="mat-title">&quot;生成式 Agent：人类行为的交互式拟真&quot;</span>
+          </a>
+          <div class="mat-sub">&quot;Generative Agents: Interactive Simulacra of Human Behavior&quot;</div>
+          <div class="mat-summary">斯坦福小镇论文：以记忆流、检索、反思与规划架构驱动 25 个 LLM Agent 模拟可信人类行为，并涌现信息扩散与协作等社会动态。</div>
+        </li>
+      </ul>
+    </section>
+    <section class="topic" id="week-week05a_multi_agent">
+      <div class="topic-head">
+        <div class="topic-date">10/19</div>
+        <h2>多智能体系统 <span class="topic-week">第5周</span></h2>
+        <div class="topic-count">4 篇材料</div>
+      </div>
+      <ul class="mat-list">
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Cemri2025_Why_Multi_Agent_LLM_Systems_Fail.html">
+            <span class="badge badge-must">必读</span>
+            <span class="badge badge-kind">论文精读</span>
+            <span class="mat-title">&quot;为什么多智能体 LLM 系统会失败?&quot;</span>
+          </a>
+          <div class="mat-sub">&quot;Why Do Multi-Agent LLM Systems Fail?&quot;</div>
+          <div class="mat-summary">首个多智能体失败分类法 MAST:14 种失败模式归入 3 大类,基于 1642 条标注轨迹,揭示 MAS 失败多源于系统设计而非模型本身。</div>
+        </li>
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Liu2024_DyLAN_COLM2024.html">
+            <span class="badge badge-supplementary">补充</span>
+            <span class="badge badge-kind">论文精读</span>
+            <span class="mat-title">&quot;DyLAN:面向任务的动态 LLM 智能体协作网络&quot;</span>
+          </a>
+          <div class="mat-sub">&quot;A Dynamic LLM-Powered Agent Network for Task-Oriented Agent Collaboration&quot;</div>
+          <div class="mat-summary">把多智能体协作建模为时序前馈网络(T-FFN):先用&quot;智能体重要性分数&quot;无监督选出任务适配的精英团队,再让团队在动态通信结构(LLM 排序器中途淘汰低效智能体+拜占庭式早停)中协作,四类任务全面超越基线。</div>
+        </li>
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Neubig2024_Dont_Sleep_On_Single_Agent_Systems.html">
+            <span class="badge badge-recommended">推荐</span>
+            <span class="badge badge-kind">全文中译</span>
+            <span class="mat-title">别忽视单智能体系统</span>
+          </a>
+          <div class="mat-sub">Don&#x27;t Sleep on Single-agent Systems</div>
+          <div class="mat-summary">OpenHands 作者为&quot;单智能体系统&quot;辩护：多数多智能体系统的收益可以用一个强 LLM、一个统一动作空间和一套好提示实现，复杂度未必是好事。</div>
+        </li>
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Wu2024_AutoGen_COLM2024.html">
+            <span class="badge badge-recommended">推荐</span>
+            <span class="badge badge-kind">论文精读</span>
+            <span class="mat-title">&quot;AutoGen:以多智能体对话构建下一代 LLM 应用&quot;</span>
+          </a>
+          <div class="mat-sub">&quot;AutoGen: Enabling Next-Gen LLM Applications via Multi-Agent Conversation&quot;</div>
+          <div class="mat-summary">微软开源的多智能体对话框架:可对话、可定制的智能体(LLM/人/工具混合后端)+ 对话编程范式,六个应用展示其在数学、RAG、决策、编码等任务上开箱即用的竞争力。</div>
+        </li>
+      </ul>
+    </section>
+    <section class="topic" id="week-week05b_optimization">
+      <div class="topic-head">
+        <div class="topic-date">10/21</div>
+        <h2>优化:测试时计算与提示优化 <span class="topic-week">第5周</span></h2>
+        <div class="topic-count">4 篇材料</div>
+      </div>
+      <ul class="mat-list">
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Agrawal2026_GEPA.html">
+            <span class="badge badge-must">必读</span>
+            <span class="badge badge-kind">论文精读</span>
+            <span class="mat-title">&quot;GEPA:反思式提示进化可以胜过强化学习&quot;</span>
+          </a>
+          <div class="mat-sub">&quot;GEPA: Reflective Prompt Evolution Can Outperform Reinforcement Learning&quot;</div>
+          <div class="mat-summary">用自然语言反思替代标量奖励的策略梯度:GEPA 对复合 AI 系统的提示做反思式进化 + 帕累托候选选择,以最多 35 倍少的 rollout 平均超出 GRPO 6%,并在全部基准上超越 MIPROv2。</div>
+        </li>
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Opsahl-Ong2024_MIPROv2.html">
+            <span class="badge badge-recommended">推荐</span>
+            <span class="badge badge-kind">论文精读</span>
+            <span class="mat-title">为多阶段语言模型程序优化指令与示例(MIPRO / MIPROv2)</span>
+          </a>
+          <div class="mat-sub">Optimizing Instructions and Demonstrations for Multi-Stage Language Model Programs</div>
+          <div class="mat-summary">把 LM 程序的提示优化分解为&quot;提议&quot;与&quot;信用分配&quot;两大挑战,提出 MIPRO 优化器联合优化各模块指令与自举少样本示例,7 个任务中 5 个上取得最佳,并给出 5 条实践 lesson。</div>
+        </li>
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Snell2025_Scaling_Test_Time_Compute_ICLR2025.html">
+            <span class="badge badge-must">必读</span>
+            <span class="badge badge-kind">全译对照</span>
+            <span class="mat-title">&quot;优化地扩展 LLM 测试时计算,可以比扩展模型参数更有效&quot;</span>
+          </a>
+          <div class="mat-sub">&quot;Scaling LLM Test-Time Compute Optimally can be More Effective than Scaling Model Parameters&quot;</div>
+          <div class="mat-summary">两种扩展测试时计算的机制(对 PRM 搜索、迭代修订)的有效性关键取决于题目难度;按难度自适应分配算力的&quot;计算最优&quot;策略可用 4 倍少算力超 best-of-N,FLOPs 对齐下胜过 14 倍大模型。</div>
+        </li>
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Soylu2024_FineTuning_and_Prompt_Optimization_EMNLP2024.html">
+            <span class="badge badge-recommended">推荐</span>
+            <span class="badge badge-kind">论文精读</span>
+            <span class="mat-title">&quot;微调与提示优化:单打都不如组合拳(BetterTogether)&quot;</span>
+          </a>
+          <div class="mat-sub">&quot;Fine-Tuning and Prompt Optimization: Two Great Steps that Work Better Together&quot;</div>
+          <div class="mat-summary">首次提出交替进行提示优化与权重微调来优化 LM 流水线:同一模型&quot;自己教自己&quot;,在 3 任务 × 3 模型上,联合策略平均比仅优化权重/提示分别高出最多 60% 与 6%。</div>
+        </li>
+      </ul>
+    </section>
+    <section class="topic" id="week-week06b_data">
+      <div class="topic-head">
+        <div class="topic-date">10/28</div>
+        <h2>数据 <span class="topic-week">第6周</span></h2>
+        <div class="topic-count">2 篇材料</div>
+      </div>
+      <ul class="mat-list">
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Shankar2024_Data_Flywheels_blog.html">
+            <span class="badge badge-must">必读</span>
+            <span class="badge badge-kind">全文中译</span>
+            <span class="mat-title">LLM 应用的数据飞轮</span>
+          </a>
+          <div class="mat-sub">Data Flywheels for LLM Applications</div>
+          <div class="mat-summary">提出用生产数据持续改进 LLM 应用的&quot;评估—监控—持续改进&quot;三段式飞轮框架：定义二值指标、动态少样本对齐裁判、把修复过的线上轨迹喂回提示。</div>
+        </li>
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Tan2024_LLMs_for_Data_Annotation_Survey_EMNLP2024.html">
+            <span class="badge badge-recommended">推荐</span>
+            <span class="badge badge-kind">论文精读</span>
+            <span class="mat-title">&quot;用于数据标注与合成的 LLM:综述&quot;</span>
+          </a>
+          <div class="mat-sub">&quot;Large Language Models for Data Annotation and Synthesis: A Survey&quot;</div>
+          <div class="mat-summary">系统梳理 LLM 做数据标注/合成的三大环节——标注生成(指令/标签/理由/成对/文本反馈)、标注评估与过滤、标注利用(SFT/对齐/推理),并讨论模型坍塌、幻觉、伦理等挑战。</div>
+        </li>
+      </ul>
+    </section>
+    <section class="topic" id="week-week07a_data_selection">
+      <div class="topic-head">
+        <div class="topic-date">11/2</div>
+        <h2>数据选择与质量 <span class="topic-week">第7周</span></h2>
+        <div class="topic-count">3 篇材料</div>
+      </div>
+      <ul class="mat-list">
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Shankar2024_Who_Validates_the_Validators_UIST2024.html">
+            <span class="badge badge-recommended">推荐</span>
+            <span class="badge badge-kind">论文精读</span>
+            <span class="mat-title">&quot;谁来验证验证者?让 LLM 辅助评估与人类偏好对齐&quot;</span>
+          </a>
+          <div class="mat-sub">&quot;Who Validates the Validators? Aligning LLM-Assisted Evaluation of LLM Outputs with Human Preferences&quot;</div>
+          <div class="mat-summary">提出 EvalGen 混合主动式界面,让用户在生成评估标准与断言的同时打分,发现「标准漂移」现象:评估标准依赖具体模型输出、随打分不断演变。</div>
+        </li>
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Yang2025_SWE-smith_NeurIPSD&B2025.html">
+            <span class="badge badge-recommended">推荐</span>
+            <span class="badge badge-kind">论文精读</span>
+            <span class="mat-title">&quot;SWE-smith:为软件工程 Agent 扩展数据规模&quot;</span>
+          </a>
+          <div class="mat-sub">&quot;SWE-smith: Scaling Data for Software Engineering Agents&quot;</div>
+          <div class="mat-summary">通过向真实代码库注入合成 bug 并以单元测试验证,SWE-smith 用约 20 小时人力构建 5 万实例训练集,训练出 SWE-bench Verified 40.2% 的开源 SOTA 模型。</div>
+        </li>
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Zhou2023_LIMA_NeurIPS2023.html">
+            <span class="badge badge-must">必读</span>
+            <span class="badge badge-kind">全译对照</span>
+            <span class="mat-title">&quot;LIMA:对齐中的「少即是多」&quot;</span>
+          </a>
+          <div class="mat-sub">&quot;LIMA: Less Is More for Alignment&quot;</div>
+          <div class="mat-summary">仅用 1,000 条精心筛选的提示-回复数据微调 LLaMa 65B,不依赖 RLHF,即可与 GPT-4 等强模型竞争,证明对齐主要是学习输出格式而非知识。</div>
+        </li>
+      </ul>
+    </section>
+    <section class="topic" id="week-week07b_evaluation">
+      <div class="topic-head">
+        <div class="topic-date">11/4</div>
+        <h2>评测基础 <span class="topic-week">第7周</span></h2>
+        <div class="topic-count">3 篇材料</div>
+      </div>
+      <ul class="mat-list">
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Polo2024_tinyBenchmarks_ICML2024.html">
+            <span class="badge badge-recommended">推荐</span>
+            <span class="badge badge-kind">论文精读</span>
+            <span class="mat-title">&quot;tinyBenchmarks:用更少样本评测大语言模型&quot;</span>
+          </a>
+          <div class="mat-sub">&quot;tinyBenchmarks: evaluating LLMs with fewer examples&quot;</div>
+          <div class="mat-summary">借鉴心理测量学的项目反应理论(IRT),从 MMLU 等 1.4 万级基准中精选 100 题,即可把 LLM 性能估计误差控制在约 2%,评测成本降低两个数量级。</div>
+        </li>
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Press2024_How_to_Build_Good_LM_Benchmarks.html">
+            <span class="badge badge-recommended">推荐</span>
+            <span class="badge badge-kind">全文中译</span>
+            <span class="mat-title">&quot;如何构建好的语言建模基准&quot;</span>
+          </a>
+          <div class="mat-sub">&quot;How to Build Good Language Modeling Benchmarks&quot;</div>
+          <div class="mat-summary">SWE-bench 作者 Ofir Press 的基准设计经验谈:好基准应自然、可自动评测、有挑战,并附单一指标、强基线、任务数量等实操准则。</div>
+        </li>
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Zhu2025_Rigorous_Agentic_Benchmarks.html">
+            <span class="badge badge-must">必读</span>
+            <span class="badge badge-kind">论文精读</span>
+            <span class="mat-title">&quot;构建严谨 Agent 基准的最佳实践&quot;</span>
+          </a>
+          <div class="mat-sub">&quot;Establishing Best Practices for Building Rigorous Agentic Benchmarks&quot;</div>
+          <div class="mat-summary">提出 Agent 基准检查清单 ABC,从任务有效性与结果有效性审计十大流行 Agent 基准,发现可致最高 100% 相对误差的缺陷,并用 CVE-Bench 示范修复使高估下降 33%。</div>
+        </li>
+      </ul>
+    </section>
+    <section class="topic" id="week-week08a_llm_as_judge">
+      <div class="topic-head">
+        <div class="topic-date">11/9</div>
+        <h2>LLM-as-Judge <span class="topic-week">第8周</span></h2>
+        <div class="topic-count">4 篇材料</div>
+      </div>
+      <ul class="mat-list">
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Grace2026_Demystifying_Evals_Anthropic.html">
+            <span class="badge badge-must">必读</span>
+            <span class="badge badge-kind">全文中译</span>
+            <span class="mat-title">&quot;解构 AI Agent 评测&quot;</span>
+          </a>
+          <div class="mat-sub">&quot;Demystifying evals for AI agents&quot;</div>
+          <div class="mat-summary">&quot;Anthropic 评测工程长文:系统讲解 Agent 评测的构成(任务/试验/评分器/轨迹/harness)、三类评分器、pass@k 与 pass^k,以及从零到一搭建可信评测的八步路线图。&quot;</div>
+        </li>
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Ryan2026_AutoMetrics_ICLR2026.html">
+            <span class="badge badge-recommended">推荐</span>
+            <span class="badge badge-kind">论文精读</span>
+            <span class="mat-title">&quot;AutoMetrics:用自动生成的评估器逼近人类判断&quot;</span>
+          </a>
+          <div class="mat-sub">&quot;AutoMetrics: Approximate Human Judgments with Automatically Generated Evaluators&quot;</div>
+          <div class="mat-summary">&quot;提出 AutoMetrics 框架:以少于 100 条人类反馈为输入,自动生成并从 48 个指标的 MetricBank 中检索候选,经 PLS 回归合成与人类判断高相关(最高提升 33.4% Kendall τ)的可解释指标,并可充当代理奖励。&quot;</div>
+        </li>
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Zheng2023_LLM_as_a_Judge_MT-Bench_NeurIPS2023.html">
+            <span class="badge badge-must">必读</span>
+            <span class="badge badge-kind">全译对照</span>
+            <span class="mat-title">&quot;评审 LLM-as-a-Judge:MT-Bench 与 Chatbot Arena&quot;</span>
+          </a>
+          <div class="mat-sub">&quot;Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena&quot;</div>
+          <div class="mat-summary">&quot;LLM-as-a-Judge 开山之作:提出 MT-Bench 与 Chatbot Arena 两大基准,系统研究 GPT-4 评审与人类偏好超 80% 的一致性,并分析位置、冗长、自我增强等偏差及缓解手段。&quot;</div>
+        </li>
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Zhu2026_AutoLibra_ICLR2026_arXiv2505.02820.html">
+            <span class="badge badge-recommended">推荐</span>
+            <span class="badge badge-kind">论文精读</span>
+            <span class="mat-title">&quot;AutoLibra:从开放式人类反馈归纳 Agent 评测指标&quot;</span>
+          </a>
+          <div class="mat-sub">&quot;AutoLibra: Agent Metric Induction from Open-Ended Human Feedback&quot;</div>
+          <div class="mat-summary">&quot;提出 AutoLibra:把「按钮禁用就别再点」这类开放式人类反馈落地到轨迹行为、聚类归纳为可解释指标,并以覆盖度/冗余度两个元指标自动优化,可反哺提示优化使 Agent 成功率提升 20% 以上。&quot;</div>
+        </li>
+      </ul>
+    </section>
+    <section class="topic" id="week-week08b_safety">
+      <div class="topic-head">
+        <div class="topic-date">11/11</div>
+        <h2>安全与护栏 <span class="topic-week">第8周</span></h2>
+        <div class="topic-count">6 篇材料</div>
+      </div>
+      <ul class="mat-list">
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Anthropic2023_Responsible_Scaling_Policy.html">
+            <span class="badge badge-recommended">推荐</span>
+            <span class="badge badge-kind">全文中译</span>
+            <span class="mat-title">介绍 Anthropic 的负责任扩展政策</span>
+          </a>
+          <div class="mat-sub">&quot;Introducing Anthropic&#x27;s Responsible Scaling Policy&quot;</div>
+          <div class="mat-summary">Anthropic 发布负责任扩展政策 RSP,以仿照生物安全等级的 ASL 框架要求模型能力越高、安全证明越严格,把灾难性风险管理嵌入训练与部署决策。</div>
+        </li>
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Li2026_Agentic_LLMs_Deanonymizers.html">
+            <span class="badge badge-recommended">推荐</span>
+            <span class="badge badge-kind">论文精读</span>
+            <span class="mat-title">&quot;智能体化 LLM 是强大的去匿名化工具:Anthropic 访谈数据集参与者的重识别&quot;</span>
+          </a>
+          <div class="mat-sub">&quot;Agentic LLMs as Powerful Deanonymizers: Re-identification of Participants in the Anthropic Interviewer Dataset&quot;</div>
+          <div class="mat-summary">用带网络搜索的 LLM 智能体,仅凭访谈中对研究项目的自然语言描述就匹配出对应论文,24 篇访谈中 6 篇被成功重识别(含唯一确定身份),单次攻击成本不到 0.5 美元。</div>
+        </li>
+        <li class="mat-row">
+          <a class="mat-link" href="reading/OpenAI2025_Prompt_Injections.html">
+            <span class="badge badge-must">必读</span>
+            <span class="badge badge-kind">全文中译</span>
+            <span class="mat-title">理解提示注入:一项前沿安全挑战</span>
+          </a>
+          <div class="mat-sub">&quot;Understanding prompt injections: a frontier security challenge&quot;</div>
+          <div class="mat-summary">OpenAI 官方科普提示注入:攻击者借网页、邮件等第三方内容诱导 AI 越权行事,并给出多层防御与用户自护指南。</div>
+        </li>
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Shao2024_PrivacyLens_NeurIPSD&B2024.html">
+            <span class="badge badge-recommended">推荐</span>
+            <span class="badge badge-kind">论文精读</span>
+            <span class="mat-title">PrivacyLens:评估语言模型在行动中的隐私规范意识</span>
+          </a>
+          <div class="mat-sub">&quot;PrivacyLens: Evaluating Privacy Norm Awareness of Language Models in Action&quot;</div>
+          <div class="mat-summary">以上下文完整性理论为骨架,把隐私敏感种子扩展为情境、轨迹并评测 LM Agent 行为,发现 GPT-4 仍在 25.68% 的案例中泄露隐私。</div>
+        </li>
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Wen2026_Contextualized_Privacy_Defense.html">
+            <span class="badge badge-recommended">推荐</span>
+            <span class="badge badge-kind">论文精读</span>
+            <span class="mat-title">&quot;面向 LLM 智能体的上下文化隐私防御(CDI)&quot;</span>
+          </a>
+          <div class="mat-sub">&quot;Contextualized Privacy Defense for LLM Agents&quot;</div>
+          <div class="mat-summary">提出 CDI 防御范式:轻量 instructor 模型在每步动作前生成上下文感知的隐私指引(而非静态提示或事后拦截),并用&quot;失败轨迹即 RL 环境&quot;的经验驱动优化(GRPO)训练,隐私保持 94.2%、有用性 80.6%。</div>
+        </li>
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Zhang2025_Searching_Privacy_Risks_LLM_Agents.html">
+            <span class="badge badge-must">必读</span>
+            <span class="badge badge-kind">全译对照</span>
+            <span class="mat-title">&quot;通过仿真搜索 LLM 智能体的隐私风险&quot;</span>
+          </a>
+          <div class="mat-sub">&quot;Searching for Privacy Risks in LLM Agents via Simulation&quot;</div>
+          <div class="mat-summary">把&quot;隐私风险发现&quot;当搜索问题:三智能体仿真中交替搜索攻击与防御指令,发现伪造同意、多轮冒充等攻击与身份验证状态机防御,可跨模型跨场景迁移;单次攻击 &lt;0.5 美元。</div>
+        </li>
+      </ul>
+    </section>
+    <section class="topic" id="week-week09b_coding_agents">
+      <div class="topic-head">
+        <div class="topic-date">11/18</div>
+        <h2>编程智能体 <span class="topic-week">第9周</span></h2>
+        <div class="topic-count">5 篇材料</div>
+      </div>
+      <ul class="mat-list">
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Anthropic2025_Claude_Code_Best_Practices.html">
+            <span class="badge badge-must">必读</span>
+            <span class="badge badge-kind">全文中译</span>
+            <span class="mat-title">Claude Code 最佳实践</span>
+          </a>
+          <div class="mat-sub">Best practices for Claude Code</div>
+          <div class="mat-summary">Anthropic 官方总结的 Claude Code 使用最佳实践:从环境配置、验证闭环、上下文管理到并行扩展的完整工程方法论。</div>
+        </li>
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Jimenez2024_SWE-bench_ICLR2024.html">
+            <span class="badge badge-must">必读</span>
+            <span class="badge badge-kind">全译对照</span>
+            <span class="mat-title">&quot;SWE-bench:语言模型能解决真实世界的 GitHub Issue 吗?&quot;</span>
+          </a>
+          <div class="mat-sub">&quot;SWE-bench: Can Language Models Resolve Real-World Github Issues?&quot;</div>
+          <div class="mat-summary">从 12 个流行 Python 仓库的 9 万个 PR 中筛出 2294 个&quot;真实 issue + 测试验证&quot;任务;发布时最强模型 Claude 2 仅解决 1.96%——编程智能体时代的标志性基准。</div>
+        </li>
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Wang2025_OpenHands_ICLR2025.html">
+            <span class="badge badge-recommended">推荐</span>
+            <span class="badge badge-kind">论文精读</span>
+            <span class="mat-title">&quot;OpenHands:AI 软件开发者通用智能体的开放平台&quot;</span>
+          </a>
+          <div class="mat-sub">&quot;OpenHands: An Open Platform for AI Software Developers as Generalist Agents&quot;</div>
+          <div class="mat-summary">开源智能体开发平台(前 OpenDevin):事件流架构 + Docker 沙箱运行时 + 代码即动作(CodeAct)+ AgentSkills 工具库 + 多智能体委派,同一 CodeAct 智能体在软件工程、网页、辅助任务 15 个基准上零改动的通用表现。</div>
+        </li>
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Yang2024_SWE-agent_NeurIPS2024.html">
+            <span class="badge badge-must">必读</span>
+            <span class="badge badge-kind">论文精读</span>
+            <span class="mat-title">&quot;SWE-agent:智能体-计算机接口(ACI)实现自动化软件工程&quot;</span>
+          </a>
+          <div class="mat-sub">&quot;SWE-agent: Agent-Computer Interfaces Enable Automated Software Engineering&quot;</div>
+          <div class="mat-summary">提出&quot;智能体-计算机接口(ACI)&quot;概念:为 LLM 专门设计的搜索/查看/编辑命令 + lint 护栏 + 上下文管理,让 GPT-4 Turbo 在 SWE-bench 上从 3.8% 跃升至 12.47%,不改模型权重。</div>
+        </li>
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Young2025_Effective_Harnesses_Long_Running_Agents.html">
+            <span class="badge badge-recommended">推荐</span>
+            <span class="badge badge-kind">全文中译</span>
+            <span class="mat-title">&quot;长时运行智能体的高效 Harness 设计&quot;</span>
+          </a>
+          <div class="mat-sub">&quot;Effective harnesses for long-running agents&quot;</div>
+          <div class="mat-summary">Anthropic 工程实践:让智能体跨多个上下文窗口持续数小时工作——初始化智能体(建特性清单/init 脚本/进度文件)+ 编码智能体(每次只做一个特性、留下干净状态、像人类一样端到端测试)。</div>
+        </li>
+      </ul>
+    </section>
+    <section class="topic" id="week-week11a_proactive_agents">
+      <div class="topic-head">
+        <div class="topic-date">11/30</div>
+        <h2>主动式智能体 <span class="topic-week">第11周</span></h2>
+        <div class="topic-count">2 篇材料</div>
+      </div>
+      <ul class="mat-list">
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Shaikh2025_General_User_Models_UIST2025.html">
+            <span class="badge badge-must">必读</span>
+            <span class="badge badge-kind">论文精读</span>
+            <span class="mat-title">从计算机使用中构建通用用户模型</span>
+          </a>
+          <div class="mat-sub">&quot;Creating General User Models from Computer Use&quot;</div>
+          <div class="mat-summary">提出 GUM 架构,从任意非结构化计算机交互(如截图)中推断带置信度的自然语言命题来表示用户,并用主动式助手 Gumbo 展示其应用。</div>
+        </li>
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Shaikh2026_Next_Action_Predictors.html">
+            <span class="badge badge-recommended">推荐</span>
+            <span class="badge badge-kind">论文精读</span>
+            <span class="mat-title">从人机交互中学习下一动作预测器</span>
+          </a>
+          <div class="mat-sub">&quot;Learning Next Action Predictors from Human-Computer Interaction&quot;</div>
+          <div class="mat-summary">形式化&quot;下一动作预测(NAP)&quot;任务,发布被动标注流水线 NAPsack(20 用户、1800 小时、36 万动作),并提出用 GRPO 端到端训练的 LongNAP 模型。</div>
+        </li>
+      </ul>
+    </section>
+    <section class="topic" id="week-week11b_open_problems">
+      <div class="topic-head">
+        <div class="topic-date">12/2</div>
+        <h2>开放问题 <span class="topic-week">第11周</span></h2>
+        <div class="topic-count">2 篇材料</div>
+      </div>
+      <ul class="mat-list">
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Xie2024_OSWorld_NeurIPSD&B2024.html">
+            <span class="badge badge-recommended">推荐</span>
+            <span class="badge badge-kind">论文精读</span>
+            <span class="mat-title">&quot;OSWorld:在真实计算机环境中评测多模态智能体的开放式任务能力&quot;</span>
+          </a>
+          <div class="mat-sub">&quot;OSWorld: Benchmarking Multimodal Agents for Open-Ended Tasks in Real Computer Environments&quot;</div>
+          <div class="mat-summary">首个可扩展的真实计算机环境基准:369 个跨应用真实任务、可复现初始状态与执行式评估脚本;人类完成 72.36%,最强模型仅 12.24%。</div>
+        </li>
+        <li class="mat-row">
+          <a class="mat-link" href="reading/Yao2022_WebShop_NeurIPS2022.html">
+            <span class="badge badge-recommended">推荐</span>
+            <span class="badge badge-kind">论文精读</span>
+            <span class="mat-title">&quot;WebShop:面向可扩展真实网页交互的接地语言智能体&quot;</span>
+          </a>
+          <div class="mat-sub">&quot;WebShop: Towards Scalable Real-World Web Interaction with Grounded Language Agents&quot;</div>
+          <div class="mat-summary">构建含 118 万真实商品、1.2 万众包指令的模拟电商环境;IL+RL 智能体成功率 29%,远低于人类专家 59.6%,并可零样本迁移到真实购物网站。</div>
+        </li>
+      </ul>
+    </section>
+    <section class="topic" id="week-extras">
+      <div class="topic-head">
+        <div class="topic-date">✦</div>
+        <h2>为什么值得学这门课 <span class="topic-week">背景阅读</span></h2>
+        <div class="topic-count">1 篇材料</div>
+      </div>
+      <ul class="mat-list">
+        <li class="mat-row">
+          <a class="mat-link" href="reading/extra_cs329a_article.html">
+            <span class="badge badge-recommended">推荐</span>
+            <span class="badge badge-kind">全文中译</span>
+            <span class="mat-title">&quot;年薪 85 万美元的绝活,斯坦福免费公开了——为什么值得学这门课&quot;</span>
+          </a>
+          <div class="mat-sub">&quot;Stanford Just Put an $850K/Year Skill on YouTube for Free&quot;</div>
+          <div class="mat-summary">Anthropic 为能构建自我进化型 AI 智能体的工程师开出最高 85 万美元年薪;斯坦福把教这门手艺的 CS329A 课程完整免费公开。本文是这门课为什么值钱的最好注脚。</div>
+        </li>
+      </ul>
+    </section>
+
+  <section class="dates" id="dates">
+    <h2 class="sec-title">课程重要日期</h2>
+    <table class="dates-table">
+      <tr><th>周次</th><th>事项</th><th>日期</th></tr>
+        <tr><td class="d-week">第3周</td><td>HW1《Build an Agentic Harness》发布</td><td class="d-date">10/5</td></tr>
+        <tr><td class="d-week">第3周</td><td>Project Proposal 截止</td><td class="d-date">10/9</td></tr>
+        <tr><td class="d-week">第6周</td><td>HW2《Evaluate an Agent》发布 · HW1 截止</td><td class="d-date">10/26 · 10/30</td></tr>
+        <tr><td class="d-week">第7周</td><td>期中演示 · 期中报告截止</td><td class="d-date">11/4 · 11/6</td></tr>
+        <tr><td class="d-week">第8周</td><td>论文视频截止</td><td class="d-date">11/13</td></tr>
+        <tr><td class="d-week">第9周</td><td>HW2 截止</td><td class="d-date">11/20</td></tr>
+        <tr><td class="d-week">第11周</td><td>互评截止(3 个视频)</td><td class="d-date">11/30</td></tr>
+        <tr><td class="d-week">期末周</td><td>最终提交与系统演示</td><td class="d-date">12/7–11</td></tr>
+    </table>
+  </section>
+
+  <section class="about" id="about">
+    <h2 class="sec-title">关于本站</h2>
+    <div class="markdown-body">
+      <ul>
+        <li><b>翻译策略</b>:论文(PDF)提供<b>逐章精读笔记</b>——摘要(Abstract)全文翻译,方法、实验与结论逐节详细展开并保留关键数字;博客与规范文档(如 MCP 规范、Anthropic 工程博客)提供<b>全文中译</b>。</li>
+        <li><b>重要度标记</b>:🔴 必读 = 该讲核心;🟡 推荐 = 强烈建议;⚪ 补充 = 拓展阅读。此为编者根据课程大纲的判断,仅供参考。</li>
+        <li><b>原文</b>:每篇页面顶部有"查看原文"链接,PDF/HTML 原件已收录在本站 <code>originals/</code> 目录,可在线打开。</li>
+        <li><b>时效说明</b>:材料下载于 2026-09-14(开课前),官网后续发布的讲义/幻灯片/作业不在本站范围内。</li>
+        <li><b>版权</b>:所有原文版权归原作者及机构所有,译文仅供个人学习研究使用。</li>
+      </ul>
+    </div>
+  </section>
+</main>
+<footer class="footer">CS 329Z · Engineering AI Agents 中文学习站 · 译文仅供个人学习使用 · 原文版权归原作者所有</footer>
+<script src="assets/site.js"></script>
+</body>
+</html>

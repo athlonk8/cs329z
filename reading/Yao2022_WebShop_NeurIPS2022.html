@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>&quot;WebShop:面向可扩展真实网页交互的接地语言智能体&quot; · CS 329Z 中文学习站</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html"><span class="brand-mark">CS</span>329Z<span class="brand-sub">中文学习站</span></a>
+    <nav class="topnav">
+      <a href="../index.html#syllabus">课程表</a>
+      <a href="../index.html#dates">重要日期</a>
+      <a href="../index.html#about">关于本站</a>
+    </nav>
+    <div class="searchbox"><input id="search-input" type="search" placeholder="搜索材料 / 主题…" autocomplete="off"><div id="search-results" class="search-results" hidden></div></div>
+  </div>
+</header>
+<div class="read-layout">
+  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">论文精读</a><ul><li><a href="#_3">摘要</a></li><li><a href="#1-introduction">1 Introduction(引言)</a></li><li><a href="#2-related-work">2 Related Work(相关工作)</a></li><li><a href="#3-the-webshop-environmentwebshop">3 The WebShop Environment(WebShop 环境)</a></li><li><a href="#4-methods">4 Methods(方法)</a></li><li><a href="#5-experiments">5 Experiments(实验)</a></li><li><a href="#6-discussion">6 Discussion(讨论)</a></li></ul></li><li><a href="#_4">要点速览</a></li></ul></aside>
+  <main class="read-main">
+    <div class="crumb"><a href="../index.html">首页</a> / <a href="../index.html#week-week11b_open_problems">第11周 · 开放问题</a></div>
+    <article class="read-article">
+      <h1 class="read-title">&quot;WebShop:面向可扩展真实网页交互的接地语言智能体&quot;</h1>
+      <p class="read-title-en">&quot;WebShop: Towards Scalable Real-World Web Interaction with Grounded Language Agents&quot;</p>
+      <p class="read-meta">&quot;Shunyu Yao, Howard Chen, et al.&quot; · &quot;NeurIPS 2022 · Princeton University&quot;</p>
+      <p class="read-badges"><span class="badge badge-recommended">推荐</span><span class="badge badge-kind">论文精读</span><button class="lang-toggle" id="lang-toggle" type="button">仅看中文</button><a class="orig-link" href="../originals/week11b_open_problems/Yao2022_WebShop_NeurIPS2022.pdf" target="_blank" rel="noopener">查看原文(PDF) ↗</a></p>
+      <div class="markdown-body">
+<h2 id="_1">导读</h2>
+<p>本文属于第 11 周"开放问题"专题,是网页智能体(web agent)方向的开山基准之一,作者 Shunyu Yao(也是 ReAct 的第一作者)来自 Princeton NLP 组。放在 2022 年的语境里,它回答的问题与 OSWorld 一脉相承:如何为语言智能体(language agent)构建<strong>可扩展、接地(grounded)、可自动评估</strong>的交互环境?当时的两个极端是:传统 NLP 基准是静态数据集,语言没有接地到语言之外的世界;而 RL 环境(游戏、3D 导航)的语言元素贫瘠、难以规模化。</p>
+<p>WebShop 的选择是把"网上购物"做成环境:从 amazon.com 抓取 118 万真实商品,配合 12,087 条众包自然语言指令,让智能体在搜索、结果、商品、详情四类页面间导航,生成查询、选择选项、比较商品并完成购买。奖励由属性/选项/价格/类型的程序化匹配函数自动计算,无需人工评估,使交互式学习可以规模化。论文训练了模仿学习(IL)与强化学习(RL)智能体:最好成绩 62.4 分/28.7% 成功率,显著超过规则基线(45.6/9.6%),但不到人类专家(82.1/59.6%)的一半;最有意思的发现是——给定一个能穷举所有选项的"选择神谕",规则基线成功率可从 9.6% 飙到 85.4%,说明"在真实网页文本上做对选择"才是核心瓶颈。最后,智能体零样本迁移到真实 amazon.com/ebay.com 仍保持类似表现,首次展示了此类基准的 sim-to-real 价值。WebShop 与 ReAct、Mind2Web、OSWorld 一起,构成了"LLM 时代网页/计算机智能体"这条主线 earliest 的几块基石。</p>
+<h2 id="_2">论文精读</h2>
+<h3 id="_3">摘要</h3>
+<p>既有的语言接地交互环境基准,要么缺乏真实世界的语言元素,要么因数据或反馈信号收集需要大量人工参与而难以扩展。为弥合这一缺口,作者开发了 WebShop——一个模拟电商网站环境,包含 118 万真实商品与 12,087 条众包文本指令。给定一条指定商品需求的文本指令,智能体需要导航多种类型的网页并发出多样动作,以找到、定制并购买一件商品。WebShop 为语言接地提供了若干挑战:理解组合式指令、(重) formulat 查询、理解并依据网页噪声文本行动、以及执行策略性探索。作者为任务收集了超过 1600 条人类演示,并用强化学习、模仿学习以及预训练图像与语言模型训练和评估了多种智能体。最好的模型任务成功率为 29%,超过基于规则的启发式(9.6%),但远低于人类专家表现(59%)。作者还分析了智能体与人类的轨迹并对各模型组件做消融,为未来更强的语言理解与决策能力智能体提供洞察。最后,在 amazon.com 与 ebay.com 上的评估显示,WebShop 训练的智能体展现出非平凡的仿真到现实(sim-to-real)迁移,表明 WebShop 对开发能在真实网络中运行的实用网页智能体具有潜在价值。</p>
+<h3 id="1-introduction">1 Introduction(引言)</h3>
+<p>NLP 与强化学习的进展催生了一批能利用语言上下文做序贯决策的智能体,而 GPT-3、BERT 等大模型在文本分类、信息抽取、问答等传统 NLP 基准上表现出色。问题在于:前一类任务的语言概念有限、难以扩展;后一类任务是静态非交互的数据集,缺乏对语言之外概念的接地。要构建接地语言模型(grounded language model),需要可扩展的交互环境,它应同时满足:(1) 包含反映真实世界丰富用法、且可大规模收集的语言元素;(2) 反馈定义良好、可自动计算,支持交互式学习而无须持续昂贵的人工反馈。</p>
+<p>万维网(WWW)天然满足第一条:互联的网页带自然文本、图像与交互元素,同时具备可扩展、语义丰富、交互、动态与真实等特性,与游戏或 3D 导航等既有环境截然不同;而且网页也是智能体的实用部署环境,有望替人类完成繁琐任务(买商品、订预约)。但以往的网页任务工作要么在转移与动作空间上缺乏深度,要么难以扩展:有的只含单步分类任务;有的每轮交互只有寥寥几个页面;有的长程任务仅限跟随超链接导航(WikiNav),或因缺乏自动奖励函数而需要人在环反馈(WebGPT)。</p>
+<p>WebShop 模拟电商购物:智能体理解人类文本指令,购买符合规格的商品——需要查询网站搜索引擎、从结果中选商品探索、阅读描述与详情、选择必要选项(如 32 oz、红色)再点"购买"。为挑到最优商品,智能体可能要查看比较多个商品(包括页面间回溯)、执行多次搜索。WebShop 含 100 万+ 抓取自 amazon.com 的商品、1.2 万+ 众包指令、以及"搜索文本查询 + 选择文本按钮"的多样语义动作空间,打包为 OpenAI Gym 环境,可用 HTML(面向人)与 simple(面向模型)两种模式渲染。奖励由考虑商品属性、类型、选项与价格的程序化匹配函数自动计算。作者开发了 RL 与 IL 智能体,并利用预训练语言模型;模块化架构用 ResNet(视觉)与 Transformer(文本)分解处理观察与动作,再用注意力融合层上下文地为每个动作打分。最好智能体平均 62.4 分(满分 100)、成功率 28.7%,显著高于启发式基线(45.6/9.6%),但仍远低于人类专家(82.1/59.6%)。分析揭示了改进方向:更鲁棒的搜索生成、显式记忆模块、更好的噪声网页文本处理。sim-to-real 实验中,WebShop 训练的智能体部署到 amazon.com 与 ebay.com 上表现相近,且稳定超过"直接用指令全文搜索后买第一条结果"的规则基线,展示了自主运行于 WWW 的实用潜力。</p>
+<h3 id="2-related-work">2 Related Work(相关工作)</h3>
+<p><strong>网页上的强化学习</strong>:WikiNav 让 RL 智能体在页面间导航,但纯导航性质、动作仅限选超链接或停止;World of Bits(WoB)/MiniWoB 支持用像素与 DOM 观察在网页上训练 RL,后续有工作流引导探索、课程与元学习、DOM 树表示、对抗环境生成、大规模行为克隆等改进。但 MiniWoB 缺乏跨多页面的长程决策,且用低层键鼠点击作动作,难度与规模都难以扩展。WebShop 则要求带上下文动作选择与回溯的更长导航路径,使用更可扩展、更可迁移的高层 search/choose 动作。AndroidEnv 与 MoTIF 提供移动平台环境但非直接操作网页。</p>
+<p><strong>非交互网页任务</strong>:网页元素预测、API 调用生成、语义解析为概念级导航动作等监督任务,内容上最接近的是 Klarna 商品页数据集(5 万+ 商品页做元素分类)。这些都只考虑单次决策的监督设置,且可能需要为每个领域定义网页 API 或命令模板。WebShop 把真实文本图像内容的网页与长程序贯决策的丰富交互空间结合起来。</p>
+<p><strong>用网页做传统 NLP</strong>:信息抽取、检索、问答、对话与网页文本训练语言模型等工作,主要把搜索引擎当作知识检索器;最相似的是 WebGPT(用带搜索引擎的网页界面训练 RL 智能体导航答题),但 WebShop 的动作与观察空间更多样(含图像)且不需要人在环评估。</p>
+<h3 id="3-the-webshop-environmentwebshop">3 The WebShop Environment(WebShop 环境)</h3>
+<p>WebShop 是包含 110 万+ 真实商品的大规模网页交互环境,以模块化方式构建——网站转移逻辑与指令、奖励等任务特定部分解耦,便于扩展到新任务与领域。</p>
+<h4 id="31">3.1 任务形式化</h4>
+<p>WebShop 形式化为 POMDP (S, A, T, R, U, O):状态空间 S、动作空间 A、确定性转移 T、奖励 R: S×A→[0,1]、指令空间 U 与观察空间 O。</p>
+<p><strong>状态与动作</strong>:状态 s 是一张网页,属四种类型之一——搜索页(含搜索框)、结果页(搜索引擎返回的商品列表)、商品页(描述某商品)、详情页(商品进一步信息)。商品 y 的记号:ȳ 表示标题/描述/概览等文本字段的聚合;y^price 是价格;Y^opt 是购买选项集合;I 是图像集(每个选项对应一张);Y^att 是<strong>对智能体隐藏的属性集合</strong>(从标题与详情页抽取),用于自动计算奖励。动作 a ∈ A(s) 只有两种:搜索文本查询(search[Red shoes])或选择文本按钮(choose[Size 9])。二者不同时可用——只有搜索页允许 search,其他页面只能 choose。按钮作为网页链接被点击,而非 World of Bits 那样的低层鼠标点击;点击引发确定性跳转,搜索则基于确定性搜索引擎(便于模仿学习与结果复现)。</p>
+<p><strong>观察</strong>:用 Flask 与 OpenAI Gym 提供两种并行观察模式:(1) HTML 模式,含网页 HTML,可在浏览器中交互;(2) simple 模式,剥去冗余元数据的简化格式。人类成绩在 HTML 模式收集,所有模型在 simple 模式训练评估。环境也支持在 HTML 模式上做像素级 RL,但那是非常低层的非语义动作空间;且任何新 HTML 页都可写成翻译器转成 simple 格式,这正是 sim-to-real 迁移的基础。</p>
+<p><strong>指令与奖励</strong>:每条自然语言指令 u 包含:非空属性集 U_att、选项集 U_opt、价格 u^price(设为高于目标商品价)。指令由标注者基于目标商品 y* 生成;例如"帮我找一双蓝黑配色、适合雨天、蓬松鞋底、90 美元以下的运动鞋"含属性 {"waterproof", "soft sole"} 与选项 {"color": "black and blue"}。每轮在终止时刻 T(动作为 choose[Buy])给奖励:</p>
+<p>r = (r_type·|U_att∩Y_att| + |U_opt∩Y_opt| + 1[y^price ≤ u^price]) / (|U_att| + |U_opt| + 1)</p>
+<p>其中类型奖励 r_type = TextMatch(ȳ, ȳ*) 基于文本匹配启发式,在属性选项相似但商品类型明显不同(如"黄油"与"植物肉"都含"cruelty-free""non-GMO"与"size: pack of 2")时给低分。</p>
+<p><strong>评估指标</strong>:(1) Task Score = 100×平均奖励;(2) 成功率 SR = 奖励 r=1 的指令占比。注意即使最终商品不是 y* 也可能得 r=1——满足"我要一件红衬衫"这一目标的红衬衫可能很多。</p>
+<h4 id="32">3.2 环境实现</h4>
+<ul>
+<li><strong>数据抓取</strong>:用 ScraperAPI 从 amazon.com 抓取 <strong>1,181,436 件商品</strong>,横跨 5 大类(服饰、美妆、电子、家具、食品),以 113 个子类名为查询。商品文本(标题+详情)平均长 262.9,词表 224,041(词频&gt;10);商品共 <strong>842,849 个唯一选项</strong>,可见数据规模与复杂度。</li>
+<li><strong>搜索引擎</strong>:用 Pyserini 离线建 BM25 稀疏索引(商品标题、描述、概览、定制选项拼接成文本),搜索引擎确定性,便于模仿学习与复现。</li>
+<li><strong>属性挖掘与标注</strong>:属性是描述商品性质的短自然语言短语。对每个类别计算拼接标题与描述中所有 bi-gram 的 TF-IDF,人工审查每类 top 200(依据"人能否理解"去噪)后分配给商品,共整理出 <strong>670 个属性</strong>的池。</li>
+<li><strong>自然语言指令</strong>:用 Amazon Mechanical Turk 收集。工人看到一个采样目标商品(标题、类别、属性、购买选项),被要求写一条命令指挥自动购物智能体找到目标;要求避免过于具体(如把整段标题写进去),但要忠实描述目标。共收集 <strong>12,087 条</strong>语言多样的指令,总词表 9,036,平均长 15.9 词。</li>
+<li><strong>人类演示</strong>:在 HTML 模式收集人类轨迹以理解任务难度并分析人类解法;用资格测试训练并筛选有动机的工人,共招募训练 13 人,选表现最好的 7 人为"专家"。该数据同时用于模仿学习。</li>
+</ul>
+<h4 id="33">3.3 研究挑战</h4>
+<p>WebShop 把 NLP 与 RL 多个子领域的挑战汇聚到一个基准:(1) 生成好的搜索查询并进行查询重构(产品文本常用缩写,如 66 英寸寬写成 66"w);(2) 网站导航的策略性探索;(3) 对文本状态与动作空间的鲁棒语言理解(选项常是指令片段的噪声改写);(4) 比较商品或回溯所需的长期记忆。单项技术的进步都会提升智能体,而 WebShop 也是开发同时应对多个挑战的跨学科技术的理想试验田——例如外部记忆模块与策略性探索结合、探索辅助查询重构等。</p>
+<h3 id="4-methods">4 Methods(方法)</h3>
+<h4 id="41">4.1 规则基线</h4>
+<p>简单规则:直接用指令原文搜索,买结果页第一件商品、不选任何选项。词典式搜索引擎使其同时是一个简单的不可学习 IR 基线,能拿到非平凡的属性奖励;但启发式规则无法解决噪声自然语言选项、无法策略性探索、也学不会生成搜索词,所以总分与成功率应当很低。</p>
+<h4 id="42-il">4.2 模仿学习(IL)</h4>
+<p>用两个预训练语言模型分别从人类演示学"搜索"与"选择"。</p>
+<p><strong>模仿人类搜索生成</strong>:把搜索当作 seq2seq 文本生成——给定指令 u(不考虑过往搜索、看过的商品等上下文)生成 search 动作。用 1,012 条训练人类轨迹中的 <strong>1,421 个指令-搜索对</strong>构建数据集,微调 BART 做条件语言建模(负对数似然)。</p>
+<p><strong>模仿人类选择</strong>:基于选择的模仿模型(图 3)预测观察 o 中所有可点击动作 A(o) 上的分布,最大化人类所点按钮 a<em> 的似然。从训练轨迹构建 </em><em>9,558 个样本</em><em>。用 12 层预训练 BERT 把 o 编码为上下文化 token 嵌入,同样编码每个动作;每个动作表示经与观察表示的交叉注意力层,再均值池化为单向量、乘矩阵 W 得到标量 S(o,a);策略为动作分数的 softmax 分布。</em><em>图像处理</em><em>:预训练 ResNet-50 把商品/选项图像提取为 512 维特征,经学习的线性层变换为 768 维后与 BERT(o) 拼接。</em><em>完整流水线</em>*:搜索页用 BART 束搜索生成 top-5 查询随机选一;其他页从 softmax 分布采样动作——随机性鼓励动作多样性;相反,只用最优生成查询或最高概率按钮的策略会导致候选商品有限或卡死(如在页面间来回弹跳)。</p>
+<h4 id="43-rl">4.3 强化学习(RL)</h4>
+<p>在基于选择的 IL 模型上做在线 RL 微调(即 IL+RL)。以往工作表明直接对文本生成做 RL 会导致语言漂移、性能退化,因此<strong>冻结 BART</strong>,由它提供 top-10 搜索生成作为精炼动作空间,让选择模型学着从中挑(借鉴文字游戏与指代游戏的工作)。用策略梯度方法,return-to-go R_t 与学习到的价值基线 V(o) = W_v^T BERT(o)(BERT 权重与策略共享);价值用 L2 损失学习;加熵损失防止过早收敛。总损失 L_RL = L_PG + L_value + L_entropy。</p>
+<h3 id="5-experiments">5 Experiments(实验)</h3>
+<h4 id="51">5.1 设置与任务验证</h4>
+<p>12,087 条指令按 i.i.d. 切分为 <strong>10,587 / 1,000 / 500</strong> 的训练/开发/测试集(未来可研究按商品类别切分等更大泛化鸿沟的划分,但 i.i.d. 划分对当前模型已足够难)。从训练指令随机采样收集 1,012 条人类演示(用于任务验证与 IL),另从开发集收 54 条演示用于超参调优与检查点选择;全部 500 条测试指令都收集了人类轨迹,人类与模型表现在这 500 条上平均。</p>
+<h4 id="52">5.2 结果</h4>
+<p><strong>任务表现</strong>:规则基线只有 45.6 分与 <strong>9.6%</strong> 成功率——它无法解决语言指定的选项、也无法探索更多商品,经验性地证明了任务的非平凡性。IL 模型两项指标都显著超过规则基线,得分 <strong>59.9</strong>、成功率 <strong>29.1%</strong>;再经 RL 微调(IL+RL)得分升至 <strong>62.4</strong>,但成功率略降(29.1%→<strong>28.7%</strong>,见 §5.3 分析)。模型与人类差距显著:最好模型的成功率不到人类专家(59.6%)的一半,也只有平均人类(50%)的六成。</p>
+<p><strong>IL 消融</strong>:(1) 把选择动作模型随机初始化(IL w/o LP Choice,LP=语言预训练),成功率从 29.1% 跌到 <strong>10.6%</strong>(近乎三分之二),证明语言预训练对本任务至关重要;(2) 把搜索生成器换成"总用指令原文"的规则(IL w/o LP Search),得分与成功率各降约 3 点(59.9→56.0,29.1→26.3%),说明扩展搜索空间的探索有价值,但不如"学会选对选项"关键;(3) 把过去 1 条观察与最近 5 个动作纳入模型,得分从 59.9 轻微降到 57.3——简单的历史拼接无用,需要更高级的技术利用过往信息。</p>
+<p><strong>RL 消融</strong>:直接从预训练 BERT 参数在线训练 RL(无 IL 热启动)只得 52.5 分/11.2% 成功率,与用 RNN 文本编码器的简单 RL(55.2 分/17.6%,方差大得多)一起表明:<strong>IL 热启动至关重要</strong>,可能因为传统语言任务到本领域存在显著分布漂移;带更强架构、更好语言与任务先验初始化的 RL 才能提升并稳定表现。</p>
+<h4 id="53">5.3 分析</h4>
+<p><strong>人类专家 vs 智能体</strong>:把总分按公式拆为属性/选项/价格/类型四个子分。人类专家在所有子分上领先,最大差距在<strong>选项分</strong>(73.9 vs IL 的 45.2,约 28 分)——智能体最难选对商品选项。人类轨迹也更长、探索更多商品、执行更多搜索且方差更高,体现灵活性。定性例子:第一个例子中,人类发现商品文本常用缩写符号("66 英寸宽" 写作 66"w),于是从查询里删掉 "inches""width""height""white" 重新搜索成功——<strong>搜索生成本质上需要推理并对接地环境的适应</strong>,查询重构的思想可资借鉴;智能体则在选项的噪声改写上做不好鲁棒语义匹配。第二个例子中,人类先探索若干商品、最终回到第一件探索过的商品购买,展示了 IL+RL 模型缺乏的长期记忆。</p>
+<p><strong>RL 微调的效应</strong>:RL 让 IL 模型变得"更贪婪、更少探索"——平均轨迹长度从 9.4 降到约 4.5,探索的商品与查询都变少;属性、类型、价格子分全部上升,但选项分从 45.2 掉到 38.9。这提示 RL 阶段需要在探索与利用间更好平衡(例如内在奖励)。</p>
+<p><strong>选择神谕(Choice oracle)实验</strong>:为分离"学搜索"与"学选择"的影响,构造一个能访问隐藏奖励函数、隐藏属性与选项的神谕:给定查询,它穷举每个结果商品、尝试所有选项组合,最终选奖励最大的商品——每轮要数百甚至数千步(对比 IL+RL 平均 4.5 步、人类专家 11.3 步)。在 500 条测试指令与四种查询(指令原文、IL BART 生成、人类轨迹的第一条与最后一条查询)下:神谕把规则启发式的成功率从 9.6% 提到 <strong>85.4%</strong>,把人类专家从 59.6% 提到 <strong>87.8%</strong>(74.8% 的人类轨迹只有一条查询)。这确认"选对动作"正是当前模型的主要瓶颈、改进空间巨大;同时即便有如此强的神谕,更好的查询仍然重要——人类的最后一条查询(重构后的)依旧优于其他查询,说明人类专家会通过重构持续改进查询质量。</p>
+<h4 id="54-sim-to-real">5.4 零样本 Sim-to-Real 迁移</h4>
+<p>把 WebShop 训练的模型不经任何微调部署到真实 amazon.com 与 ebay.com:采样 100 条测试指令,部署 rule、IL、IL+RL 三个模型交互,并按奖励公式人工打分。两个真实网站上的表现与 WebShop 上相近(规则基线在 Amazon 上略好,可能因其搜索引擎更强):amazon.com 上 IL+RL 得 <strong>65.9 分/25% SR</strong>(规则 45.8/19%),IL 61.5/27%;ebay.com 上 IL+RL 得 <strong>62.3 分/21% SR</strong>(规则 31.7/7%),IL 58.2/21%。Turker 在两站的人类均分为 88.2/79.7、成功率 65%/40%。尽管人类好得多,其网页交互慢得多——平均每轮 <strong>815 秒</strong>,而 IL/IL+RL 模型在 Amazon 上<strong>不足 8 秒</strong>。此迁移只需两处小改动,表明 WebShop 一类环境适合开发能在真实网页任务上减少人力的实用接地智能体。</p>
+<h3 id="6-discussion">6 Discussion(讨论)</h3>
+<p>作者开发了以电商网站交互为模型的网页决策与语言接地基准 WebShop,评估了模仿学习与强化学习训练的自主智能体,并展示了向真实购物网站的 sim-to-real 迁移。对模型与人类轨迹的定性定量分析识别出若干研究挑战,为未来模型指出多学科融合的方向:用多模态数据、网页超文本或网页"指令-动作"映射做预训练,可帮助智能体理解利用网页内容、动作与指令的丰富语义;查询(重)构可以帮助扩展搜索探索;改进的动作探索与记忆机制能帮助智能体在长程与大动作空间上更好决策。WebShop 的模块化设计也便于加入新的网页任务与领域,期望以此塑造未来接地语言智能体研究,使其具备更强的真实世界网页交互能力。</p>
+<h2 id="_4">要点速览</h2>
+<ul>
+<li><strong>动机</strong>:静态 NLP 数据集缺乏接地、游戏/导航环境语言贫瘠;需要一个语言真实、可大规模收集、且奖励可自动计算的可扩展交互环境——WWW 天然满足,电商购物是理想切口。</li>
+<li><strong>环境规模</strong>:1,181,436 件真实商品(amazon.com,5 大类、113 个子类查询),842,849 个唯一选项,商品文本平均 262.9 词;Pyserini BM25 确定性搜索引擎;TF-IDF bi-gram 挖掘出 670 个隐藏属性用于奖励计算。</li>
+<li><strong>指令与人类数据</strong>:12,087 条 AMT 众包指令(平均 15.9 词),i.i.d. 切分 10,587/1,000/500;13 名工人中选 7 名专家,共 1,600+ 人类演示(1,012 训练 + 54 调参 + 500 测试全量人类轨迹)。</li>
+<li><strong>任务设计</strong>:POMDP;四类页面(搜索/结果/商品/详情);动作只有 search[Query] 与 choose<a href="高层语义动作,刻意避开低层鼠标点击">Button</a>;奖励 = 类型×属性匹配 + 选项匹配 + 价格满足,归一化到 [0,1];指标为 Task Score(100×平均奖励)与 SR(r=1 占比,r=1 不要求恰好买到原目标商品)。</li>
+<li><strong>方法</strong>:搜索用 BART 微调(1,421 个指令-搜索对,束搜索 top-5 随机选);选择用 12 层 BERT + 交叉注意力 + 均值池化打分 softmax(9,558 个样本),图像经 ResNet-50 融合;RL 冻结 BART 提供 top-10 查询作精炼动作空间,策略梯度 + 价值基线 + 熵正则。</li>
+<li><strong>主结果</strong>:规则 45.6/9.6% &lt; IL 59.9/29.1% &lt; IL+RL 62.4/28.7% ≪ 人类专家 82.1/59.6%(平均人类 SR 50%)——最好模型成功率不到专家一半。</li>
+<li><strong>消融</strong>:去掉选择模型的语言预训练,成功率 29.1%→10.6%(跌近 2/3);搜索生成换规则各降约 3 点;无 IL 热启动的纯 RL 仅 52.5/11.2%,RNN 编码器 RL 55.2/17.6% 且方差大;简单拼接历史反而降至 57.3。</li>
+<li><strong>关键洞察——选项选择是瓶颈</strong>:人类对智能体的最大领先在选项分(73.9 vs 45.2);穷举式 Choice oracle 把规则基线 SR 从 9.6% 拉到 85.4%、人类从 59.6% 到 87.8%,证明"在噪声网页文本上选对动作"是核心难点;人类的查询重构(如删去 inches/width 改用 66"w 缩写)与长期记忆(回头买第一件)是智能体缺失的能力。</li>
+<li><strong>RL 的双刃剑</strong>:RL 微调让模型更贪婪(轨迹长度 9.4→约 4.5),属性/类型/价格分全升但选项分 45.2→38.9——探索与利用需要更好的平衡。</li>
+<li><strong>Sim-to-Real</strong>:零样本迁移 amazon.com(IL+RL 65.9/25%)与 ebay.com(62.3/21%)均大幅超过规则基线,接近模拟环境内成绩;人类 815 秒/轮 vs 模型 &lt;8 秒/轮——证明此类仿真环境训练的智能体有真实网页实用价值。</li>
+<li><strong>课程定位</strong>:WebShop(2022)→ ReAct/Mind2Web(2023)→ WebArena/VisualWebArena(2023-24)→ OSWorld(2024)构成网页到通用计算机智能体基准的演进线;它与本讲 OSWorld 对照阅读,可以看到"高层语义动作 + 自动奖励"与"真实环境 + 执行式评估"两种设计取舍如何互补。</li>
+</ul>
+      </div>
+    </article>
+    <nav class="pager"><a class="pager-prev" href="Xie2024_OSWorld_NeurIPSD&B2024.html"><span>上一篇</span>&quot;OSWorld:在真实计算机环境中评测多模态智能体的开放式任务能力&quot;</a><a class="pager-next" href="extra_cs329a_article.html"><span>下一篇</span>&quot;年薪 85 万美元的绝活,斯坦福免费公开了——为什么值得学这门课&quot;</a></nav>
+  </main>
+</div>
+<script src="../assets/site.js"></script>
+</body>
+</html>

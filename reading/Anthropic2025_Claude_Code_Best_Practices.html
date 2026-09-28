@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude Code 最佳实践 · CS 329Z 中文学习站</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html"><span class="brand-mark">CS</span>329Z<span class="brand-sub">中文学习站</span></a>
+    <nav class="topnav">
+      <a href="../index.html#syllabus">课程表</a>
+      <a href="../index.html#dates">重要日期</a>
+      <a href="../index.html#about">关于本站</a>
+    </nav>
+    <div class="searchbox"><input id="search-input" type="search" placeholder="搜索材料 / 主题…" autocomplete="off"><div id="search-results" class="search-results" hidden></div></div>
+  </div>
+</header>
+<div class="read-layout">
+  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#claudeskillsfix-issueskillmd">.claude/skills/fix-issue/SKILL.md</a></li><li class="has-sub"><a href="#claudeagentssecurity-reviewermd">.claude/agents/security-reviewer.md</a><ul><li><a href="#auto">用 auto 模式自主运行</a></li><li><a href="#_1">添加对抗性审查步骤</a></li></ul></li><li><a href="#_2">避免常见的失败模式</a></li><li><a href="#_3">培养你的直觉</a></li><li><a href="#_4">相关资源</a></li><li><a href="#_5">要点速览</a></li></ul></aside>
+  <main class="read-main">
+    <div class="crumb"><a href="../index.html">首页</a> / <a href="../index.html#week-week09b_coding_agents">第9周 · 编程智能体</a></div>
+    <article class="read-article">
+      <h1 class="read-title">Claude Code 最佳实践</h1>
+      <p class="read-title-en">Best practices for Claude Code</p>
+      <p class="read-meta">Anthropic · &quot;Anthropic · Claude Code Docs&quot;</p>
+      <p class="read-badges"><span class="badge badge-must">必读</span><span class="badge badge-kind">全文中译</span><button class="lang-toggle" id="lang-toggle" type="button">仅看中文</button><a class="orig-link" href="../originals/week09b_coding_agents/Anthropic2025_Claude_Code_Best_Practices.html" target="_blank" rel="noopener">查看原文(HTML) ↗</a></p>
+      <div class="markdown-body">
+<p>name: api-conventions
+description: REST API design conventions for our services</p>
+<hr />
+<h1 id="api-conventions">API Conventions</h1>
+<ul>
+<li>Use kebab-case for URL paths</li>
+<li>Use camelCase for JSON properties</li>
+<li>Always include pagination for list endpoints</li>
+<li>Version APIs in the URL path (/v1/, /v2/)</li>
+</ul>
+<pre><code>
+(中文说明:上面是一份 API 约定技能——URL 路径用 kebab-case,JSON 属性用 camelCase,列表端点必须分页,API 版本号放在 URL 路径中。)
+
+Skills 也可以定义你直接调用的可复用工作流:
+
+</code></pre>
+<h2 id="claudeskillsfix-issueskillmd">.claude/skills/fix-issue/SKILL.md</h2>
+<p>name: fix-issue
+description: Fix a GitHub issue
+disable-model-invocation: true</p>
+<hr />
+<p>Analyze and fix the GitHub issue: $ARGUMENTS.</p>
+<ol>
+<li>Use <code>gh issue view</code> to get the issue details</li>
+<li>Understand the problem described in the issue</li>
+<li>Search the codebase for relevant files</li>
+<li>Implement the necessary changes to fix the issue</li>
+<li>Write and run tests to verify the fix</li>
+<li>Ensure code passes linting and type checking</li>
+<li>Create a descriptive commit message</li>
+<li>Push and create a PR</li>
+</ol>
+<pre><code>
+(中文说明:这是一个&quot;修复 GitHub issue&quot;的工作流技能——查看 issue、理解问题、检索代码、实现修复、写测试并运行、通过 lint 与类型检查、生成提交信息、推送并开 PR。运行 `/fix-issue 1234` 即可调用。)
+
+对有副作用、希望手动触发的工作流,使用 `disable-model-invocation: true`。
+
+### 创建自定义子智能体
+
+在 `.claude/agents/` 下定义专门的助手,让 Claude 可以把隔离任务委托出去。
+
+子智能体(subagents)在各自的上下文中运行,拥有各自允许的工具集。它们适合处理需要读大量文件、或需要专门聚焦的任务,且不会弄乱你的主对话。
+
+</code></pre>
+<h2 id="claudeagentssecurity-reviewermd">.claude/agents/security-reviewer.md</h2>
+<p>name: security-reviewer
+description: Reviews code for security vulnerabilities
+tools: Read, Grep, Glob, Bash
+model: opus</p>
+<hr />
+<p>You are a senior security engineer. Review code for:</p>
+<ul>
+<li>Injection vulnerabilities (SQL, XSS, command injection)</li>
+<li>Authentication and authorization flaws</li>
+<li>Secrets or credentials in code</li>
+<li>Insecure data handling</li>
+</ul>
+<p>Provide specific line references and suggested fixes.</p>
+<pre><code>
+(中文说明:这是一个安全审查子智能体——资深安全工程师角色,检查注入漏洞(SQL/XSS/命令注入)、认证与授权缺陷、代码中的密钥凭据、不安全的数据处理,并给出具体行号引用与修复建议。)
+
+明确告诉 Claude 使用子智能体:&quot;Use a subagent to review this code for security issues.&quot;(用子智能体审查这段代码的安全问题。)
+
+### 安装插件
+
+运行 `/plugin` 浏览插件市场。插件无需配置即可添加技能、工具与集成。
+
+插件(plugins)把技能、hooks、子智能体和 MCP 服务器打包成来自社区与 Anthropic 的单一可安装单元。如果你使用静态类型语言,可以安装代码智能(code intelligence)插件,让 Claude 获得精确的符号导航与编辑后的自动错误检测。
+
+如何在 skills、子智能体、hooks 与 MCP 之间选择,参见《Extend Claude Code》。
+
+## 有效沟通
+
+像问另一位工程师那样问 Claude 问题;对较大的功能,先让 Claude 面试你、写出规格说明,再开始实现。
+
+### 问代码库问题
+
+把你会问资深工程师的问题拿来问 Claude。
+
+接手新代码库时,把 Claude Code 用于学习与探索。你可以问 Claude 那些你会问其他工程师的问题:
+
+- 日志是怎么工作的?
+- 我怎么加一个新的 API 端点?
+- `foo.rs` 第 134 行的 `async move { ... }` 是什么意思?
+- `CustomerOnboardingFlowImpl` 处理了哪些边界情况?
+- 为什么第 333 行这里调用 `foo()` 而不是 `bar()`?
+
+这样用 Claude Code 是一种高效的上手方式,能缩短磨合期、减少对其他工程师的打扰。不需要特殊提示技巧,直接问即可。
+
+### 让 Claude 面试你
+
+对较大的功能,先让 Claude 来面试你。从一个最小提示词开始,让 Claude 用 AskUserQuestion 工具向你提问。
+
+Claude 会问到你可能还没想到的方面,包括技术实现、UI/UX、边界情况与权衡取舍。发送前把 `[brief description]` 替换成你的功能描述:
+
+&gt; I want to build [brief description]. Interview me in detail using the AskUserQuestion tool.
+&gt;
+&gt; Ask about technical implementation, UI/UX, edge cases, concerns, and tradeoffs. Don't ask obvious questions, dig into the hard parts I might not have considered.
+&gt;
+&gt; Keep interviewing until we've covered everything, then write a complete spec to SPEC.md.
+
+(中文说明:我想构建[简要描述]。用 AskUserQuestion 工具详细面试我。问技术实现、UI/UX、边界情况、顾虑与权衡;不要问显而易见的问题,深挖我可能没考虑到的难点;一直问到覆盖全部,然后把完整规格写入 SPEC.md。)
+
+规格完成后,开一个全新会话去执行它。新会话拥有专注于实现的干净上下文,而且你有一份可引用的书面规格。
+
+最有用的规格是自包含的:点名涉及的文件与接口、声明哪些不在范围内、并以一个证明功能可用的端到端验证步骤收尾。把时间花在把规格写精确上,比花在盯着实现过程上回报更高。
+
+## 管理你的会话
+
+对话是持久且可回退的。要善用这一点!
+
+### 尽早、频繁纠偏
+
+一发现 Claude 跑偏就立刻纠正。
+
+最好的结果来自紧密的反馈循环。虽然 Claude 偶尔能一次完美解决问题,但快速纠偏通常能更快产出更好的方案。
+
+- `Esc`:按 Esc 可在动作进行中打断 Claude。上下文会保留,你可以重新指派方向。
+- `Esc + Esc` 或 `/rewind`:按两次 Esc 或运行 `/rewind` 打开回退菜单,恢复之前的对话与代码状态,或从选中消息开始做摘要。
+- &quot;Undo that&quot;:让 Claude 撤销它的改动。
+- `/clear`:在不相关的任务之间重置上下文。塞满无关内容的长会话会降低性能。
+
+如果同一问题上你已纠正 Claude 超过两次,说明上下文已被失败的尝试污染。运行 `/clear`,带着你学到的经验、用更具体的提示词重新开始。一个带着更好提示词的干净会话,几乎总是胜过一个积累了层层纠正的长会话。
+
+### 积极管理上下文
+
+在不相关的任务之间运行 `/clear` 重置上下文。
+
+接近上下文上限时,Claude Code 会自动压缩(compact)对话历史,在保留重要代码与决策的同时释放空间。
+
+长会话中,Claude 的上下文窗口可能被无关对话、文件内容与命令填满,这会降低性能,有时还会让 Claude 分心。
+
+- 在任务之间频繁使用 `/clear`,彻底重置上下文窗口。
+- 自动压缩触发时,Claude 会摘要最重要的内容,包括代码模式、文件状态与关键决策。
+- 想要更多控制,运行 `/compact &lt;instructions&gt;`,例如 `/compact Focus on the API changes`(聚焦 API 改动)。
+- 只想压缩对话的一部分时,用 `Esc + Esc` 或 `/rewind` 选中某个消息检查点,选择 &quot;Summarize from here&quot;(从这里开始摘要,压缩其后、保留之前的上下文)或 &quot;Summarize up to here&quot;(摘要到此处,压缩之前、保留最近的完整内容)。
+- 在 CLAUDE.md 中自定义压缩行为,比如写上 &quot;When compacting, always preserve the full list of modified files and any test commands&quot;(压缩时始终保留已修改文件完整清单与测试命令),确保关键上下文在摘要中幸存。
+- 对不需要留在上下文里的问题,用 `/btw`。答案永远不会进入对话历史,查个细节也不会撑大上下文。
+
+### 用子智能体做调查
+
+用 &quot;use subagents to investigate X&quot; 把研究工作委托出去。它们在独立上下文中探索,让你的主对话保持干净、专注实现。
+
+既然上下文是根本约束,就用子智能体把调查研究挡在主上下文之外。Claude 研究一个代码库时会读大量文件,全部消耗你的上下文。子智能体在独立的上下文窗口中运行,只返回摘要报告:
+
+&gt; Use subagents to investigate how our authentication system handles token refresh, and whether we have any existing OAuth utilities I should reuse.
+
+(中文说明:用子智能体调查我们的认证系统如何处理 token 刷新,以及是否已有可复用的 OAuth 工具。)
+
+在 Claude 完成实现后,也可以用子智能体做验证,见下文&quot;添加对抗性审查步骤&quot;。
+
+### 用检查点回退
+
+你发出的每一个开启新回合的提示都会创建一个检查点(checkpoint)。你可以把对话、代码或两者一起恢复到任何之前的检查点。
+
+Claude 会在每次改动前自动对文件做快照,因此检查点能够恢复。双击 Esc 或运行 `/rewind` 打开回退菜单:可以只恢复对话、只恢复代码、两者都恢复,或从选中消息开始摘要。细节见 Checkpointing 文档。
+
+你不必步步为营地规划,可以放手让 Claude 尝试有风险的做法;不行就回退,换一条路。检查点随对话一起保存,所以你可以关掉终端、之后再恢复会话,依然能回退。
+
+检查点只追踪通过 Claude 文件编辑工具做出的改动,通过 Bash 命令或外部进程产生的改动不会被捕获。它不能替代 git。
+
+### 恢复对话
+
+用 `/rename` 给会话命名,把它们当成分支对待:每条工作流都有自己的持久上下文。
+
+Claude Code 在本地保存对话,因此跨多次坐席的任务不必重新交代背景。运行 `claude --continue` 从上次中断处继续,或 `claude --resume` 从列表中选择。给会话起描述性名字(如 `oauth-migration`),方便日后查找。完整的恢复、分支与命名控制参见 Manage sessions。
+
+## 自动化与规模化
+
+当你用一个 Claude 已经得心应手,就可以用并行会话、非交互模式与扇出模式成倍放大产出。
+
+### 运行非交互模式
+
+在 CI、pre-commit hook 或脚本中使用 `claude -p &quot;prompt&quot;`。加上 `--output-format stream-json --verbose` 可获得流式 JSON 输出。
+
+`claude -p &quot;your prompt&quot;` 让 Claude 以非交互方式运行,不进入交互式提示。除非传 `--no-session-persistence`,运行仍会创建可恢复的会话。非交互模式是你把 Claude 集成进 CI 流水线、pre-commit hook 或任何自动化工作流的方式。输出格式支持程序化解析:纯文本、JSON 或流式 JSON。
+
+</code></pre>
+<h1 id="one-off-queries">One-off queries —— 一次性查询</h1>
+<p>claude -p "Explain what this project does"</p>
+<h1 id="structured-output-for-scripts">Structured output for scripts —— 供脚本使用的结构化输出</h1>
+<p>claude -p "List all API endpoints" --output-format json</p>
+<h1 id="streaming-for-real-time-processing">Streaming for real-time processing —— 实时处理的流式输出</h1>
+<p>claude -p "Analyze this log file" --output-format stream-json --verbose</p>
+<pre><code>
+(中文说明:第一条打印纯文本;`json` 格式返回单个含 `result` 字段的 JSON 对象;`stream-json` 格式逐行打印 JSON 对象,以一个 init 事件开头。)
+
+### 运行多个 Claude 会话
+
+并行运行多个 Claude 会话,可以加速开发、做隔离实验或启动复杂工作流。
+
+根据你愿意亲自做多少协调,选择合适的并行方式,并在会话之间需要传递结论时加上消息机制:
+
+- **Worktrees**:在隔离的 git 检出中运行多个 CLI 会话,编辑互不冲突。
+- **跨会话消息(cross-session messaging)**:让你自己启动的会话互相传递发现。
+- **桌面应用**:可视化管理多个本地会话,可选让每个会话独占一个 worktree。
+- **Claude Code on the web**:在云端、默认由 Anthropic 管理的基础设施上运行会话。
+- **Agent view**(研究预览):运行 `claude agents` 派发在后台持续运行的会话,并在一个界面中统览。
+- **Agent teams**(实验性,默认关闭):带共享任务、消息与 team lead 的多会话自动协调。
+
+除了并行做事,多会话还能支撑以质量为导向的工作流。新鲜上下文能改善代码审查,因为 Claude 不会偏袒自己刚写的代码。例如 Writer/Reviewer 模式:
+
+| 会话 A(Writer) | 会话 B(Reviewer) |
+| --- | --- |
+| Implement a rate limiter for our API endpoints(为 API 端点实现限流器) | Review the rate limiter implementation in @src/middleware/rateLimiter.ts. Look for edge cases, race conditions, and consistency with our existing middleware patterns.(审查限流器实现,找边界情况、竞态条件,检查与现有中间件模式的一致性) |
+| Here's the review feedback: [Session B output]. Address these issues.(这是审查反馈,处理这些问题) | |
+
+测试也可以如法炮制:让一个 Claude 写测试,另一个写通过测试的代码。
+
+### 跨文件扇出
+
+循环遍历任务,对每个任务调用 `claude -p`。批量操作时用 `--allowedTools` 限定权限。
+
+对大规模迁移或分析,可以把工作分摊到多个并行 Claude 调用上。在 git 仓库中,运行 `/batch &lt;instruction&gt;` 让 Claude 把改动拆分给 5 到 30 个子智能体,每个子智能体在自己的 worktree 中工作并开一个 PR。想用你自己的脚本驱动扇出,可以循环调用 `claude -p`:
+
+**1. 生成任务清单**
+
+让 Claude 把需要迁移的文件列表写入文件,供下一步的循环读取,提示词如:&quot;list all 2,000 Python files that need migrating and save the list to files.txt&quot;。
+
+**2. 写一个遍历清单的脚本**
+
+```bash
+for file in $(cat files.txt); do
+  claude -p &quot;Migrate $file from Python 2 to Python 3. Return OK or FAIL.&quot; \
+    --allowedTools &quot;Edit,Bash(git commit *)&quot;
+done
+</code></pre>
+<p><strong>3. 先在几个文件上测试,再全量运行</strong></p>
+<p>根据前 2-3 个文件上暴露的问题打磨提示词,然后跑全量。<code>--allowedTools</code> 限制 Claude 能做什么——在无人值守运行时这很关键。</p>
+<p>也可以把 Claude 集成进既有的数据/处理流水线:</p>
+<pre><code class="language-bash">claude -p &quot;&lt;your prompt&gt;&quot; --output-format json | your_command
+</code></pre>
+<p>开发调试时用 <code>--verbose</code>,生产环境关掉。</p>
+<h3 id="auto">用 auto 模式自主运行</h3>
+<p>要 uninterrupted 执行、同时保留后台安全检查,使用 auto 模式。一个分类器模型会在命令运行前审查,拦截权限升级、未知基础设施与恶意内容驱动的动作,同时让例行工作免提示通过。</p>
+<pre><code class="language-bash">claude --permission-mode auto -p &quot;fix all lint errors&quot;
+</code></pre>
+<p>当分类器在带 <code>-p</code> 标志的非交互运行中反复拦截动作时,Claude Code 并不会停止运行;具体会发生什么及阈值,参见 auto 模式的回退机制说明。</p>
+<h3 id="_1">添加对抗性审查步骤</h3>
+<p>在把任务当作完成之前,让一个子智能体在全新上下文中审查 diff 并报告缺口。</p>
+<p>Claude 无人值守工作的时间越长,在认定工作完成前做一次独立检查就越重要。运行在全新子智能体上下文中的审查者只看到 diff 与你给的标准,看不到产生改动的那套推理,因此它能按自己的标准评判结果。</p>
+<p>做正确性检查,可直接运行内置的 <code>/code-review</code> 技能:它会在全新子智能体中审查当前 diff 的 bug,并把发现带回会话。要按你的计划来检查 diff,就自己写审查提示词——点名要检查的工作、对照的计划、什么算一条 finding:</p>
+<blockquote>
+<p>Use a subagent to review the rate limiter diff against PLAN.md. Check that every requirement is implemented, the listed edge cases have tests, and nothing outside the task's scope changed. Report gaps, not style preferences.</p>
+</blockquote>
+<p>(中文说明:用子智能体对照 PLAN.md 审查限流器的 diff。检查每条需求都已实现、列出的边界情况都有测试、任务范围之外没有改动。报告缺口,不报告风格偏好。)</p>
+<p>因为审查者以子智能体运行,实现会话能直接收到缺口列表、修复并复审,无需你在窗口间搬运结论。</p>
+<p>被要求找缺口的审查者通常总会报出一些,哪怕工作本身是可靠的——因为这就是它被要求做的事。追逐每条 finding 会导致过度工程:多余的抽象层、防御性代码、为不可能场景写的测试。告诉审查者只标记影响正确性或既定需求的缺口,其余视为可选。</p>
+<h2 id="_2">避免常见的失败模式</h2>
+<p>以下是常见错误,早识别能省时间:</p>
+<ul>
+<li><strong>大杂烩会话(the kitchen sink session)</strong>:你从一个任务开始,中途问了个不相关的问题,然后又回到第一个任务。上下文里塞满无关信息。<strong>修法</strong>:不相关任务之间 <code>/clear</code>。</li>
+<li><strong>反复纠正</strong>:Claude 做错了,你纠正,还是错,再纠正。上下文被失败尝试污染。<strong>修法</strong>:两次纠正失败后,<code>/clear</code> 并结合所学写一个更好的初始提示词。</li>
+<li><strong>过度膨胀的 CLAUDE.md</strong>:CLAUDE.md 太长时,Claude 会忽略其中一半——重要规则淹没在噪音里。<strong>修法</strong>:狠心修剪。如果某条指令删掉后 Claude 照样做对,就删掉或转成 hook。</li>
+<li><strong>先信任后验证的空档(the trust-then-verify gap)</strong>:Claude 产出一个看起来合理、但没处理边界情况的实现。<strong>修法</strong>:永远提供验证手段(测试、脚本、截图)。无法验证的东西就不要上线。</li>
+<li><strong>无限探索</strong>:你让 Claude"调查一下"某事却没限定范围。Claude 读了几百个文件,填满了上下文。<strong>修法</strong>:把调查范围收窄,或改用子智能体,别让探索消耗主上下文。</li>
+</ul>
+<h2 id="_3">培养你的直觉</h2>
+<p>本指南中的模式并非金科玉律。它们是一般情况下行之有效的起点,未必对每种情况都最优。</p>
+<p>有时你<strong>应当</strong>让上下文积累——因为你正深陷一个复杂问题,历史是有价值的。有时你应当跳过规划,让 Claude 自己想办法——因为任务是探索性的。有时模糊的提示词恰恰是对的——因为你想先看 Claude 如何理解这个问题,再去约束它。</p>
+<p>留意什么有效。当 Claude 产出优秀结果时,回顾你做了什么:提示词结构、你提供的上下文、你所在的模式。当 Claude 卡壳时,问问为什么:上下文太吵?提示词太模糊?任务太大而不适合一轮完成?</p>
+<p>假以时日,你会形成任何指南都无法囊括的直觉。你会知道何时该具体、何时该开放,何时该规划、何时该探索,何时该清空上下文、何时该让它积累。</p>
+<h2 id="_4">相关资源</h2>
+<ul>
+<li><strong>How Claude Code works</strong>:智能体循环、工具与上下文管理</li>
+<li><strong>Extend Claude Code</strong>:skills、hooks、MCP、子智能体与插件</li>
+<li><strong>Common workflows</strong>:调试、测试、PR 等的分步配方</li>
+<li><strong>CLAUDE.md</strong>:存放项目约定与持久上下文</li>
+</ul>
+<h2 id="_5">要点速览</h2>
+<ul>
+<li>一条总纲:Claude 的上下文窗口填得快、性能随填充而降,上下文是最需要管理的资源;几乎所有最佳实践都由此推出。</li>
+<li>给 Claude 一个可自运行的验证检查(测试、构建、截图),把"你当验证环节"变成"闭环自动收敛";可用 <code>/goal</code>、Stop hook、验证子智能体逐级加强约束强度。</li>
+<li>推荐四阶段工作流:探索(plan mode)→ 规划 → 实现 → 提交;一句话能描述 diff 的小任务可跳过规划。</li>
+<li>提示词要具体:点名文件、说明约束、指向代码库中的范例模式;<code>@</code> 引用文件、贴图、给 URL、管道输入都是喂上下文的高效方式。</li>
+<li>环境配置是复利投资:精炼的 CLAUDE.md(只写删掉会导致犯错的内容)、权限白名单与沙箱、<code>gh</code> 等 CLI 工具、MCP 服务器、hooks(确定性)、skills(按需知识)、子智能体(隔离上下文)各有分工。</li>
+<li>大功能先让 Claude 用 AskUserQuestion"面试"你并写出自包含的 SPEC.md,再开新会话执行,规格精度比盯梢更值钱。</li>
+<li>会话管理:早纠偏(Esc/rewind/Undo)、两纠不过就 <code>/clear</code> 重开、自动压缩与 <code>/compact</code> 定向摘要、检查点让 risky 尝试零成本回退、<code>/rename</code> 把会话当分支用。</li>
+<li>规模化:<code>claude -p</code> 非交互模式接 CI 与脚本,worktrees/多会话做 Writer-Reviewer 与测试先行,<code>/batch</code> 或 shell 循环做 5-30 个子智能体的文件级扇出,auto 模式用分类器兜底安全。</li>
+<li>无人值守前加一道对抗性审查:全新上下文的子智能体只看 diff 与标准来挑缺口,但要求它只报影响正确性的问题,避免过度工程。</li>
+<li>警惕五大失败模式:大杂烩会话、反复纠正、CLAUDE.md 过长、信任-验证空档、无限探索;对应的修法几乎都是 <code>/clear</code>、修剪与限定范围。</li>
+</ul>
+      </div>
+    </article>
+    <nav class="pager"><a class="pager-prev" href="Zhang2025_Searching_Privacy_Risks_LLM_Agents.html"><span>上一篇</span>&quot;通过仿真搜索 LLM 智能体的隐私风险&quot;</a><a class="pager-next" href="Jimenez2024_SWE-bench_ICLR2024.html"><span>下一篇</span>&quot;SWE-bench:语言模型能解决真实世界的 GitHub Issue 吗?&quot;</a></nav>
+  </main>
+</div>
+<script src="../assets/site.js"></script>
+</body>
+</html>

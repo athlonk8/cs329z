@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>为多阶段语言模型程序优化指令与示例(MIPRO / MIPROv2) · CS 329Z 中文学习站</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html"><span class="brand-mark">CS</span>329Z<span class="brand-sub">中文学习站</span></a>
+    <nav class="topnav">
+      <a href="../index.html#syllabus">课程表</a>
+      <a href="../index.html#dates">重要日期</a>
+      <a href="../index.html#about">关于本站</a>
+    </nav>
+    <div class="searchbox"><input id="search-input" type="search" placeholder="搜索材料 / 主题…" autocomplete="off"><div id="search-results" class="search-results" hidden></div></div>
+  </div>
+</header>
+<div class="read-layout">
+  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">论文精读</a><ul><li><a href="#_3">摘要(全译)</a></li><li><a href="#1">1. 引言</a></li><li><a href="#2">2. 问题陈述</a></li><li><a href="#3">3. 设计空间</a></li><li><a href="#4">4. 优化器实例</a></li><li><a href="#5">5. 实验设置</a></li><li><a href="#6-lesson-2">6. 结果与讨论(五条 lesson,表 2 主结果)</a></li><li><a href="#7">7. 相关工作</a></li><li><a href="#8">8. 结论与局限</a></li></ul></li><li><a href="#_4">要点速览</a></li></ul></aside>
+  <main class="read-main">
+    <div class="crumb"><a href="../index.html">首页</a> / <a href="../index.html#week-week05b_optimization">第5周 · 优化:测试时计算与提示优化</a></div>
+    <article class="read-article">
+      <h1 class="read-title">为多阶段语言模型程序优化指令与示例(MIPRO / MIPROv2)</h1>
+      <p class="read-title-en">Optimizing Instructions and Demonstrations for Multi-Stage Language Model Programs</p>
+      <p class="read-meta">Krista Opsahl-Ong, Michael J. Ryan, Josh Purtell, et al. · &quot;ACL 2024 · Stanford / UC Berkeley / KTH&quot;</p>
+      <p class="read-badges"><span class="badge badge-recommended">推荐</span><span class="badge badge-kind">论文精读</span><button class="lang-toggle" id="lang-toggle" type="button">仅看中文</button><a class="orig-link" href="../originals/week05b_optimization/Opsahl-Ong2024_MIPROv2.pdf" target="_blank" rel="noopener">查看原文(PDF) ↗</a></p>
+      <div class="markdown-body">
+<h2 id="_1">导读</h2>
+<p>本文是第 5 周「优化」一讲与第 3 周 DSPy 的重要衔接:DSPy 论文(Khattab et al., 2024)提出了把 LM 流水线的提示当"参数"优化的编程模型,但当时的优化器只能自举示例、不能优化多模块程序的指令;MIPRO 补上了这块拼图。它把问题形式化为:在没有模块级标签、梯度、中间指标的前提下,只靠"程序 + 任务指标 + 训练集"来联合优化<strong>每个模块的自由文本指令</strong>与<strong>少样本示例</strong>。论文识别出两大挑战——<strong>提议(proposal)</strong>:提示空间天文数字大,如何提出高质量候选;<strong>信用分配(credit assignment)</strong>:任务级分数如何归因到各模块的具体选择——并系统探索 3×3 种策略组合,提出 MIPRO(Multi-prompt Instruction PRoposal Optimizer):用"接地(grounding)"的提议 LM 生成指令候选、自举示例、再用贝叶斯(TPE)代理模型在 minibatch 评分上做组合搜索。基于 7 任务基准(500 训练/500 开发/2k 测试,Llama3-8B 任务模型 + GPT-3.5 提议模型)得出 5 条 practitioner lesson。其改进版 MIPROv2 已成为 DSPy 默认优化器,也是同讲 GEPA 论文的直接对比基线。</p>
+<h2 id="_2">论文精读</h2>
+<h3 id="_3">摘要(全译)</h3>
+<p>语言模型程序(Language Model Programs),即由模块化 LM 调用组成的复杂流水线,正在持续推进 NLP 任务。然而构建这些流水线需要为所有模块联合地打造有效提示。我们研究 LM 程序的提示优化,即如何在不访问模块级标签或梯度的情况下更新提示以最大化下游指标。为使其可行,我们把问题分解为优化每个模块的自由格式指令与少样本示例,并提出若干策略来打造任务接地的指令以及在模块间进行信用分配。我们的策略包括:(i) 感知程序与数据的技巧来提出有效指令;(ii) 一个随机 minibatch 评估函数,用于学习目标的代理模型;(iii) 一个随时间改进 LM 构造提案方式的元优化过程。基于这些洞见我们提出 MIPRO,一个新优化器,使用一流开源模型(Llama3-8B)在七个多样化 LM 程序中的五个上超过基线,提升最高达 13% 准确率。新优化器与基准已在 DSPy 中发布(dspy.ai)。</p>
+<h3 id="1">1. 引言</h3>
+<ul>
+<li>复杂任务需要把思维链等提示技术链接成多阶段流水线(LM 程序),但如今主要靠"提示工程"手工试错。APE、OPRO、EvoPrompt 等提示优化器多数不适用于<strong>缺少模块级金标签</strong>的多阶段程序;DSPy 虽把指令/示例/权重都参数化了,但其优化器无法为多提示流水线调指令。</li>
+<li><strong>弱假设设定</strong>(与 DSPy 抽象一致):不访问 LM 权重、对数概率、中间阶段的手工指标或标签;只需要程序本身、一个任务指标、训练集输入(视指标而定还有最终输出)。</li>
+<li><strong>两大挑战</strong>:①提议——可能提示空间不可行地大,模块越多越糟;②信用分配——需联合优化参数化所有模块提示的众多变量,必须推断每个变量配置的影响。</li>
+<li>三点贡献:问题形式化 + 3+3 策略设计空间;发布 7 任务优化器基准;构造并评估代表性算法子集(MIPRO 为代表),并提炼 5 条 lesson。</li>
+</ul>
+<h3 id="2">2. 问题陈述</h3>
+<ul>
+<li>LM 程序 Φ 含 m 个模块,每模块有含变量(开放槽位)的提示模板(指令变量 i、K 个示例变量 d)。设 V 为全部变量,目标找到总赋值 V↦S 最大化指标 μ 在训练集上的均值。</li>
+<li>不可行的原因:(i) 字符串取值任意;(ii) μ 只在整任务层面提供监督,所有变量是隐变量;(iii) 无梯度/嵌入,排除很多 RL 与 prompt-tuning 方法;(iv) 数据集小;(v) LM 调用评估预算小。</li>
+<li><strong>通用优化框架(算法 1)</strong>:优化器 M 提供 Initialize / Propose / Update / ExtractOptimizedSets 四接口;每轮提出赋值、在大小 B 的 minibatch 上验证评分并更新——该框架统一并推广了 OPRO、APE。</li>
+</ul>
+<h3 id="3">3. 设计空间</h3>
+<p><strong>3.1 提议问题(3 策略)</strong>——如何让"提议 LM"生成贴合任务/程序/数据/指标的候选提示:</p>
+<ul>
+<li><strong>自举示例(Bootstrap Demonstrations)</strong>:沿用 DSPy 的拒绝采样——把训练输入跑过 Φ 得到各模块轨迹,若整程序得分 μ≥λ 则把轨迹中各模块的输入/输出当作该模块的候选少样本示例;优化问题化为在(模块内与跨模块的)示例组合中做选择。常胜过手写示例。</li>
+<li><strong>接地(Grounding)</strong>:给提议 LM 提供上下文:(i) 数据集模式刻画(零样本 LM 程序总结原始数据规律)、(ii) 程序控制流摘要、(iii) 自举出的成功示例、(iv) 各阶段历史指令及其得分。假设:这些上下文能帮助造出更贴合的指令。</li>
+<li><strong>学习提议(Learning to Propose)</strong>:提议策略自身有超参(温度、是否接地数据摘要等),最优配置因任务而异(数据摘要对逻辑推理任务关键,却可能干扰小模型做熟悉的事实问答)。把提议超参也参数化,用贝叶斯模型在多次试验中学习。</li>
+</ul>
+<p><strong>3.2 信用分配问题(3 策略)</strong>:</p>
+<ul>
+<li><strong>贪心</strong>:逐阶段单点修改评估。误归因少但极低效(改动需逐个应用;且某阶段的改进可能要等其他阶段先改进才显现);实验中不比其他方法好、时间复杂度差得多。</li>
+<li><strong>代理模型(Surrogate)</strong>:贝叶斯学习高效优化多隐变量函数。用 Optuna 的多变量 TPE(树结构 Parzen 估计器)从历史评估学习参数组合质量的代理模型,把探索聚焦到有希望的区域,可联合优化各变量;缺点是只能在<strong>固定候选集</strong>上选,无法用历史经验改进提案本身。</li>
+<li><strong>基于历史(History-Based)</strong>:假设足够强的 LM 读到"(指令, 分数)历史"就能自己做信用分配,无需显式代理——OPRO 思路;可同时完成归因与提案。但历史长了信息会丢失(长上下文退化)。</li>
+</ul>
+<h3 id="4">4. 优化器实例</h3>
+<ul>
+<li><strong>Bootstrap Random Search</strong>(基线):自举 N 组示例集 → 随机搜索组合 → 返回最高分赋值。</li>
+<li><strong>Module-Level OPRO</strong>:把 OPRO 扩展到多模块:假设程序分数足以代理单条指令质量;对每个模块,用(该模块当前指令, 程序分)历史让提议 LM 生成新指令;m 条新指令一起参数化程序并评估;循环到最大迭代。</li>
+<li><strong>MIPRO(主算法)</strong>:为放宽 OPRO 的强假设,显式用贝叶斯代理学习"任务级分数对模块级参数(指令/示例)的敏感度",把信用分配与提案解耦——提议 LM 专注提案,归因与选择事后由代理完成:
+  1. Initialize:按 Grounding 与自举策略,为每模块准备 N 组示例与指令候选;各潜在类别变量(每模块的指令选择、示例集选择)初始化均匀先验;
+  2. Propose:按 TPE 采样规则选择参数化 Φ 的指令/示例组合;
+  3. Update:在随机 minibatch(B 个样本)上评分,更新 TPE 对参数质量的先验——<strong>minibatch 评估是对噪声鲁棒的贝叶斯优化的效率关键</strong>;
+  4. 每隔 S 步对历史最高分参数化做全训练集评估,最终返回最高分的全评估赋值。</li>
+<li><strong>变体</strong>:0-Shot MIPRO(只优化指令,适合成本/上下文窗口受限)、Bayesian Bootstrap(只优化示例)、<strong>MIPRO++</strong>(元优化提议超参:是否用数据摘要/程序摘要、温度、给提议 LM 的提示工程 tip、给它的示例集选择)、Program-Level OPRO(整轨迹历史,假设太强、历史过长丢信息)、CA-OPRO(坐标上升式贪心,低效,弃用)。</li>
+</ul>
+<h3 id="5">5. 实验设置</h3>
+<ul>
+<li><strong>7 任务基准</strong>(表 1):HotPotQA(2 模块多跳检索)、<strong>HotPotQA Conditional</strong>(答案格式依实体类型变化——专测条件规则)、Iris / Iris-Typo(单模块 CoT 分类;Typo 版含拼写错误种子提示)、Heart Disease(3 个 CoT 意见 + 1 个综合模块)、ScoNe(嵌套否定的 NLI)、HoVer(4 模块三跳声明验证,Recall@21)。500 训练 / 500 开发 / 2k 测试。</li>
+<li>模型:任务模型 Llama3-8B,提议模型 GPT-3.5(温度 0.7);自举教师默认 Llama3-8B,难任务(ScoNe/HoVer)用 GPT-4o。预算 20-50 次全量试验(minibatch 使实际试验更多);每设定跑 5 次,Wilcoxon 符号秩检验判显著性。</li>
+</ul>
+<h3 id="6-lesson-2">6. 结果与讨论(五条 lesson,表 2 主结果)</h3>
+<ul>
+<li><strong>Lesson 1:优化自举示例是达到最佳性能的关键</strong>。多数任务上,仅优化自举示例就显著好于仅优化指令;除一个例外(HotPotQA Conditional),简单的 Bootstrap Random Search 都胜过最好的"仅指令"优化器。不同示例集的性能方差很大,说明好示例教的是<strong>成功的推理行为</strong>,而非仅格式。</li>
+<li><strong>Lesson 2:联合优化指令与示例(MIPRO)总体最佳</strong>。对每任务第二名做显著性检验支持该结论;例外是 HotPotQA(最终模块是模型熟悉的直白问答)、Heart Disease 与无 Typo 的 Iris(种子指令未传达分类标准,指令优化器难以自行推断)。</li>
+<li><strong>Lesson 3:指令优化对"条件规则"任务最重要</strong>——规则 (i) 对 LM 不直观、(ii) 无法用少量示例表达。HotPotQA Conditional 上仅 0-shot 指令优化就胜过仅示例优化(Iris-Typo 上指令优化甚至能纠正种子提示中的错误拼写)。复杂任务应在<strong>写明规则的种子提示</strong>上做优化。</li>
+<li><strong>Lesson 4:接地总体有益,但最佳提议策略因任务而异</strong>。接地对 HotPotQA/HoVer 关键、对 ScoNe 有害;0-Shot MIPRO++ 能为 ScoNe 学回这部分性能。贝叶斯学到的重要性分数显示:跨任务最重要的是"给提议 LM 看的自举示例"与"提示工程 tip";数据摘要在 ScoNe 上重要性最高、在 HotPotQA/HoVer 上几乎最低。</li>
+<li><strong>Lesson 5:优化器之道尚有大量未知</strong>。Module-Level OPRO vs 0-Shot MIPRO vs 0-Shot MIPRO++ 结果互有胜负;推测不同预算下结论会不同——低预算下 minibatch 的 0-Shot MIPRO 或最佳,高预算下元优化的 MIPRO++ 或胜出,留待未来工作。</li>
+<li><strong>代表性数字(测试集)</strong>:MIPRO HotPotQA 79.4(Bootstrap RS 75.4)、HoVer 39.0(37.6)、HotPotQA Cond. 23.3(RS 10.4,翻倍)、Iris 98.4;ScoNe 上 Bayesian Bootstrap 77.4 最高,MIPRO 79.4→(ScoNe 列 MIPRO 79.4 略高于 75.4,显著性不足并列加粗)。</li>
+</ul>
+<h3 id="7">7. 相关工作</h3>
+<p>提示优化已有:梯度引导搜索、暴力重排、进化算法、让 LM 提议(OPRO/APE/APO)、RL(词级/短语级编辑)。Sordoni et al. 把堆叠 LM 调用的联合提示优化建模为变分推断,但需要访问传入 token 的对数概率——在只有文本进出的商用 API 时代越来越不可行;MIPRO 无此要求,开箱适用于任意模块数的程序。</p>
+<h3 id="8">8. 结论与局限</h3>
+<ul>
+<li>形式化 LM 程序提示优化问题;识别提议与信用分配两挑战;3+3 策略 + 新基准;结论:优化少样本示例非常强大,但对含多条条件规则的复杂任务,指令优化不可或缺;MIPRO 联合优化在 7 设定中的 5 个上最有效。</li>
+<li>局限:未研究极低/极高预算下的动力学差异;固定了提议/任务模型;优化器在<strong>没有手写种子提示</strong>时推断复杂任务规则的能力有限;基准任务复杂度仍可提升。</li>
+</ul>
+<h2 id="_4">要点速览</h2>
+<ul>
+<li>两挑战框架:<strong>提议</strong>(生成高质量候选)与<strong>信用分配</strong>(把任务级分数归因到模块级选择)——是理解所有提示优化器的实用透镜。</li>
+<li>MIPRO 三步:Grounding 提议指令候选 → 自举示例集 → TPE 贝叶斯代理在 minibatch 评分上搜组合;信用分配与提案解耦。</li>
+<li><strong>minibatch 评估</strong>是效率关键:同预算下探索更多配置,且贝叶斯优化天然抗噪。</li>
+<li>实践 lesson:①示例优化收益最大;②指令+示例联合通常最佳;③条件规则任务靠指令优化(且要给写明规则的种子提示);④接地并非处处有益,可元学习(MIPRO++);⑤不同预算下最优优化器可能不同。</li>
+<li>与课程关联:DSPy(第 3 周)的默认优化器 MIPROv2 即本文成果;GEPA(同讲)以"自然语言反思"路线全面超越它,两篇对照读收获最大。</li>
+</ul>
+      </div>
+    </article>
+    <nav class="pager"><a class="pager-prev" href="Agrawal2026_GEPA.html"><span>上一篇</span>&quot;GEPA:反思式提示进化可以胜过强化学习&quot;</a><a class="pager-next" href="Snell2025_Scaling_Test_Time_Compute_ICLR2025.html"><span>下一篇</span>&quot;优化地扩展 LLM 测试时计算,可以比扩展模型参数更有效&quot;</a></nav>
+  </main>
+</div>
+<script src="../assets/site.js"></script>
+</body>
+</html>

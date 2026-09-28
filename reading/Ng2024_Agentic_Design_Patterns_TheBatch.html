@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agentic 设计模式(一):四种提升 GPT-4 与 GPT-3.5 表现的 AI Agent 策略 · CS 329Z 中文学习站</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html"><span class="brand-mark">CS</span>329Z<span class="brand-sub">中文学习站</span></a>
+    <nav class="topnav">
+      <a href="../index.html#syllabus">课程表</a>
+      <a href="../index.html#dates">重要日期</a>
+      <a href="../index.html#about">关于本站</a>
+    </nav>
+    <div class="searchbox"><input id="search-input" type="search" placeholder="搜索材料 / 主题…" autocomplete="off"><div id="search-results" class="search-results" hidden></div></div>
+  </div>
+</header>
+<div class="read-layout">
+  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li><a href="#_2">全文中译</a></li><li><a href="#_3">要点速览</a></li></ul></aside>
+  <main class="read-main">
+    <div class="crumb"><a href="../index.html">首页</a> / <a href="../index.html#week-week01_introduction">第1周 · 课程导论</a></div>
+    <article class="read-article">
+      <h1 class="read-title">Agentic 设计模式(一):四种提升 GPT-4 与 GPT-3.5 表现的 AI Agent 策略</h1>
+      <p class="read-title-en">&quot;Agentic Design Patterns Part 1: Four AI Agent Strategies That Improve GPT-4 and GPT-3.5 Performance&quot;</p>
+      <p class="read-meta">Andrew Ng · &quot;The Batch 2024 · DeepLearning.AI&quot;</p>
+      <p class="read-badges"><span class="badge badge-recommended">推荐</span><span class="badge badge-kind">全文中译</span><button class="lang-toggle" id="lang-toggle" type="button">仅看中文</button><a class="orig-link" href="../originals/week01_introduction/Ng2024_Agentic_Design_Patterns_TheBatch.html" target="_blank" rel="noopener">查看原文(HTML) ↗</a></p>
+      <div class="markdown-body">
+<h2 id="_1">导读</h2>
+<p>本文是吴恩达(Andrew Ng)在 DeepLearning.AI《The Batch》通讯上发表的「Agentic 设计模式」系列开篇(2024 年 3 月 20 日),被安排在第 1 周课程导论中,用来建立对「什么是 Agentic 工作流」的第一印象。文章的核心论点是:今年 AI 的最大进步可能不是来自下一代基础模型,而是来自 Agent 工作流。作者用 HumanEval 编程基准的数据说明:GPT-3.5 零样本正确率为 48.1%,GPT-4 零样本为 67.0%,而把 GPT-3.5 包裹进迭代式 Agent 循环后最高可达 95.1%——工作流带来的增益远超模型换代。在此基础上,文章给出了一个日后被广泛引用的 Agentic 设计模式分类框架:反思(Reflection)、工具使用(Tool Use)、规划(Planning)与多智能体协作(Multi-agent collaboration),为整个课程的 Agent 主题提供了概念地图。</p>
+<h2 id="_2">全文中译</h2>
+<h1 id="agentic-gpt-4-gpt-35-ai-agent">Agentic 设计模式(一):四种提升 GPT-4 与 GPT-3.5 表现的 AI Agent 策略</h1>
+<p>Letters · Technical Insights
+ 发布时间:2024 年 3 月 20 日 · 阅读时长 2 分钟</p>
+<p>各位朋友:</p>
+<p>我认为 AI Agent 工作流将在今年推动大规模的 AI 进步——甚至可能超过下一代基础模型带来的进步。这是一个重要的趋势,我敦促每一位从事 AI 工作的人都加以关注。</p>
+<p>如今,我们大多以零样本(zero-shot)方式使用 LLM:提示模型逐个 token 地生成最终输出,中途不修改自己的工作。这就好比要求一个人从头到尾一气呵成地写完一篇文章,不允许任何回退修改,却期望得到高质量的结果。尽管难度很大,LLM 在这项任务上的表现已经相当惊艳!</p>
+<p>然而,借助 Agent 工作流,我们可以让 LLM 对一份文档进行多轮迭代。例如,它可以执行这样一系列步骤:</p>
+<ul>
+<li>规划一份提纲。</li>
+<li>判断是否需要进行网络搜索来收集更多信息。</li>
+<li>撰写初稿。</li>
+<li>通读初稿,找出论据不足或内容冗余之处。</li>
+<li>根据发现的问题修改草稿。</li>
+<li>依此往复。</li>
+</ul>
+<p>对大多数人类作者而言,这种迭代过程是写出好文章的关键。对 AI 来说,这种迭代式工作流同样能带来远好于一次性写作的结果。</p>
+<p>Devin 高调的演示最近在社交媒体上引发了大量讨论。我的团队一直在密切跟踪「会写代码的 AI」的演进。我们分析了多个研究团队的成果,关注算法在广泛使用的 HumanEval 编程基准上的表现。你可以在下图中看到我们的发现。</p>
+<p>[图:各团队方法在 HumanEval 基准上的准确率对比——GPT-3.5(zero-shot)48.1%,GPT-4(zero-shot)67.0%,Agent 循环中的 GPT-3.5(AI Agent 训练)最高 95.1%]</p>
+<p>GPT-3.5(zero-shot)的正确率为 48.1%,GPT-4(zero-shot)更好一些,为 67.0%。然而,与引入迭代式 Agent 工作流所带来的提升相比,从 GPT-3.5 到 GPT-4 的进步就显得微不足道了。事实上,在 Agent 循环的加持下,GPT-3.5 的正确率最高可达 95.1%。</p>
+<p>开源 Agent 工具和关于 Agent 的学术文献正在快速涌现,这让当下既令人兴奋,也令人困惑。为了帮助大家正确地看待这些工作,我想分享一个用于归类 Agent 设计模式的框架。我的团队 AI Fund 已在许多应用中成功使用了这些模式,希望它们对你同样有用。</p>
+<ul>
+<li><strong>反思(Reflection)</strong>:LLM 审视自己的工作,想出改进它的方法。</li>
+<li><strong>工具使用(Tool Use)</strong>:为 LLM 提供网络搜索、代码执行或任何其他工具,帮助它收集信息、采取行动或处理数据。</li>
+<li><strong>规划(Planning)</strong>:LLM 制定并执行一个多步骤计划来实现目标(例如,先为文章写提纲,然后上网调研,再写出草稿,依此类推)。</li>
+<li><strong>多智能体协作(Multi-agent collaboration)</strong>:多个 AI Agent 协同工作,拆分任务、讨论并辩论想法,从而得出单个 Agent 难以企及的更优解决方案。</li>
+</ul>
+<p>下周,我将详细展开这些设计模式,并为每个模式提供推荐阅读。</p>
+<p>保持学习!</p>
+<p>Andrew</p>
+<p><strong>延伸阅读(本系列后续篇目):</strong>
+- 《Agentic 设计模式(二):反思》
+- 《Agentic 设计模式(三):工具使用》
+- 《Agentic 设计模式(四):规划》
+- 《Agentic 设计模式(五):多智能体协作》</p>
+<h2 id="_3">要点速览</h2>
+<ul>
+<li>吴恩达判断:2024 年 AI 的最大推动力可能是 Agent 工作流,甚至超过下一代基础模型。</li>
+<li>零样本使用 LLM 类似于「一次成稿、不许回退」的写作方式;Agent 工作流则允许多轮「规划—起草—审阅—修改」的迭代。</li>
+<li>关键数据:HumanEval 上 GPT-3.5 零样本 48.1%、GPT-4 零样本 67.0%,而 Agent 循环中的 GPT-3.5 最高达 95.1%,工作流增益远超模型升级。</li>
+<li>四大 Agentic 设计模式:反思(Reflection)、工具使用(Tool Use)、规划(Planning)、多智能体协作(Multi-agent collaboration)。</li>
+<li>反思 = 让模型审视并改进自己的输出;工具使用 = 赋予模型搜索、执行代码等能力。</li>
+<li>规划 = 模型自主制定并执行多步骤计划;多智能体协作 = 多个 Agent 分工、讨论、辩论以获得更优解。</li>
+<li>该分类框架是后续四周系列文章的总纲,也是本课程 Agent 部分的重要概念基础。</li>
+</ul>
+      </div>
+    </article>
+    <nav class="pager"><span></span><a class="pager-next" href="Si2026_Execution-Grounded_Automated_AI_Research.html"><span>下一篇</span>迈向执行接地的自动化 AI 研究</a></nav>
+  </main>
+</div>
+<script src="../assets/site.js"></script>
+</body>
+</html>

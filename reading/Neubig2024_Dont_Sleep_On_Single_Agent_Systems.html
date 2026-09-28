@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>别忽视单智能体系统 · CS 329Z 中文学习站</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html"><span class="brand-mark">CS</span>329Z<span class="brand-sub">中文学习站</span></a>
+    <nav class="topnav">
+      <a href="../index.html#syllabus">课程表</a>
+      <a href="../index.html#dates">重要日期</a>
+      <a href="../index.html#about">关于本站</a>
+    </nav>
+    <div class="searchbox"><input id="search-input" type="search" placeholder="搜索材料 / 主题…" autocomplete="off"><div id="search-results" class="search-results" hidden></div></div>
+  </div>
+</header>
+<div class="read-layout">
+  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">全文中译</a><ul><li><a href="#llm-agent">是什么构成了一个基于 LLM 的 Agent？</a></li><li><a href="#_3">一个多智能体的例子</a></li><li><a href="#_4">多智能体系统的一些问题</a></li><li><a href="#_5">如何做出优秀的单智能体系统</a></li><li><a href="#_6">结论</a></li></ul></li><li><a href="#_7">要点速览</a></li></ul></aside>
+  <main class="read-main">
+    <div class="crumb"><a href="../index.html">首页</a> / <a href="../index.html#week-week05a_multi_agent">第5周 · 多智能体系统</a></div>
+    <article class="read-article">
+      <h1 class="read-title">别忽视单智能体系统</h1>
+      <p class="read-title-en">Don&#x27;t Sleep on Single-agent Systems</p>
+      <p class="read-meta">Graham Neubig · &quot;OpenHands Blog · 2024-09-26&quot;</p>
+      <p class="read-badges"><span class="badge badge-recommended">推荐</span><span class="badge badge-kind">全文中译</span><button class="lang-toggle" id="lang-toggle" type="button">仅看中文</button><a class="orig-link" href="../originals/week05a_multi_agent/Neubig2024_Dont_Sleep_On_Single_Agent_Systems.html" target="_blank" rel="noopener">查看原文(HTML) ↗</a></p>
+      <div class="markdown-body">
+<h2 id="_1">导读</h2>
+<p>本文是第 5 周"多智能体系统"的反思性阅读材料。当周的 AutoGen、DyLAN 等论文展示了多智能体框架的能力，而 Graham Neubig（OpenHands 框架的作者之一，CMU 教授）在这篇 2024 年 9 月的博文中提出了一个重要的反方视角：多智能体并不是银弹，很多时候<strong>一个足够强的单智能体（single-agent）系统反而更简单、更强大、更易维护</strong>。</p>
+<p>文章的价值在于它给出了一个清晰的分析框架：任何 LLM Agent 都由三个要素构成——底层 LLM、提示（Prompt）、动作空间（Action Space），而所谓"多智能体系统"本质上就是在不同智能体之间改变这三个要素中的至少一个。由此出发，作者逐条剖析多智能体系统的三大痛点（结构僵化、上下文丢失、可维护性差），并论证这三点恰恰是单智能体系统的优势所在。它与 Cemri et al. 2025 对多智能体失败模式的实证分析互为印证，适合对照阅读：多智能体的"组织病"是真实存在的，工程上应当先问"是否真的需要多个智能体"。</p>
+<h2 id="_2">全文中译</h2>
+<p><strong>《别忽视单智能体系统》</strong></p>
+<p><em>作者：Graham Neubig · 发布于 2024 年 9 月 26 日</em></p>
+<p>最近，"多智能体系统（multi-agent system）"成了 AI 领域最热门的流行语之一，它是 MetaGPT、AutoGen 等广受欢迎的开源框架的核心，也是各类黑客松和大量研究论文的关注焦点。但在这篇文章里，我想审视一下这个趋势，并论证<strong>单智能体系统（single-agent systems）</strong>同样有一些很强的理由值得重视。在讨论中，我会借鉴我们构建 OpenHands——一个软件开发智能体框架——的经验。</p>
+<p>概而言之，本文将讨论：</p>
+<ul>
+<li>现代 AI Agent 的构成要素——大语言模型（LLM）、提示（prompt）与动作空间（action space）；</li>
+<li>一个多智能体系统的示例；</li>
+<li>多智能体系统存在的一些问题；</li>
+<li>我们如何从使用多个专用智能体过渡到一个强大的单一智能体，以及尚待解决的遗留问题。</li>
+</ul>
+<h3 id="llm-agent">是什么构成了一个基于 LLM 的 Agent？</h3>
+<p>近来，大多数实用的 Agent 都基于大语言模型，例如 Anthropic 的 Claude 或 OpenAI 的语言模型。但光有语言模型还不足以构建一个 Agent，你至少需要三个组件：</p>
+<p><strong>底层 LLM（The Underlying LLM）</strong></p>
+<p><strong>提示（The Prompt）</strong>：可以是用于规定模型一般行为的系统提示词，也可以是你从 Agent 周围环境中拉取的信息类型。</p>
+<p><strong>动作空间（The Action Space）</strong>：这些是我们提供给 Agent 的工具，让它能够在世界中行动。</p>
+<p>一般来说，当我们谈论多智能体系统时，我们其实是在至少改变这三个组件中的一个。</p>
+<h3 id="_3">一个多智能体的例子</h3>
+<p>举例来说，假设我们要构建一个 AI 软件开发者。我们可以参考 CodeR，一个面向 AI 软件开发的多智能体框架。它包含若干个 Agent，全部使用同一个底层 LM，但各自具有不同的提示和动作空间：</p>
+<p><strong>Manager（管理者）</strong>：这个 Agent 的提示规定它应当为其他 Agent 编写执行计划，动作空间是输出计划。</p>
+<p><strong>Reproducer（复现者）</strong>：这个 Agent 的提示要求它复现问题（issue），动作空间是向 reproduce.py 文件写入能复现该错误的代码。</p>
+<p><strong>Fault Localizer（错误定位器）</strong>：这个 Agent 的提示要求它找出引发错误的文件，动作空间是使用软件工程中的错误定位工具，并列出文件供后续使用。</p>
+<p><strong>Editor（编辑者）</strong>：这个 Agent 的提示接收复现者和错误定位器的结果，动作空间允许它对文件进行修改。</p>
+<p><strong>Verifier（验证者）</strong>：这个 Agent 的提示接收其他 Agent 的结果并要求它验证这些结果，动作空间是输出一个"是/否"的判断，即问题是否已被解决。</p>
+<p>这是一种非常符合直觉的系统构建方式，但构建这样的系统会碰到不少困难。</p>
+<h3 id="_4">多智能体系统的一些问题</h3>
+<p>构建多智能体系统时，你可能会遇到以下困难：</p>
+<p><strong>把结构搞对（Getting the Structure Right）</strong>：多智能体系统通过增加结构来解决问题。当 Agent 面对的问题与预设结构完全匹配时，这很棒；但如果不相匹配呢？比如，验证者想要自己执行一下文件定位，以确保它真正验证了答案，该怎么办？由于这些 Agent 是完全分离的，验证者将无法访问完成其工作所需的工具。</p>
+<p><strong>保持上下文（Preserving Context）</strong>：多智能体系统通常需要在多个 Agent 之间传递信息，而这可能成为信息丢失的来源。例如，如果错误定位器只把它工作的摘要传给下游 Agent，往往会导致重要的上下文信息丢失，而这些信息本可能对下游 Agent 的工作很有用。</p>
+<p><strong>可维护性（Maintainability）</strong>：最后，这些 Agent 中的每一个通常都是独立的代码库，或者至少是一个独立的提示。正因如此，多智能体系统往往会有更大、更复杂的代码库。</p>
+<p>有意思的是，这些挑战中有许多同样会出现在人类组织中！我想大家都经历过团队组织混乱、沟通不畅，或者某个成员离开后团队难以维持必要技能的情况。</p>
+<h3 id="_5">如何做出优秀的单智能体系统</h3>
+<p>需要指出的是，人们构建多智能体系统是有原因的——当你能为每个 Agent 提供把工作做好所需的结构和工具时，专用 Agent 在特定任务上表现出色！那么单智能体能否与之竞争？我相信这可能比我们想象的更容易——我们在 OpenHands 中实现的 CodeActAgent 已经为此做出了一个不错的原型。让我们看看要拥有单一 LLM、单一动作空间和单一提示技术，分别需要什么。</p>
+<p><strong>单一 LLM（Single LLM）</strong>：这是相对容易的部分。近来我们有了优秀的通用 LLM，包括闭源的 Claude 和 GPT-4o，以及开源的 Llama-3.1、Qwen-2.5 等。虽然这些模型并非无所不能，但它们的能力覆盖面非常广。如果缺少某种特定能力，还可以通过持续训练（continual training）来补足，同时不会显著削弱其他能力。</p>
+<p><strong>单一动作空间（Single Action Space）</strong>：这也不算难。如果多个 Agent 手里有不同的工具，我们可以：(1) 为模型提供相对通用、能够解决问题的工具；(2) 在不同 Agent 拥有不同工具箱的情况下，把工具箱拼接起来。例如，在 OpenHands 中我们提供的工具让 Agent 能够 (a) 编写代码、(b) 运行代码、(c) 执行网页浏览。这种通用方法让我们可以复用早已为人类开发者打造的软件工具，使 Agent 具备极强的通用性，并且涵盖了大多数其他多智能体系统能做的事情。</p>
+<p><strong>单一提示技术（Single Prompting Technique）</strong>：这才是棘手的地方！我们需要确保 Agent 获得如何解决其任务的恰当指引，以及来自环境的恰当信息。</p>
+<p>这里有几个选项：</p>
+<p><strong>把所有提示拼接起来（Concatenate All the Prompts）</strong>：如果我们有一个包含 10 个不同提示的多智能体系统，为什么不把它们全部拼接在一起？现在我们有了能处理数十万乃至上百万 token 的长上下文模型（Claude 达到 200k token，Llama 达到 128k）。这是 OpenHands 目前采用的做法。不过它也有几个缺点：首先是成本，更长的提示意味着更多的金钱和时间开销，尽管 Anthropic 的提示缓存（prompt caching）等功能已让这比从前便宜得多；另一个缺点是，LLM 可能会因为提供了过多的额外上下文而分心，不过同样，越强大的语言模型正越来越擅长从长上下文中识别重要信息。</p>
+<p><strong>检索增强式提示（Retrieval-augmented Prompting）</strong>：另一个可能的选择是求助于检索。就像检索增强生成（RAG）系统出于效率或准确性原因削减很长的上下文一样，我们可以做检索增强式提示。已有一些研究工作探讨如何挑选提供给 LLM 的示例，但就我所知，在 Agent 场景下的这类研究还很少。</p>
+<p>找到这方面的最佳方法仍是一个活跃的研究问题，但我相信它是可以攻克的。如果你有兴趣和我们一起解决它，欢迎加入 OpenHands 的 Slack，我们很乐意深入讨论！</p>
+<h3 id="_6">结论</h3>
+<p>以上这些并不是说多智能体系统没有用武之地。例如，当一个 Agent 需要访问特权信息时，或者当不同 Agent 代表不同的人行动时，多智能体系统无疑是正确的选择！</p>
+<p>这篇文章的目的只是促使我们批判性地思考"给系统不断加复杂度"这一趋势。有时候简单才是最好的，而凭借强大的模型、强大的工具和灵活多用的提示，我们已经在通往这一目标的路上了。</p>
+<p>如果这些观点引起了你的共鸣，你可以通过我们的开源版本或在线版本试用基于单个通用 AI Agent 的强大开源软件开发者，或者加入我们的社区并做出贡献！</p>
+<h2 id="_7">要点速览</h2>
+<ul>
+<li>任何 LLM Agent 都由三要素构成：底层 LLM、提示（Prompt）、动作空间（Action Space）；多智能体系统的本质就是在这三个要素上做差异化组合。</li>
+<li>以 CodeR 为例，多智能体系统（Manager/Reproducer/Fault Localizer/Editor/Verifier）各自换提示、换工具，结构直观，符合人类分工的直觉。</li>
+<li>多智能体三大痛点：结构僵化（Agent 无法越界使用其他 Agent 的工具）、上下文丢失（Agent 间传递摘要会损失关键信息）、可维护性差（代码库和提示数量成倍膨胀）。</li>
+<li>这些痛点与人类组织的毛病高度同构：分工混乱、沟通损耗、人员流动导致技能断层。</li>
+<li>单智能体方案：用一个强通用 LLM（Claude、GPT-4o、Llama-3.1、Qwen-2.5 等），不足的能力可通过持续训练补齐。</li>
+<li>动作空间可以合并：把多个 Agent 的工具箱拼接成一套通用工具（写代码、运行代码、浏览网页），即可覆盖大多数多智能体系统的功能，OpenHands 的 CodeActAgent 是现成原型。</li>
+<li>提示是单智能体最难的一环，两条路线：直接拼接所有提示（依赖长上下文，代价是成本与"分心"风险，可用 prompt caching 缓解）或检索增强式提示（把提示工程转化为检索问题，Agent 场景下研究尚少）。</li>
+<li>多智能体仍有真实适用场景：需要隔离特权信息、或不同 Agent 代表不同委托人行动时。</li>
+<li>核心工程教训：先证明"确实需要多个 Agent"，再引入多智能体复杂度；与本周 Cemri et al. (2025) 对多智能体失败模式的实证结论互为印证。</li>
+</ul>
+      </div>
+    </article>
+    <nav class="pager"><a class="pager-prev" href="Liu2024_DyLAN_COLM2024.html"><span>上一篇</span>&quot;DyLAN:面向任务的动态 LLM 智能体协作网络&quot;</a><a class="pager-next" href="Wu2024_AutoGen_COLM2024.html"><span>下一篇</span>&quot;AutoGen:以多智能体对话构建下一代 LLM 应用&quot;</a></nav>
+  </main>
+</div>
+<script src="../assets/site.js"></script>
+</body>
+</html>

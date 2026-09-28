@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-RQ3FWL8NSC"></script>
+      <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+
+        gtag('config', 'G-RQ3FWL8NSC');
+      </script>
+    
+    
+    
+    
+    <title>How to Build Good Language Modeling Benchmarks – Ofir Press</title>
+
+        <meta charset="utf-8" />
+    <meta content='text/html; charset=utf-8' http-equiv='Content-Type'>
+    <meta http-equiv='X-UA-Compatible' content='IE=edge'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0'>
+
+    
+    <meta name="description" content="Building benchmarks is important because they shine a spotlight on the weaknesses of existing language models and so can guide the community on how to improve them.
+
+" />
+    <meta property="og:description" content="Building benchmarks is important because they shine a spotlight on the weaknesses of existing language models and so can guide the community on how to improve them.
+
+" />
+    
+    <meta name="author" content="Ofir Press" />
+
+    
+    <meta property="og:title" content="How to Build Good Language Modeling Benchmarks" />
+    <meta property="twitter:title" content="How to Build Good Language Modeling Benchmarks" />
+    
+
+    <!--[if lt IE 9]>
+      <script src="http://html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+
+    <link rel="stylesheet" type="text/css" href="/style.css" />
+    <link rel="alternate" type="application/rss+xml" title="Ofir Press" href="/feed.xml" />
+
+    <!-- Created with Jekyll Now - http://github.com/barryclark/jekyll-now -->
+  </head>
+
+  <body>
+   
+    
+    
+    <div class="wrapper-masthead">
+      <div class="container">
+        <header class="masthead clearfix">
+           <!--<a href="/" class="site-avatar"><img src="https://ofir.io/images/logo.png" /></a>  -->
+
+          <div class="site-info">
+            <h1 class="site-name"><a href="/">Ofir Press</a></h1>
+            <!-- <p class="site-description">My thoughts on deep learning for NLP</p> -->
+          </div>
+
+          <nav>
+            <!-- <a href="/">Blog</a> -->
+            <a href="/about">About & Publications</a>
+          </nav>
+        </header>
+      </div>
+    </div>
+
+    <div id="main" role="main" class="container">
+      <article class="post">
+  <h1>How to Build Good Language Modeling Benchmarks</h1>
+  
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.10.2/dist/katex.min.css" integrity="sha384-yFRtMMDnQtDRO8rLpMIKrtPCD5jdktao2TV19YiZYWMDkUR5GQZR/NOVTdquEx1j" crossorigin="anonymous">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.10.2/dist/katex.min.js" integrity="sha384-9Nhn55MVVN0/4OFx7EE5kpFBPsEMZxKTCnA+4fqDmg12eCTqGi6+BB2LjY8brQxJ" crossorigin="anonymous"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.10.2/dist/contrib/auto-render.min.js" integrity="sha384-kWPLUVMOks5AQFrykwIup5lo0m3iMkkHrD0uJ4H5cjeGihAutqP0yW0J6dpFiVkI" crossorigin="anonymous" onload="renderMathInElement(document.body);"></script>
+
+
+  <div class="entry">
+    <p>Building benchmarks is important because they shine a spotlight on the weaknesses of existing language models and so can guide the community on how to improve them.</p>
+
+<p>I’ve spent a lot of my career both on building benchmarks and on building systems that push forward the state-of-the-art on a given benchmark, and I believe that building good benchmarks is <em>just as important</em> as building new systems.</p>
+
+<p>Designing a good benchmark is challenging and I’ve spent a lot of time recently thinking about what makes for a good benchmark. I’ve distilled it down to three main properties:</p>
+
+<h4 id="1--natural">1.  Natural:</h4>
+<p>Try to build a benchmark that has natural questions that some category of humans ask on a frequent basis. For example, the questions in our <a href="https://swe-bench.com">SWE-bench</a> are made up of <em>real</em> bugs that users reported in popular GitHub repos. The task is to take the reported bug and the repo (as it was at the time the bug was reported) and try to fix the bug. That’s a very natural task that many people do on a daily basis (and even get paid for). Other natural tasks that we’ve recently turned into benchmarks include answering questions such as “What yoga studio near me has vinyasa classes before 8 AM on weekdays?” (see <a href="https://assistantbench.github.io/">AssistantBench</a>) and “Which paper first showed that transformer language models can’t extrapolate to long sequences?” (see <a href="https://citeme.ai">CiteME</a>).</p>
+
+<p>Sometimes I see new benchmarks come out that don’t fulfill the naturalness criteria, and they often have a hard time getting excitement from the community. I find benchmarks that contain IQ test-like questions, where you have to identify patterns in diagrams to not be very exciting. Or any ‘common sense’-like benchmarks that have questions like ‘Bob threw an egg at Alice’s face. Is Alice happy, sad, or ambivalent?’ These types of benchmarks might have been interesting in the past, when our LMs were still struggling with basic tasks, but now that our language models are becoming more capable, we need to challenge them with tougher and more realistic tasks.</p>
+
+<p>Another way to think about whether a benchmark fulfills the naturalness criteria is to evaluate whether it fulfills what I term the usefulness criteria: would a system that got better-than-baseline accuracy on this benchmark be useful to humans? Would it make anyone more productive? A system that can autonomously fix bugs would save lots of time for developers, even if it only managed to fix the easiest ten percent of bugs. A system that can quickly find me a yoga class that meets my needs would save me time.</p>
+
+<p>I’ve also noticed that there are two simple indicators for a benchmark being unnatural, and so I try to avoid building benchmarks that have these properties:</p>
+
+<p>A.  <strong>The question set-up is unrealistic</strong>: For example, if a benchmark contains multiple choice questions, I believe it is unnatural. When I go to the doctor, I never say “Doctor doctor, my elbow hurts, and it is definitely happening because of one of these <em>four</em> options…”. Always think of your question set-up and if it seems unrealistic, try to modify it.</p>
+
+<p>B.  <strong>The questions are made up and not taken from actual questions asked by actual humans</strong>: If you work for Google and you’re tasked with building a challenging question-answering benchmark, a really nonoptimal thing to do would be to sit around by yourself in a room and just try to think of questions. You’d probably come up with weird questions that no real user would ever ask. A really smart thing to do would be to look at the Google Search logs and try to filter it to find questions that users entered and did not find a good answer to (for example, this might be indicated by the user going to the second result page or because the user spent more than five minutes on the initial results page).</p>
+
+<p>SWE-bench contains real bug reports filed by real users on real GitHub repos. I think this makes the benchmark much more exciting to the community. Using questions that actual users asked implies that by building systems that get higher scores on the benchmark, we would be fulfilling a real-world need.</p>
+
+<h4 id="2--automatically-evaluateable">2.  Automatically Evaluateable:</h4>
+<p>In a benchmark, given a model-generated answer to a question, we need to determine if the model was right or wrong. Sometimes this is easy, but depending on the question type, this could be hard or impossible. Validating the correctness of code could be a challenging task, since there are many different ways to program a given function, and that’s why benchmarks such as HumanEval and SWE-bench use unit tests to automatically validate code.</p>
+
+<p>Summarization is a task that I think could be super useful for humans (“Write a 500 word summary of this patient’s medical file”) but we’ve seen very little development of new benchmarks in this space because evaluation is just so hard. There are many different ways to correctly summarize a given text, but evaluating these summaries is hard. Some have proposed using an LM to evaluate LM outputs but I don’t think that that’s the right way to go. We should either use an LM to solve a task, or use it to judge outputs, but if we use it as both the solver and the evaluator that leads to problems.</p>
+
+<h4 id="3--challenging">3.  Challenging</h4>
+<p>If you launch an automatically evaluatable and natural benchmark, but the accuracy of the best LM at launch is 80%, people will see your benchmark as already being <em>solved</em> and won’t want to try and build models to improve performance on it. I think making your benchmarking challenging is critical. I think that at launch, a good benchmark should have the top LMs achieving between 1% to 35% accuracy on it.</p>
+
+<p><em>Edit, January 2025:</em> Due to the extremely fast development of LMs these days, I currently recommend that benchmark builders launch their benchmarks with the top accuracy being between 0.1% to 9%. Anything higher probably means that the benchmark is too easy.</p>
+
+<p><em>Edit, May 2025:</em> I had to make another edit. Due to the speed of development of AI I’m now asking my collaborators, not to think of benchmarks that would have AI systems achieving 0% at launch, but to think of benchmarks that would have systems achieving “-200%” at launch. Find questions that are so hard that even if the models improve 3x they’ll still get zero. Just building a benchmark where models get 0% today might not be enough anymore. You have to look at how the models have been improving over the past 3-6 months, try to predict where they’ll be in 6-12 months and build benchmarks that would not only make current models fail, but benchmarks that would make the models of next year fail as well. Anything easier than that might get saturated much more quickly than you expect.</p>
+
+<p><del>If you find a benchmark idea and build it out and it’s natural and automatically evaluateable but you build a baseline and it gets 70% right, one thing you might want to consider doing is to use that baseline to <strong>filter-out the easier instances</strong> in the benchmark. For example, our <a href="https://ofir.io/The-Bamboogle-Dataset/">Bamboogle benchmark</a> had tough-to-answer 2-hop questions, and we built the dataset by filtering out all questions that Google Search answered correctly. For CiteME, we filtered out all questions that GPT-4o managed to answer correctly in a prompting-only setting (i.e. non-agentic). I think that building benchmarks by finding tasks that a strong existing approach can’t solve is a great way to go.</del></p>
+
+<p><em>Edit, June 2026:</em> If you are collecting benchmark tasks from a specific domain and find yourself needing to filter out some instances in order to make the benchmark harder, you are working with a task distribution that is too easy across the board. Sure, you can filter out some easier instances now, but that will only be a temporary measure. Your overall task distribution is too easy and you should probably move towards collecting tasks from a totally different and much harder domain.</p>
+
+<p>Beware- researchers are humans and humans have emotions. If at launch, the top model’s accuracy is less than 10%, that might seem very intimidating for most researchers, and they might not want to work on your benchmark at all. Try to plan for that. For example, when we launched SWE-bench the top model’s accuracy was 1.96%. Almost everyone I talked to at the time was intimidated by this and didn’t want to approach it. I wasn’t worried, because we immediately started working on SWE-agent after releasing SWE-bench. I remember telling the team that if we got anywhere near 10% accuracy, the community would see that SWE-bench isn’t as impossible as it seemed, and that would get the ball rolling. Eventually we launched SWE-agent at around 13% accuracy and soon afterwards a barrage of other models appeared, each getting better accuracy than the previous one.</p>
+
+<h4 id="bonus-property">Bonus Property:</h4>
+
+<p>Building a benchmark that would be <strong>hard to leak into the training data</strong> is something that I think about all the time. Could we build a benchmark such that even if the benchmark itself leaks into an LM’s training data, it won’t really help that LM in getting a good score on the benchmark? In <a href="https://scicode-bench.github.io/">SciCode</a>, we had PhDs write very tough programming challenges related to their field of study. Each instance in the dataset is a description of a function and the unit tests to validate whether the model programmed it correctly or not. We intentionally <em>do not</em> release any of the answers to these programming challenges, to make sure these answers are never inserted into any LMs training data. This way, even if our benchmark fully leaks into an LM’s training set, it still won’t be able to produce the right answers to the questions. Achieving this property is extremely difficult, and so it’s not something I try to do with every single benchmark I build.</p>
+
+<h4 id="other-guidelines">Other guidelines:</h4>
+
+<ol>
+  <li>
+    <p>Have <strong>one</strong> number for your benchmark. One metric that people go for. “We get 87% on HumanEval” is the vibe you are going for. Don’t have three metrics, like accuracy, precision, and recall, have just one. Don’t divide accuracy by category, have just an overall accuracy. This is really important. You want to make use of your benchmark as easy as possible. You want people to <em>get it</em> right away. If you start having seventeen metrics and nineteen categories it’s going to be complicated for people to understand what you’re trying to do, and that will lower the chances of your benchmark catching on.</p>
+
+    <p>When you write the analysis section in your paper about your benchmark, it’s totally fine to present other metrics for each model, or to break down performance by category, but you should only do that there, and not have the categories or other metrics when you generally talk about the benchmark.</p>
+  </li>
+  <li>
+    <p>When you write a paper, always <strong>include very strong baselines</strong>, both based on strong proprietary models and on leading open source models. You should never try to make your benchmark look more impressive than it actually is by including only weak baselines, or baseline systems that use old or outdated models like GPT 3.5 or Llama 3 7B.</p>
+  </li>
+  <li>
+    <p>How many tasks should your benchmark have? I think a good minimum is to have at least 150 tasks in a benchmark. But defining a ‘task’ is hard, a benchmark that has 50 ‘tasks’ which each have 10 subtasks, could also work. Aim for 300-500 tasks so that your benchmark has more statistical resolution. In my experience, having more tasks than that doesn’t really help. I would also use the 500 task point as an upper limit, because having more tasks means it could take a very long time to run your benchmark, which could be a big downside for adoption.</p>
+  </li>
+  <li>
+    <p>Benchmarks typically get saturated within a year. And so when you build a benchmark, I don’t think it’s important to worry about questions like “Will this still be an interesting question in five years?”. Deep learning moves incredibly quickly, and there’s no way to predict where we’ll be in more than a year. For this reason, it’s also OK to have benchmarks that ask questions that will probably have totally different answers in a year or two, such as “Which yoga studios near Bushwick in NYC have a Vinyasa class before 7AM?”.</p>
+  </li>
+</ol>
+
+<p>Benchmarks are great because they provide a lot of room for creativity, and they can be super impactful in guiding the community towards the future. I hope this post helps you in building the next big LM benchmark. And always remember- rules are meant to be broken. I do not think that a benchmark that does not follow all of these rules is bad. I just think that these guidelines are a good indicator for whether you’re on the right path or not.</p>
+
+<h3 id="concluding-thoughts">Concluding Thoughts</h3>
+
+<p>Here are some questions to think about while you’re designing a new benchmark:</p>
+<ol>
+  <li>
+    <p>A benchmark is a collection of tasks, where each task is made up of &lt;request, environment, stopping criteria, scorer&gt; 4-tuples.
+<br />     
+A. The <strong>request</strong> is what you want the model to actually do, i.e. in SWE-bench it would be “Fix this issue “ + issue_text.
+<br />     
+B. The <strong>environment</strong> is a total description of the environment that the agent will act in while solving your request. Is internet access allowed? What dependencies are installed and which ones are not? Are there any special tools you will be providing the agent with?
+<br />     
+C. The <strong>stopping criteria</strong> is how you decide when to end an agent’s run. For some tasks the agent will probably issue a ‘submit’ command and exit but you need to decide how to act when that never happens. Are you going to have a turn limit per task? A cost limit? A walltime limit? A combination of these? All answers are viable, you just need to decide.
+<br />     
+D. The <strong>scorer</strong> takes the environment as it was when the agent exited and scores it. Will you build a binary pass/fail benchmark, like we did in SWE-bench with the fail2pass and pass2pass tests? Or will you build a benchmark with a continuous score, like we did in AlgoTune, where we ask agents to speed up computer programs, and the score per task is the agent’s code total runtime divided by our baseline’s total runtime. Or will you use ELO like we did in CodeClash? There are many possiblities here.</p>
+  </li>
+  <li>
+    <p>What is the baseline scaffolding that you will use and how similar is it to the best scaffolding in common use right now? For example, if you’re asking coding questions, and your scaffolding doesn’t allow for code execution, that’s not a very good representation of reality. If you’re asking knowledge questions and don’t allow access to the internet, that’s not realistic. Try to make your scaffolding as close as good as you can. This frequently doesn’t take much effort as people think. mini-SWE-agent is able to get very competitive scores (and sometimes even surpass) Claude Code these days, even though it is orders of magnitude simpler. I talk a lot about how much easier it is to sell a benchmark that is realistic, and part of that is making the tasks realistic, but you should also make your baseline scaffolding realistic, otherwise people will mistrust your results.</p>
+  </li>
+</ol>
+
+<p>Benchmarks are what moves the frontier of AI forward, there isn’t anything more important than building good new benchmarks. Good luck!</p>
+
+
+  </div>
+
+  <div class="date">
+    Written on August  7, 2024
+  </div>
+
+  
+
+</article>
+
+    </div>
+
+    <div class="wrapper-footer">
+      <div class="container">
+        <footer class="footer">
+          
+
+
+
+
+
+
+
+
+
+
+
+
+        </footer>
+      </div>
+    </div>
+
+    
+
+  </body>
+</html>

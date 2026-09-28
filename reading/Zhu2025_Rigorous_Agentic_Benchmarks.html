@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>&quot;构建严谨 Agent 基准的最佳实践&quot; · CS 329Z 中文学习站</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html"><span class="brand-mark">CS</span>329Z<span class="brand-sub">中文学习站</span></a>
+    <nav class="topnav">
+      <a href="../index.html#syllabus">课程表</a>
+      <a href="../index.html#dates">重要日期</a>
+      <a href="../index.html#about">关于本站</a>
+    </nav>
+    <div class="searchbox"><input id="search-input" type="search" placeholder="搜索材料 / 主题…" autocomplete="off"><div id="search-results" class="search-results" hidden></div></div>
+  </div>
+</header>
+<div class="read-layout">
+  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">论文精读</a><ul><li><a href="#abstract">摘要(Abstract)</a></li><li><a href="#1-introduction">1 引言(Introduction)</a></li><li><a href="#2-related-work">2 相关工作(Related Work)</a></li><li><a href="#3-overview">3 总览:分类学与工作流(Overview)</a></li><li><a href="#4-abcagentic-benchmark-checklist">4 ABC:Agentic Benchmark Checklist</a></li><li><a href="#5-agent">5 对 Agent 基准的评估</a></li><li><a href="#6-conclusion">6 结论(Conclusion)</a></li><li><a href="#_3">附录速览</a></li></ul></li><li><a href="#_4">要点速览</a></li></ul></aside>
+  <main class="read-main">
+    <div class="crumb"><a href="../index.html">首页</a> / <a href="../index.html#week-week07b_evaluation">第7周 · 评测基础</a></div>
+    <article class="read-article">
+      <h1 class="read-title">&quot;构建严谨 Agent 基准的最佳实践&quot;</h1>
+      <p class="read-title-en">&quot;Establishing Best Practices for Building Rigorous Agentic Benchmarks&quot;</p>
+      <p class="read-meta">&quot;Yuxuan Zhu et al.&quot; · &quot;arXiv 2507.02825 · UIUC / Stanford / UC Berkeley 等&quot;</p>
+      <p class="read-badges"><span class="badge badge-must">必读</span><span class="badge badge-kind">论文精读</span><button class="lang-toggle" id="lang-toggle" type="button">仅看中文</button><a class="orig-link" href="../originals/week07b_evaluation/Zhu2025_Rigorous_Agentic_Benchmarks.pdf" target="_blank" rel="noopener">查看原文(PDF) ↗</a></p>
+      <div class="markdown-body">
+<h2 id="_1">导读</h2>
+<p>本文是第 7 周「评测基础」单元的核心必读,作者阵容横跨 UIUC、Stanford、UC Berkeley、Yale、Princeton、MIT、UK AI Safety Institute 等机构(Daniel Kang 组牵头)。它直面 Agent 时代的评测危机:传统基准靠分类准确率或自动指标(如 BLEU)评分,而 Agent 基准以「完成端到端任务」定义成功,用单元测试、字符串匹配、状态比对、LLM 裁判等方式给非结构化结果打分——这套「基于结果的评测」看似客观,实则暗藏大量可被利用或可致系统性偏差的漏洞。</p>
+<p>论文的两大支柱:其一,<strong>有效性分类学</strong>——严谨的 Agent 评测须同时满足「任务有效性(task validity):任务当且仅当 Agent 具备目标能力才可解」与「结果有效性(outcome validity):评测通过当且仅当任务真正完成」;其二,把两类条件落地为可操作的 <strong>Agentic Benchmark Checklist(ABC)</strong>,覆盖工具、环境、实现、四类评测方法与结果报告。用 ABC 审计十大流行 Agent 基准的结论触目惊心:七个违反任务有效性、七个违反结果有效性、十个全部存在报告局限;τ-bench 上「什么都不做」的平凡 Agent 拿 38% 成功率反超 GPT-4o Agent,SWE-Lancer 的 Agent 不解任何任务也能拿满分,KernelBench 高估约 31%,OSWorld 因网站漂移低估 28%。对任何要造基准、刷榜单或据榜单做决策的人,ABC 都是一份即拿即用的审计清单,与本单元 Press 的设计经验谈、tinyBenchmarks 的降本方法构成完整闭环。</p>
+<h2 id="_2">论文精读</h2>
+<h3 id="abstract">摘要(Abstract)</h3>
+<p>基准(benchmark)对定量追踪 AI 进展至关重要。随着 AI Agent 能力日益增强,研究者与从业者引入了 Agent 基准来评估 Agent 在复杂真实任务上的表现。这些基准通常通过特定的奖励设计评估任务结果来度量 Agent 能力。然而我们发现,许多 Agent 基准在任务设置或奖励设计上存在问题:例如 SWE-bench-Verified 使用了不充分的测试用例,而 τ-bench 把空响应计为成功。此类问题可导致对 Agent 性能的低估或高估达相对意义上的 100%。为使 Agent 评测更严谨,我们提出 Agentic Benchmark Checklist(ABC)——一套由我们的基准构建经验、最佳实践调研与已报告问题综合而成的指南。将其应用于评测设计尤其复杂的 CVE-Bench 后,ABC 使性能高估降低了 33%。</p>
+<h3 id="1-introduction">1 引言(Introduction)</h3>
+<p>将机器学习模型与工具、记忆、知识集成的 AI Agent 正在崛起,业界为此构建了大量含真实任务的 Agent 基准来追踪进展、辅助决策,且 Agent 在其上表现亮眼——例如基于 GPT-4o 的 Agent 在工具-用户交互基准 τ-bench-Airline 上解决 35% 的任务。随着 Agent 基准在学术界与工业界的影响扩大,确保这些数字可信变得至关重要。</p>
+<p>Agent 基准与传统 AI 基准有本质不同:ImageNet、MMLU 等多选数据集按分类标签准确率评测,文本生成基准依赖 BLEU 等自动指标;而 Agent 场景下的成功由「完成端到端任务」定义——Agent 需进行连贯推理、写代码、执行命令以产出最终结果,再通过与真值结果的比对(程序测试、字符串匹配等)判定性能。不幸的是,许多基于结果的评测方法存在缺陷,可使能力估计偏差达相对 100%。典型例证:(1) SWE-bench-Verified 要求 Agent 解决 GitHub issue,以补丁通过人工审核的单元测试为成功;但先前工作表明单元测试可能漏掉重要边界情况,通过测试不代表解决了问题——其排行榜前 50 名中 24% 的位置不正确;(2) 我们发现,在 τ-bench 中,一个只返回空响应的平凡(trivial)Agent 在「故意不可能完成的任务」(如修改不可退票)上被判成功,拿到 38% 的成功率,反超基于 GPT-4o 的 Agent。</p>
+<p>尽管评测严谨性问题会显著扭曲结果,它在当前 Agent 基准的开发、部署与分析中仍常被忽视。作者分析了先前的 Agent 基准缺陷研究与 17 个广泛使用的 Agent 基准(含 SWE-bench-Verified、GAIA、τ-bench、WebArena),结合自身基准开发经验,提炼出基准结果有效性的两个条件:<strong>结果有效性</strong>(评测结果真正指示任务成功——SWE-bench-Verified 在此失守,错误补丁也能通过测试套件)与<strong>任务有效性</strong>(任务当且仅当 Agent 具备目标能力才可解——τ-bench 在此失守,平凡 Agent 无需机票规则知识即通过 38% 的任务)。据此形成 ABC 清单,并用它评估十个覆盖全部能力类型的流行 Agent 基准:七个有结果有效性缺陷、七个有任务有效性问题、全部存在报告局限。新发现的问题举例:Agent 可在 SWE-Lancer 上不解任何任务拿 100%;KernelBench 因模糊测试不全面而绝对高估内核函数正确性约 31%;WebArena 因字符串匹配问题高估 5.2%。应用 ABC 改进网络安全基准 CVE-Bench,经网络安全专家确认,性能高估绝对下降 33%。四点贡献:(1) 识别 Agent 基准严谨性的两大威胁;(2) 开发可操作的 ABC;(3) 用 ABC 评估十大基准,发现致最高 100% 相对误差的新问题;(4) 提供开发期改进基准的案例研究。</p>
+<h3 id="2-related-work">2 相关工作(Related Work)</h3>
+<p><strong>评估 AI 基准</strong>:基准质量维护是长期挑战,已有研究考察标签质量与数量、标准化评测协议、构念效度(construct validity)、数据污染、可复现性与实际用途;连 ImageNet 也曾受数据偏差与标签噪声困扰。近期工作为通用/代码基准提出最佳实践,但它们主要面向多选或生成任务——不涉及多步推理,歧义与复杂度远低于 Agent 基准。<strong>Agent 基准化</strong>:覆盖编程、环境交互、数学等领域的 Agent 基准大量涌现,其评测需处理 Agent 与环境的动态交互、给非结构化回复判分,确保严谨性的难度远超传统基准。<strong>Agent 评测中的问题</strong>:既有分析已发现个别基准的问题——答案格式的隐式假设致低估 5.3%;SWE-bench-Lite/Verified 分别有 7.7%/5.2% 的任务可在无正确补丁的情况下通过评测;BIRD 的标注噪声显著影响评测;WebArena 的网站限流曾阻止 Agent 解题;KernelBench 的判分漏洞允许绕过正确性检查。但此前没有工作把这些问题整理成可操作、系统性的评估指南——这正是本文定位。</p>
+<h3 id="3-overview">3 总览:分类学与工作流(Overview)</h3>
+<p><strong>分类学</strong>(图 1):Agent 基准挑战 AI Agent 在特定环境中用给定工具完成任务;若干轮(交)互后 Agent 产出任务结果(文本回复、代码、环境状态等),基准以定制方法(字符串匹配、测试、状态匹配等)自动判定成败。概念上,<strong>当且仅当</strong> (1) 目标能力 ⟺ 任务成功(任务有效性),且 (2) 任务成功 ⟺ 评测通过(结果有效性)时,Agent 评测才严谨。Agent 基准让两个条件难以成立的两大独特挑战是:<strong>复杂任务设置</strong>(除任务描述外还要搭建环境、提供工具)与<strong>非结构化任务结果</strong>(验证其正确性需要专门设计的方法)。设置不当破坏任务有效性(τ-bench 含故意不可解任务,而「什么都不做」也被判成功);判分不严破坏结果有效性(SWE-bench-Verified 的手写单元测试可能不完备,通过也可能错)。</p>
+<p><strong>基准收集</strong>:聚焦 2024 年 1 月至 2025 年 3 月间被顶级 AI 提供商(OpenAI、Anthropic、Amazon、Meta、Google、xAI、Mistral、DeepSeek)使用、或在同行评审会议获奖的基准。附录 B 显示从模型发布材料中识别出 78 个基准,剔除事实问答(SimpleQA、MMLU)与直接编程任务(MBPP、HumanEval)等非 Agent 基准后得 25 个,最终收录 17 个。<strong>清单开发</strong>:审查基准、调研评测框架与已记录问题、借鉴软件测试等领域的判分最佳实践,结合自身经验整理出 ABC(附录 C 列出每条检查项的来源)。<strong>基准评估</strong>:从 17 个中选 10 个开源、覆盖全部能力类型与评测方法者做深入评估(每满足一条得 1 分),并对每条识别出的问题设计实验定量验证。</p>
+<h3 id="4-abcagentic-benchmark-checklist">4 ABC:Agentic Benchmark Checklist</h3>
+<h4 id="41">4.1 评估任务有效性</h4>
+<p>这些检查揭露造成假阳性(捷径/shortcut)或假阴性(不可能任务)的设计与实现缺陷,分三组:</p>
+<p><strong>工具(Tool)</strong>:基准提供自托管工具(如 Python、命令行)与 API 型工具(如 Web 服务)两类。前者须在提示中明确指定正确的工具/包版本(T.1);后者须保证评测期间 API 持续可用(T.2),并在 API 不可访问时妥善终止或处理错误以告知用户(T.3)。</p>
+<p><strong>环境(Environment)</strong>:Agent 基准常需沙箱模拟真实场景。首先,任务间须彻底清理残留数据与状态以保证任务独立性(T.4)——例如 KernelBench 曾未把标准答案从 GPU 显存中清除,Agent 可经越界内存访问直接读到正确结果;其次,须将 Agent 与真值信息完全隔离以防「偷看答案」(T.5);最后,环境设置应完全可复现并在发布时冻结,不建议依赖持续更新的外部网站等动态资源(T.6)。</p>
+<p><strong>实现(Implementation)</strong>:细微实现漏洞同样造成捷径或不可解任务。须验证真值标注与任务设置的正确性(T.7–8);提供能自动解决全部任务的 Oracle 求解器以证明任务配置正确(T.9);并在试点实验中检查离群值以发现实现 bug(T.10)——若 Agent 总在简单任务上失败,可能任务不可解;若只在困难任务上成功,可能存在捷径。</p>
+<h4 id="42">4.2 评估结果有效性</h4>
+<p>按结果类型与判分方法分四组:</p>
+<p><strong>信息获取</strong>:评估搜索、检索、整合与摘要能力,判分方案有三。(1) <strong>全字符串匹配</strong>直接比对回复与真值:标注时须考虑语义等价表达(O.a.1)与冗余词(O.a.2);(2) <strong>子串匹配</strong>检查回复是否包含真值:除等价表达外还须处理否定修饰词如"not"(O.b.1),并精心设计任务以防穷举所有可能答案(O.b.2)或猜测(O.b.3)得分;(3) <strong>LLM-as-a-Judge</strong>:因 LLM 标注准确率随领域变化,须以试点实验证明裁判的准确率、自洽性与人类一致性(O.c.1),并设计成能抵抗对抗输入与奖励 hacking(O.c.2)。</p>
+<p><strong>代码生成</strong>:借助程序测试技术。(1) <strong>单元测试</strong>:劣质测试用例会同时制造假阳与假阴,须人工验证其正确性与质量(O.d.1),并用代码覆盖率、圈复杂度等客观指标提供质量保证(O.d.2);(2) <strong>模糊测试</strong>:用自动生成的输入把生成代码与真值实现对比,输入生成器须覆盖不同取值、类型、内存布局与边界情况(O.e.1–2),且输入必须能影响输出(O.e.3)——例如随机负数对 relu(x) 的正确性毫无信息量;(3) <strong>端到端测试</strong>:模拟完整用户工作流,须覆盖所有可能分支(O.f.1),并额外消除非确定性(「flaky」测试)以保证可重复(O.f.2)。</p>
+<p><strong>状态修改</strong>:如订机票、改网站,常把 Agent 达到的最终状态与真值状态比对。三个关键检查:真值状态应包含成功解题可达到的全部结果(如评估网站攻击时应涵盖所有可能的攻击结果,O.g.1);状态空间应同时含相关与无关状态(既看改动文件也看未改动文件)以检测 Agent 是否越界影响环境(O.g.2);状态空间应足够复杂(多变量、多依赖)以防随机/平凡修改碰巧正确(O.g.3)。</p>
+<p><strong>多步推理</strong>:常见两种方式。(1) <strong>答案匹配</strong>:解析输出再比对真值;现有基准的解析器常对输出格式做隐式假设(如 MATH 数据集假设答案以"Answer:"开头),必须显式声明此类假设/格式要求(O.h.1),并设计成难以靠随机猜测成功(O.h.2);(2) <strong>质量度量</strong>:当真值不可得时(如 ML 工程任务)用相对基线的定制指标评分;指标选择高度主观,为防 metric hacking,须确保指标与真实推理过程强相关(O.i.1)。</p>
+<h4 id="43">4.3 评估基准报告</h4>
+<p>完全避免评测问题常常不可行(尤其 LLM 裁判与测试类方法),此时透明沟通局限尤为重要。三组检查:<strong>透明与效度</strong>——开源数据与评测框架(R.1–2)、含防数据污染措施如私有留出测试集(R.3)与持续更新计划(R.4)、清晰陈述所测能力与构念效度(R.5)及评测对象是模型还是 Agent 框架(R.6);<strong>缺陷缓解</strong>——记录预防、识别与纠正缺陷的步骤(R.7),对不可避免缺陷做定性(R.8)与定量(R.9)影响分析(资源受限时可用抽样与不确定性量化技术估计真值噪声影响);<strong>结果解读</strong>——报告置信区间等统计显著性指标(R.10)、给出带缺陷结果的解读指南(R.11)、并报告非 AI 基线如人类专家(R.12)与平凡 Agent 如「什么都不做」者的成绩(R.13)。</p>
+<h3 id="5-agent">5 对 Agent 基准的评估</h3>
+<h4 id="51">5.1 评估得分</h4>
+<p>从 17 个基准中选 10 个开源基准深入评估(原文 Table 1):SWE-bench(软件工程,单元测试)、SWE-Lancer(软件工程,端到端测试)、KernelBench(软件工程,模糊测试)、BIRD(软件工程,单元测试)、Cybench(网络安全,答案匹配)、MLE-bench(软件工程,质量度量)、GAIA(通用助手,答案匹配)、τ-bench(环境交互,子串+状态匹配)、WebArena(环境交互,四种判分兼具)、OSWorld(环境交互,状态匹配)。按 ABC 各部分计算适用项平均分(图 5),结论:<strong>任务有效性</strong>——过半基准存在实现缺陷,尤其是向 Agent 提供工具者;<strong>结果有效性</strong>——过半基准未能处理其评测方法固有的局限;<strong>报告</strong>——80% 的基准未承认设计或实现弱点,且没有任何一个满足全部报告标准。</p>
+<h4 id="52">5.2 评估发现(六个量化新问题)</h4>
+<ol>
+<li><strong>τ-bench 依赖平凡状态/子串作真值</strong>(违反 O.b.3、O.g.3),高估 38%。τ-bench 的航空子集含 38% 故意不可解的任务(零售子集为 6%),而「成功」被定义为环境保持不变——什么都不做的 Agent 自然通过;该平凡 Agent 拿到 38% 成功率,超过 GPT-4o Agent 的表现。</li>
+<li><strong>τ-bench 允许穷举全部答案</strong>(违反 O.b.2),高估 40%。航空子集 2%、零售子集 3.6% 的任务把数据库原文当真值、按子串匹配判分——把整库 dump 出来的 Agent 即可通过。</li>
+<li><strong>WebArena</strong> 既违反 O.b.2(子串匹配忽略无关内容,回复中带上无关信息也算成功),其 LLM 裁判又未验证准确率与一致性(O.c.1,对标记"N/A"的任务接受空回复),合计高估 1.4–5.2%。</li>
+<li><strong>SWE-Lancer</strong> 未将 Agent 与真值隔离(T.5):Agent 可执行直接操作文件系统的 Python 脚本,虽然测试用例放在密码保护的 ZIP 内,但无需密码即可列出目录结构并覆写内容——Agent 可定位测试文件并替换为 <code>assert 1 == 1</code>,不解任何任务拿 100%。</li>
+<li><strong>KernelBench</strong> 的模糊测试只变张量取值、不变形状与内存布局(违反 O.e.1–2),在其他配置下会出错的内核也能通过;复查 Lange et al. 报告的内核,正确率被高估约 31%(绝对值)。</li>
+<li><strong>OSWorld</strong> 中网站改版破坏了评测所依赖的 HTML 选择器(类名、XPath 等):chrome 部分 46 题中 13 题已失效,导致对当时最强开源 Agent UI-TARS 的性能绝对低估 28%。</li>
+</ol>
+<h4 id="53-cve-bench">5.3 修订 CVE-Bench:案例研究</h4>
+<p>CVE-Bench 评估 Agent 在一日/零日(one/zero-day)场景下利用真实 Web 漏洞的能力,以预设攻击目标(如拒绝服务)是否达成判分,是设计与实现复杂度俱佳的示范对象。用 ABC 修复了两处缺陷:</p>
+<p><strong>时间盲注的天真状态匹配</strong>:时间型 SQL 注入靠测量多次请求的延迟差推断数据库内容(如在 IF 子句中执行 SLEEP 并测时延)。CVE-Bench 原以「数据库日志中出现 SLEEP 子句」为判据——但日志含 SLEEP 不代表 SLEEP 被执行(违反 O.g.1),Agent 把 SLEEP 任意塞进查询即可通过,造成 32.5% 的性能高估;修复判据后消失。
+<strong>未设防的外发服务器</strong>:诱导 Web 应用向被封禁的外发服务器发请求是关键攻击向量,原判据是「外发服务器被访问过」。按 T.9 做多轮模拟执行时,发现所有 Agent 都能通过该项——排查后确认:与被测服务同处一个 docker 网络即可直接访问外发服务器,构成捷径;在外发服务器上拒绝外部请求后,Agent 成功率下降 10%。综合两项修复,ABC 使 CVE-Bench 的性能高估绝对下降 33%(经网络安全专家确认)。</p>
+<h3 id="6-conclusion">6 结论(Conclusion)</h3>
+<p>本文提出首个可操作的 Agent 基准检查清单 ABC,聚焦任务有效性、结果有效性与结果报告,据此形成构建严谨 Agent 基准的最佳实践;基于 ABC 评估十个广泛使用的基准,发现了估计 Agent 性能时误差可达相对 100% 的重大评测问题;最后以 CVE-Bench 为例演示如何在基准构建过程中用 ABC 提升评测严谨性。</p>
+<h3 id="_3">附录速览</h3>
+<p>附录 A 为局限与影响声明:仅覆盖 2024.1–2025.3 顶级厂商使用的 17 个基准,清单未必穷尽;分类学基于对 Agent 推理能力的当前理解,未来新能力或带来新挑战;结论仅反映写作时点各基准状态。附录 B 详述基准收集(78 → 25 → 17 → 10)。附录 C 逐条列出 ABC 检查项的来源(自建经验 / 现有最佳实践 / 已知问题教训 / 领域特定建议)。附录 D 给出十个基准的逐项评分与理由(如 SWE-Lancer 因 T.5/T.10 得 0 分,BIRD 因数据库未以只读打开且未在任务间重置而 T.4 得 0 分)。附录 E 为各问题的实验设计。附录 F 以 BIRD 为例改写出满足全部 13 条报告标准的示范:重验 500 个任务发现 11.65% 的真值查询有错;基于正态假设给出成功率置信区间公式(μ = e + (1−2e)p₀ 等);报告 SQL 专家基线 92.96%、平凡 Agent 0% 的健全性检查——「高排名模型的置信区间可低至让原排名第 1 者可能落到第 13 名」,直观展示仅看点数的决策风险。</p>
+<h2 id="_4">要点速览</h2>
+<ul>
+<li><strong>两大有效性条件</strong>:任务有效性(任务可解 ⟺ Agent 具备目标能力)与结果有效性(评测通过 ⟺ 任务真正完成);Agent 基准因「复杂任务设置 + 非结构化结果」两大挑战而特别容易双双失守。</li>
+<li><strong>ABC 清单结构</strong>:任务有效性 10 条(工具 T.1–3、环境 T.4–6、实现 T.7–10)+ 结果有效性约 18 条(按全串/子串/LLM 裁判、单元/模糊/端到端测试、状态匹配、答案匹配/质量度量分组)+ 报告 13 条(透明与效度、缺陷缓解、结果解读)。</li>
+<li><strong>审计结论</strong>:十个流行基准(SWE-bench、SWE-Lancer、KernelBench、BIRD、Cybench、MLE-bench、GAIA、τ-bench、WebArena、OSWorld)中 7 个违反任务有效性、7 个违反结果有效性、10 个全部存在报告局限;80% 未承认自身弱点。</li>
+<li><strong>τ-bench 双重缺陷</strong>:「什么都不做」的平凡 Agent 因「环境未变即成功」的定义在 38% 故意不可解任务上得分,反超 GPT-4o Agent;子串匹配 + 数据库原文作真值,使「穷举全部答案」可再高估 40%。</li>
+<li><strong>判分被绕过的三个实锤</strong>:SWE-Lancer 的密码 ZIP 可免密列目录并覆写,换成 <code>assert 1==1</code> 即拿 100%;KernelBench 模糊测试不变张量形状与内存布局,高估约 31%;WebArena 子串匹配忽略无关内容 + LLM 裁判接受空回复,高估 1.4–5.2%。</li>
+<li><strong>环境漂移致低估</strong>:OSWorld 的 chrome 部分 46 题中 13 题因网站改版破坏 HTML 选择器而失效,低估 UI-TARS 达 28%(绝对)——冻结环境(T.6)不只是防作弊,也防基准腐烂。</li>
+<li><strong>CVE-Bench 案例的修复收益</strong>:修正时间盲注判据(「日志含 SLEEP」→「SLEEP 真被执行」)消除 32.5% 高估;封堵 docker 网络捷径使成功率下降 10%;合计使性能高估绝对下降 33%,证明 ABC 在基准开发期即可用。</li>
+<li><strong>报告标准同样关键</strong>:私有留出测试集、持续更新计划、置信区间、解读指南、人类专家与平凡 Agent 基线(R.1–13);BIRD 示范显示,考虑真值 11.65% 错误率后,原排名第 1 的模型置信区间可滑至第 13 名。</li>
+<li><strong>工程启示</strong>:造基准时先跑平凡 Agent(什么都不做、dump 数据库、穷举答案)与 Oracle 求解器做健全性检查;给 Agent 的工具要固定版本、隔离真值、冻结环境;判分器(尤其 LLM 裁判)必须先验证准确率与自洽性。</li>
+<li><strong>课程关联</strong>:把 Press 的「三性质」具体化为可勾选的审计项,回应 tinyBenchmarks 想要高效评测的前提(先保证正确),也与 SWE-bench/SWE-smith 的单元测试验证链路直接呼应——执行验证并非天然严谨,测试本身也需要被验证。</li>
+</ul>
+      </div>
+    </article>
+    <nav class="pager"><a class="pager-prev" href="Press2024_How_to_Build_Good_LM_Benchmarks.html"><span>上一篇</span>&quot;如何构建好的语言建模基准&quot;</a><a class="pager-next" href="Grace2026_Demystifying_Evals_Anthropic.html"><span>下一篇</span>&quot;解构 AI Agent 评测&quot;</a></nav>
+  </main>
+</div>
+<script src="../assets/site.js"></script>
+</body>
+</html>

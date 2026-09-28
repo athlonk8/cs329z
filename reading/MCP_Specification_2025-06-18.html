@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>模型上下文协议（MCP）规范（2025-06-18 版） · CS 329Z 中文学习站</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html"><span class="brand-mark">CS</span>329Z<span class="brand-sub">中文学习站</span></a>
+    <nav class="topnav">
+      <a href="../index.html#syllabus">课程表</a>
+      <a href="../index.html#dates">重要日期</a>
+      <a href="../index.html#about">关于本站</a>
+    </nav>
+    <div class="searchbox"><input id="search-input" type="search" placeholder="搜索材料 / 主题…" autocomplete="off"><div id="search-results" class="search-results" hidden></div></div>
+  </div>
+</header>
+<div class="read-layout">
+  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">全文中译</a><ul><li><a href="#_3">规范说明</a></li><li><a href="#overview">概览（Overview）</a></li><li><a href="#key-details">关键细节（Key Details）</a></li><li><a href="#security-and-trust-safety">安全与信任及安全（Security and Trust &amp;amp; Safety）</a></li><li><a href="#learn-more">延伸阅读（Learn More）</a></li></ul></li><li><a href="#_4">要点速览</a></li></ul></aside>
+  <main class="read-main">
+    <div class="crumb"><a href="../index.html">首页</a> / <a href="../index.html#week-week03a_tool_use_mcp">第3周 · 工具调用与 MCP</a></div>
+    <article class="read-article">
+      <h1 class="read-title">模型上下文协议（MCP）规范（2025-06-18 版）</h1>
+      <p class="read-title-en">&quot;Model Context Protocol Specification (Version 2025-06-18)&quot;</p>
+      <p class="read-meta">Model Context Protocol 项目（modelcontextprotocol.io） · &quot;官方规范网页 · modelcontextprotocol.io · Version 2025-06-18&quot;</p>
+      <p class="read-badges"><span class="badge badge-must">必读</span><span class="badge badge-kind">全文中译</span><button class="lang-toggle" id="lang-toggle" type="button">仅看中文</button><a class="orig-link" href="../originals/week03a_tool_use_mcp/MCP_Specification_2025-06-18.html" target="_blank" rel="noopener">查看原文(HTML) ↗</a></p>
+      <div class="markdown-body">
+<h2 id="_1">导读</h2>
+<p>本文是第 3 周"工具调用与 MCP"专题的核心材料。MCP（Model Context Protocol，模型上下文协议）是一个开放协议，为 LLM 应用接入外部数据源与工具提供标准化方式，被称为"AI 应用的 USB-C 接口"。本页是 2025-06-18 版官方规范站的概览页（Specification/Overview），它规定了整个协议的骨架：架构上的三种角色（Host、Client、Server）、通信基础（JSON-RPC 2.0 消息、有状态连接、能力协商）、Server 提供的三类能力（Resources、Prompts、Tools）与 Client 提供的三类能力（Sampling、Roots、Elicitation），以及贯穿协议的安全与信任原则。</p>
+<p>这份概览值得逐句精读：它定义了工具调用的信任边界（工具即任意代码执行、工具描述应视为不可信）、采样的用户控制权（用户须批准每次 LLM 采样并能看到实际发出的提示），这些原则直接决定构建 Agent 工具层的安全设计。下文完整翻译该概览页的全部内容，未补充存档之外的规范细节；各子规范的深入内容（Architecture、Base Protocol、Server Features、Client Features）可按文末"延伸阅读"所列条目在官网继续查阅。</p>
+<h2 id="_2">全文中译</h2>
+<blockquote>
+<p>译注：本存档仅包含规范站 Specification 页面（即协议概览）的完整内容。以下译文覆盖该页全部实质内容，并按原文结构整理。</p>
+</blockquote>
+<h3 id="_3">规范说明</h3>
+<p><strong>模型上下文协议（Model Context Protocol，MCP）是一个开放协议</strong>，支持 LLM 应用与外部数据源和工具之间的无缝集成。无论你是在构建 AI 加持的 IDE、增强一个聊天界面，还是创建自定义的 AI 工作流，MCP 都提供了一种标准化的方式，把 LLM 与它们所需的上下文连接起来。</p>
+<p>本规范定义了权威的协议要求，其依据是 <code>schema.ts</code> 中的 TypeScript 模式（schema）。实现指南与示例请访问 modelcontextprotocol.io。</p>
+<p>本文档中的关键词"必须（MUST）"、"绝不可以（MUST NOT）"、"要求（REQUIRED）"、"应当（SHALL）"、"不应（SHALL NOT）"、"建议（SHOULD）"、"不建议（SHOULD NOT）"、"推荐（RECOMMENDED）"、"不推荐（NOT RECOMMENDED）"、"可以（MAY）"和"可选（OPTIONAL）"，当且仅当它们以全大写形式出现时，应按 BCP 14 [RFC2119] [RFC8174] 的描述进行解释。</p>
+<h3 id="overview">概览（Overview）</h3>
+<p>MCP 为应用程序提供了一种标准化的方式来：</p>
+<ul>
+<li>与语言模型共享上下文信息；</li>
+<li>向 AI 系统暴露工具与能力；</li>
+<li>构建可组合的集成与工作流。</li>
+</ul>
+<p>该协议使用 JSON-RPC 2.0 消息在以下三者之间建立通信：</p>
+<ul>
+<li><strong>主机（Hosts）</strong>：发起连接的 LLM 应用程序；</li>
+<li><strong>客户端（Clients）</strong>：主机应用程序内部的连接器；</li>
+<li><strong>服务器（Servers）</strong>：提供上下文与能力的服务。</li>
+</ul>
+<p>MCP 的部分设计灵感来自语言服务器协议（Language Server Protocol, LSP）——LSP 标准化了如何在整个开发工具生态中为编程语言添加支持。与此类似，MCP 标准化了如何将额外的上下文和工具集成到 AI 应用生态之中。</p>
+<h3 id="key-details">关键细节（Key Details）</h3>
+<h4 id="base-protocol">基础协议（Base Protocol）</h4>
+<ul>
+<li>JSON-RPC 消息格式；</li>
+<li>有状态连接（Stateful connections）；</li>
+<li>服务器与客户端的能力协商（capability negotiation）。</li>
+</ul>
+<h4 id="features">功能（Features）</h4>
+<p>服务器（Servers）可向客户端提供以下任意功能：</p>
+<ul>
+<li><strong>资源（Resources）</strong>：供用户或 AI 模型使用的上下文与数据；</li>
+<li><strong>提示（Prompts）</strong>：面向用户的模板化消息与工作流；</li>
+<li><strong>工具（Tools）</strong>：供 AI 模型执行的函数。</li>
+</ul>
+<p>客户端（Clients）可向服务器提供以下功能：</p>
+<ul>
+<li><strong>采样（Sampling）</strong>：由服务器发起的智能体行为与递归式 LLM 交互；</li>
+<li><strong>根（Roots）</strong>：由服务器发起的、对 URI 或文件系统边界（即服务器可在其中操作的范围）的询问；</li>
+<li><strong>引导填写（Elicitation）</strong>：由服务器发起的、向用户请求补充信息的机制。</li>
+</ul>
+<h4 id="additional-utilities">附加工具（Additional Utilities）</h4>
+<ul>
+<li>配置（Configuration）；</li>
+<li>进度追踪（Progress tracking）；</li>
+<li>取消（Cancellation）；</li>
+<li>错误报告（Error reporting）；</li>
+<li>日志（Logging）。</li>
+</ul>
+<h3 id="security-and-trust-safety">安全与信任及安全（Security and Trust &amp; Safety）</h3>
+<p>模型上下文协议通过任意的数据访问与代码执行路径，提供了强大的能力。伴随这种能力而来的，是所有实现者都必须认真对待的重要安全与信任考量。</p>
+<h4 id="key-principles">关键原则（Key Principles）</h4>
+<p><strong>用户同意与控制（User Consent and Control）</strong></p>
+<ul>
+<li>用户必须明确同意并理解所有的数据访问与操作；</li>
+<li>用户必须保持对"共享哪些数据、执行哪些操作"的控制权；</li>
+<li>实现者应提供清晰的界面（UI），供用户审阅和授权相关活动。</li>
+</ul>
+<p><strong>数据隐私（Data Privacy）</strong></p>
+<ul>
+<li>主机在向服务器暴露用户数据之前，必须获得用户的明确同意；</li>
+<li>未经用户同意，主机不得将资源数据传输到其他地方；</li>
+<li>用户数据应通过适当的访问控制加以保护。</li>
+</ul>
+<p><strong>工具安全（Tool Safety）</strong></p>
+<ul>
+<li>工具代表任意代码执行（arbitrary code execution），必须以相应的谨慎态度对待；</li>
+<li>特别地，对工具行为的描述（例如注解/annotations）应被视为不可信，除非其来自可信任的服务器；</li>
+<li>主机在调用任何工具之前，必须获得用户的明确同意；</li>
+<li>用户在授权使用某个工具之前，应当了解该工具的功能。</li>
+</ul>
+<p><strong>LLM 采样控制（LLM Sampling Controls）</strong></p>
+<ul>
+<li>用户必须明确批准任何 LLM 采样请求；</li>
+<li>用户应当控制：</li>
+<li>是否进行采样；</li>
+<li>实际发送的提示（prompt）内容；</li>
+<li>服务器能看到哪些结果；</li>
+<li>协议有意限制服务器对提示内容的可见性。</li>
+</ul>
+<h4 id="implementation-guidelines">实施指南（Implementation Guidelines）</h4>
+<p>尽管 MCP 本身无法在协议层面强制执行这些安全原则，实现者<strong>应当（SHOULD）</strong>：</p>
+<ul>
+<li>在应用中内建健壮的同意与授权流程；</li>
+<li>提供清晰的安全影响说明文档；</li>
+<li>实现适当的访问控制与数据保护；</li>
+<li>在集成中遵循安全最佳实践；</li>
+<li>在功能设计中考虑隐私影响。</li>
+</ul>
+<h3 id="learn-more">延伸阅读（Learn More）</h3>
+<p>可以进一步探索协议各组件的详细规范：</p>
+<ul>
+<li>架构（Architecture）；</li>
+<li>基础协议（Base Protocol）；</li>
+<li>服务器功能（Server Features）；</li>
+<li>客户端功能（Client Features）；</li>
+<li>参与贡献（Contributing）。</li>
+</ul>
+<h2 id="_4">要点速览</h2>
+<ul>
+<li>MCP 是开放协议，目标是让 LLM 应用与外部数据源、工具无缝集成：无论 AI IDE、聊天界面还是自定义 AI 工作流，都以同一标准化方式接入上下文。</li>
+<li>通信地基是 JSON-RPC 2.0 消息；连接是有状态的，并且服务器与客户端之间进行能力协商（capability negotiation）。附加工具层提供配置、进度追踪、取消、错误报告与日志。</li>
+<li>架构三角色：Host（发起连接的 LLM 应用，如 IDE 或聊天客户端）、Client（Host 内部的连接器，通常与 Server 一一相连）、Server（提供上下文与能力的服务）。</li>
+<li>设计灵感来自语言服务器协议（LSP）：如同 LSP 统一了编程语言在开发工具生态中的接入，MCP 统一了上下文与工具在 AI 应用生态中的接入。</li>
+<li>Server 三大能力：Resources（给用户/模型用的上下文数据）、Prompts（模板化消息与工作流）、Tools（供模型执行的函数）。</li>
+<li>Client 三大能力：Sampling（服务器发起的智能体行为与递归 LLM 交互）、Roots（询问 URI/文件系统操作边界）、Elicitation（向用户征求补充信息）。</li>
+<li>安全第一原则：用户必须明确同意并理解所有数据访问与操作，且保留对共享数据和所执行操作的最终控制权。</li>
+<li>工具即任意代码执行：工具的行为描述（如 annotations）应视为不可信（除非来自可信服务器）；调用任何工具前 Host 必须获得用户明确同意。</li>
+<li>采样必须由用户批准：用户控制是否采样、实际发出的提示内容、以及服务器可见的结果；协议有意限制服务器对提示的可见性——这是 MCP 设计中防提示泄露的关键边界。</li>
+<li>协议本身无法在协议层强制执行安全原则，因此规范用 SHOULD 级别要求实现者内建同意/授权流程、访问控制、数据保护并遵循安全最佳实践。</li>
+</ul>
+      </div>
+    </article>
+    <nav class="pager"><a class="pager-prev" href="Lewis2020_RAG_NeurIPS2020.html"><span>上一篇</span>面向知识密集型 NLP 任务的检索增强生成</a><a class="pager-next" href="Khattab2024_DSPy_ICLR2024.html"><span>下一篇</span>DSPy：将声明式语言模型调用编译为自我改进的流水线</a></nav>
+  </main>
+</div>
+<script src="../assets/site.js"></script>
+</body>
+</html>

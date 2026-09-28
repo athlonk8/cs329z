@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>&quot;MemGPT：让 LLM 走向操作系统&quot; · CS 329Z 中文学习站</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html"><span class="brand-mark">CS</span>329Z<span class="brand-sub">中文学习站</span></a>
+    <nav class="topnav">
+      <a href="../index.html#syllabus">课程表</a>
+      <a href="../index.html#dates">重要日期</a>
+      <a href="../index.html#about">关于本站</a>
+    </nav>
+    <div class="searchbox"><input id="search-input" type="search" placeholder="搜索材料 / 主题…" autocomplete="off"><div id="search-results" class="search-results" hidden></div></div>
+  </div>
+</header>
+<div class="read-layout">
+  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">论文精读</a><ul><li><a href="#abstract">摘要（Abstract）</a></li><li><a href="#1-introduction">1 引言（Introduction）</a></li><li><a href="#2-memgptmemorygpt">2 MemGPT（MemoryGPT）系统设计</a></li><li><a href="#3">3 实验</a></li><li><a href="#4-related-work">4 相关工作（Related Work）</a></li><li><a href="#5-conclusion">5 结论（Conclusion）</a></li></ul></li><li><a href="#_3">要点速览</a></li></ul></aside>
+  <main class="read-main">
+    <div class="crumb"><a href="../index.html">首页</a> / <a href="../index.html#week-week04b_memory">第4周 · Agent 记忆</a></div>
+    <article class="read-article">
+      <h1 class="read-title">&quot;MemGPT：让 LLM 走向操作系统&quot;</h1>
+      <p class="read-title-en">&quot;MemGPT: Towards LLMs as Operating Systems&quot;</p>
+      <p class="read-meta">&quot;Charles Packer et al.&quot; · &quot;arXiv 2023 · UC Berkeley&quot;</p>
+      <p class="read-badges"><span class="badge badge-must">必读</span><span class="badge badge-kind">论文精读</span><button class="lang-toggle" id="lang-toggle" type="button">仅看中文</button><a class="orig-link" href="../originals/week04b_memory/Packer2023_MemGPT.pdf" target="_blank" rel="noopener">查看原文(PDF) ↗</a></p>
+      <div class="markdown-body">
+<h2 id="_1">导读</h2>
+<p>本文是第 4 周「Agent 记忆」专题的开山之作（importance: must），由 UC Berkeley 的 Charles Packer 等人于 2023 年提出（后发展为商业公司 Letta）。它回答的问题非常根本：LLM 的上下文窗口（context window）是固定且有限的，如何让它"看起来"拥有无限上下文？</p>
+<p>MemGPT 的答案是向传统操作系统（OS）借智慧：正如操作系统通过内存与磁盘之间的分页（paging）为应用程序营造出"内存远大于物理内存"的虚拟内存（virtual memory）假象，MemGPT 把 LLM 的上下文窗口当作受限的"主存"，把外部存储当作"磁盘"，并借助函数调用（function calling）让 LLM 自主地在两级存储之间换入换出数据。这一"LLM 即操作系统"的隐喻直接定义了后来 Agent 记忆系统的基本词汇：主上下文/外置上下文、工作记忆（working context）、召回存储（recall storage）、归档存储（archival storage）、记忆压力（memory pressure）警告等。论文在文档分析与多会话对话两个长上下文场景上验证：MemGPT 能让 GPT-4 在深度记忆检索任务上把准确率从 32.1% 提升到 92.5%。</p>
+<h2 id="_2">论文精读</h2>
+<h3 id="abstract">摘要（Abstract）</h3>
+<p>大语言模型（LLM）已经革新了 AI，但受限的上下文窗口阻碍了其在扩展对话与文档分析等任务中的效用。为了能够使用超出上下文窗口限制的内容，作者提出<strong>虚拟上下文管理（virtual context management）</strong>技术，其灵感来自传统操作系统的分层记忆体系——后者通过物理内存与磁盘之间的分页提供了扩展虚拟内存的假象。基于该技术，作者提出 MemGPT（MemoryGPT）：一个智能管理不同存储层级（storage tiers）、从而在 LLM 有限上下文窗口内有效提供扩展上下文的系统。作者在两个现代 LLM 有限上下文严重制约性能的领域评估了这一受操作系统启发的设计：文档分析——MemGPT 能够分析远超底层 LLM 上下文窗口的大文档；以及多会话聊天（multi-session chat）——MemGPT 可以创建在与用户长期互动中记忆、反思并动态演化的对话 Agent。代码与实验数据开源于 research.memgpt.ai。</p>
+<h3 id="1-introduction">1 引言（Introduction）</h3>
+<p>尽管 LLM 已成为对话式 AI 的基石，但固定长度的上下文窗口严重限制了其应用于长对话或长文档推理的能力：最广泛使用的开源 LLM 只能支撑几十轮往返消息或一篇短文档，就会超出最大输入长度。</p>
+<p>直接扩展 Transformer 的上下文长度，会因自注意力机制带来计算时间与内存的二次方增长；而且即使克服了计算问题，最近研究（Lost in the Middle）也表明长上下文模型并不能有效利用额外上下文——注意力分布不均匀，模型对上下文中部信息的召回能力弱于首尾。因此，在训练更长模型收益递减的情况下，迫切需要替代技术来支撑长上下文。</p>
+<p>MemGPT 的思路是：<strong>在继续使用固定上下文模型的前提下，提供"无限上下文"的假象</strong>。操作系统中的虚拟内存分页技术允许应用处理远超可用内存的数据集——溢出数据被换页到磁盘，被访问时再通过缺页中断（page fault）取回内存。MemGPT 把这一思想移植过来：</p>
+<ul>
+<li>上下文窗口 ≈ 主存/物理内存（main context）；</li>
+<li>外部存储 ≈ 磁盘（external context）；</li>
+<li>LLM 通过函数调用读写外部数据源、修改自身上下文、决定何时响应用户——相当于自己充当"操作系统"，负责把信息在主上下文与外部存储之间"换页"（page in / page out）。</li>
+</ul>
+<p>论文表 1 列出了截至 2024 年 1 月常用模型的上下文长度：Llama (1) 2k token（约 20 条消息）、Llama 2 4k（约 60 条）、Mistral 7B 与 GPT-4（发布版）8k（约 140 条）、GPT-3.5 Turbo 16k（约 300 条）、GPT-4 32k（约 600 条）、Claude 2 100k（约 2000 条）、GPT-4 Turbo 128k（约 2600 条）。可见即便最长的窗口，对以月计的陪伴式对话或百万 token 级的法律/财务文档（如年报 10-K）也远远不够。</p>
+<h3 id="2-memgptmemorygpt">2 MemGPT（MemoryGPT）系统设计</h3>
+<p>MemGPT 的多级记忆架构区分两大类记忆：</p>
+<ul>
+<li><strong>主上下文（main context）</strong>：即 LLM 的提示词 token（prompt tokens），类比主存/RAM。只有处于主上下文中的内容才被视为"在上下文内"，可在推理时被 LLM 处理器访问。</li>
+<li><strong>外置上下文（external context）</strong>：固定上下文窗口之外的一切信息，类比磁盘存储。外置数据必须被显式移入主上下文，才能参与推理。</li>
+</ul>
+<p>MemGPT 提供一组函数调用，让 LLM <strong>无需任何用户干预即可自主管理自己的记忆</strong>——自主更新与检索，自主决定何时在层级间移动数据（例如对话历史过长时），以及修改主上下文以反映自己对当前目标与职责的演化理解。</p>
+<h4 id="21-token">2.1 主上下文（提示词 token）的三个区段</h4>
+<p>主上下文被划分为三个连续区段：</p>
+<ol>
+<li><strong>系统指令（system instructions）</strong>：只读、静态，包含 MemGPT 控制流说明、各级记忆的用途说明、以及如何使用 MemGPT 函数的指令。</li>
+<li><strong>工作上下文（working context）</strong>：一块固定大小、可读写的非结构化文本区，<strong>只能通过 MemGPT 函数调用写入</strong>。在对话场景中，它用于存放关于用户与 Agent 人设的关键事实、偏好等重要信息（例如把"男友叫 James"更新为"前男友叫 James"），使 Agent 能与用户流畅交流。</li>
+<li><strong>FIFO 队列</strong>：滚动存放消息历史，包括 Agent 与用户的消息、系统消息（如内存警告）以及函数调用的输入输出。队列的第一个位置存放一条系统消息，是对已被逐出队列消息的<strong>递归摘要（recursive summary）</strong>。</li>
+</ol>
+<h4 id="22-queue-manager">2.2 队列管理器（Queue Manager）</h4>
+<p>队列管理器负责管理召回存储（recall storage，即 MemGPT 的消息数据库）与 FIFO 队列：</p>
+<ul>
+<li>收到新消息时，将其追加到 FIFO 队列，拼接提示词 token 并触发 LLM 推理；随后把输入消息与 LLM 输出都写入召回存储。</li>
+<li>通过函数调用取回的历史消息会被追加到队列尾部，重新进入上下文窗口。</li>
+<li><strong>上下文溢出控制</strong>：当提示词 token 超过底层 LLM 上下文窗口的"警告阈值"（warning token count，如 70%）时，队列管理器向队列插入一条系统消息，警告 LLM 即将发生队列逐出——这就是"<strong>内存压力（memory pressure）</strong>"警告，让 LLM 有机会用函数把 FIFO 队列中的重要信息存入工作上下文或归档存储（archival storage，一个可存放任意长度文本对象的可读写数据库）。当 token 超过"清空阈值"（flush token count，如 100%）时，队列管理器清空队列以释放空间：逐出一定数量的消息（如上下文窗口的 50%），并利用既有递归摘要与被逐出消息生成新的递归摘要。被逐出的消息不再处于上下文内，但会无限期保存在召回存储中，可随时通过函数调用读取。</li>
+</ul>
+<h4 id="23-function-executor-token">2.3 函数执行器（Function Executor，处理补全 token）</h4>
+<p>MemGPT 通过 LLM 处理器生成的函数调用来编排主上下文与外置上下文之间的数据流动。记忆的编辑与检索完全是<strong>自导向（self-directed）</strong>的：系统指令中包含（1）记忆层级及其用途的详细描述，以及（2）带自然语言描述的函数模式（function schema），指导 LLM 访问或修改自己的记忆。</p>
+<p>每个推理周期中，LLM 以主上下文（拼接为单一字符串）为输入生成输出串；MemGPT 解析并校验函数参数后执行函数，执行结果（包括运行时错误，例如在主上下文已满时仍尝试追加内容）会被反馈给处理器——这一反馈回路让系统能从自身行为中学习并调整。系统会向处理器提示 token 限制警告以引导其记忆管理决策；检索机制也实现了分页（pagination），防止一次检索就撑爆上下文窗口。</p>
+<h4 id="24-function-chaining">2.4 控制流与函数链（Function Chaining）</h4>
+<p>MemGPT 由<strong>事件（event）</strong>触发 LLM 推理。事件是广义输入，包括：用户消息、系统消息（如主上下文容量警告）、用户交互事件（如"用户刚登录""用户上传完文档"的提醒），以及定时事件（让 MemGPT 可在无用户干预下"主动"运行）。事件经解析器转换为纯文本消息，追加进主上下文。</p>
+<p>许多实际任务需要按顺序调用多个函数（例如对单个查询翻阅多页检索结果，或把来自不同查询的多份文档内容汇入主上下文）。<strong>函数链</strong>允许 MemGPT 在把控制权交还用户之前顺序执行多个函数调用：函数可带一个特殊标志请求在函数执行完后立即把控制权返回处理器（request heartbeat=true），MemGPT 会把函数输出加入主上下文并继续推理；若不带该标志（即让出 yield），则暂停处理器，直到下一个外部事件到来。</p>
+<h3 id="3">3 实验</h3>
+<p>MemGPT 在两个长上下文领域评估：对话 Agent 与文档分析。实验所用模型端点：GPT-4 指 gpt-4-0613（上下文 8,192）、GPT-4 Turbo 指 gpt-4-1106-preview（128,000）、GPT-3.5 Turbo 指 gpt-3.5-turbo-1106（16,385）。</p>
+<h4 id="31-agent">3.1 对话 Agent：一致性与吸引力</h4>
+<p>陪伴式/个性化助手需要与用户进行跨越数周、数月甚至数年的自然长期互动，这对固定上下文模型构成两大挑战，也是评估的两条标准：(1) <strong>一致性（Consistency）</strong>——新提到的事实、偏好与事件应与用户和 Agent 双方的既往表述相吻合；(2) <strong>吸引力（Engagement）</strong>——Agent 应能利用关于用户的长期知识来个性化回复，让对话更自然。</p>
+<p><strong>数据集</strong>：Multi-Session Chat（MSC，Xu et al., 2021）——由人类标注者扮演一致人设生成的多会话聊天日志，每段对话共 5 个会话、每会话约十来条消息。作者增加了第 6 个会话，其中包含同一对人设间的一组问答对。</p>
+<p><strong>深度记忆检索任务（DMR，测一致性）</strong>：作者提出的新任务——用户提出一条明确回指先前对话、且正确答案范围很窄的问题。问答对由另一个 LLM 生成，要求问题必须只能凭借过去会话中的知识才能答对（不能只靠人设摘要答出）。评测用 ROUGE-L（R）与 LLM 评委（GPT-4 判分）。基线（裸 LLM）只能看到过去五段对话的有损摘要以模拟递归摘要流程，而 MemGPT 可访问完整对话历史，但必须通过分页搜索查询将其召回主上下文。</p>
+<p>结果（表 2）：MemGPT 显著超越固定上下文基线——GPT-3.5 Turbo：38.7% → 66.9%（ROUGE-L 0.394 → 0.629）；GPT-4：32.1% → 92.5%（0.296 → 0.814）；GPT-4 Turbo：35.3% → 93.4%（0.359 → 0.827）。</p>
+<p><strong>对话开场白任务（Opener，测吸引力）</strong>：评估 Agent 能否利用先前对话积累的知识写出吸引人的开场白，方法是将其生成的开场白与"金标准人设"及人类撰写的开场白计算 CSIM 相似度。结果（表 3）：人类开场白 SIM-1/SIM-3/SIM-H 为 0.800/0.800/1.000；MemGPT（GPT-3.5）为 0.830/0.812/0.817，MemGPT（GPT-4）为 0.868/0.843/0.773——MemGPT 的开场白与人类手写的开场白相似度（SIM-H）达到甚至超过基线模型，偶尔优于人类。作者还发现，把信息存入工作上下文是生成有吸引力开场白的关键。</p>
+<h4 id="32">3.2 文档分析</h4>
+<p>许多真实文档远超模型上下文：法律、财务文档（如 SEC 10-K 年报）可轻松超过百万 token；且很多任务需要跨多篇长文档建立联系——盲目扩大上下文难以解决这些问题。</p>
+<p><strong>多文档问答</strong>：采用 Liu et al.（2023a）的检索器-阅读器（retriever-reader）文档问答任务：从 NaturalQuestions-Open 选问题，检索器（OpenAI text-embedding-ada-002 嵌入 + 余弦相似度）选出与问题相关的 Wikipedia 文档，阅读模型基于给定文档作答；评估阅读器准确率随检索文档数 K 增长的变化。MemGPT 侧使用 PostgreSQL + pgvector 扩展做归档存储（HNSW 索引实现亚秒级近似查询），整份嵌入文档集装入归档存储，检索器"自然涌现"为归档存储的搜索功能。使用 2018 年末的 Wikipedia 转储，抽取 50 个问题评估，由 LLM 评委判分以保证答案确实来自检索文档。</p>
+<p>结果（图 5）：固定上下文基线的性能上限约等于检索器性能（若相似度搜索没把金文档排进前排，基线永远看不到它）；文档截断会随压缩程度加深而降低准确率。MemGPT 则能通过多次调用检索器、在归档存储中迭代翻页，使其可用文档数不再受限于上下文窗口能容纳的数量——其性能几乎不受上下文长度增长影响。MemGPT 用 GPT-3.5 时因函数调用能力有限而明显退化，用 GPT-4 表现最佳。</p>
+<p><strong>嵌套键值检索（Nested KV）</strong>：作者基于先前工作的合成 KV 任务（键值均为 128 位 UUID）提出嵌套版本——值本身也可能是键，需要多跳查找。固定 UUID 对总数为 140（约 8k token，即 GPT-4 基线上下文长度），嵌套层级从 0 到 4，采样 30 种排序配置。</p>
+<p>结果（图 7）：GPT-3.5 在 1 层嵌套即跌至 0% 准确率（主要失败模式是直接返回原始值）；GPT-4 与 GPT-4 Turbo 稍好，但在 3 层嵌套时也降到 0%。MemGPT（GPT-4）则完全不受嵌套层数影响，能通过反复的函数查询完成嵌套查找；MemGPT（GPT-4 Turbo / GPT-3.5）也优于对应基线，但在 2 层后开始下滑。这一任务直接检验了 Agent 汇集多个数据源信息（多跳检索）的能力。</p>
+<h3 id="4-related-work">4 相关工作（Related Work）</h3>
+<ul>
+<li><strong>长上下文 LLM</strong>：稀疏注意力、低秩近似、神经记忆，以及把上下文窗口外推到训练长度之外的位置插值等。MemGPT 与这些改进是互补的——更长的模型相当于更大的"主存"，MemGPT 的贡献在于分层记忆本身。</li>
+<li><strong>检索增强模型</strong>：MemGPT 的外部记忆设计建立在大量"用外部检索器增强 LLM"的工作之上，尤其是 FLARE（让 LLM 在生成过程中主动决定何时检索什么）以及把检索与思维链交错以改进多步问答的工作。</li>
+<li><strong>LLM 作为 Agent</strong>：Park et al.（2023，即"斯坦福小镇"生成式 Agent）为 LLM 增加记忆并用作规划器；WebGPT 训练模型先搜网再答题并使用与 MemGPT 相似的分页概念控制上下文；ReAct 证明交错思维链推理能提升交互式 LLM Agent 的规划能力（MemGPT 中 LLM 执行函数时也能"边想边说"）；AgentBench 等 LLM-as-agent 基准用于评测。与之相对，MemGPT 聚焦于为 Agent 配备对用户输入的长期记忆。</li>
+</ul>
+<h3 id="5-conclusion">5 结论（Conclusion）</h3>
+<p>MemGPT 是一个受操作系统启发、管理 LLM 有限上下文窗口的新系统：通过设计类比传统 OS 的记忆层级与控制流，为 LLM 提供了更大上下文资源的假象。在文档分析中，MemGPT 通过高效地把相关上下文换入换出内存，能处理远超当前 LLM 上下文限制的长文本；在对话 Agent 中，MemGPT 支持在长对话中维持长期记忆、一致性与可演化性。总体而言，分层内存管理与中断等操作系统技术的引入，能在固定上下文限制内释放 LLM 的潜力。未来方向包括把 MemGPT 扩展到其他具有海量或无界上下文的领域、集成数据库/缓存等不同记忆层级技术、以及进一步改进控制流与内存管理策略。</p>
+<h2 id="_3">要点速览</h2>
+<ul>
+<li>核心隐喻：LLM 上下文窗口 = 主存（RAM），外部存储 = 磁盘；MemGPT 用函数调用实现"分页"，让固定上下文模型获得"虚拟无限上下文"。</li>
+<li>主上下文三区段：只读的系统指令、只能经函数写入的工作上下文（存用户/人设关键事实）、滚动消息 FIFO 队列（队首是被逐出消息的递归摘要）。</li>
+<li>溢出控制：token 达到 70% 警告阈值时发"内存压力"系统警告，给 LLM 抢救重要信息的机会；达到 100% 清空阈值时逐出约 50% 上下文的消息并更新递归摘要。</li>
+<li>两大外部存储：召回存储（消息数据库，由队列管理器自动落盘）与归档存储（任意长度文本对象，经函数读写，可实现向量检索与分页）。</li>
+<li>函数链与心跳机制（request heartbeat=true）允许 LLM 连续执行多步检索再答复用户；事件驱动（用户消息、系统警告、定时事件）触发推理。</li>
+<li>深度记忆检索（DMR）任务：MemGPT 把 GPT-4 准确率从 32.1% 提升到 92.5%，GPT-4 Turbo 从 35.3% 到 93.4%，GPT-3.5 从 38.7% 到 66.9%。</li>
+<li>对话开场白任务上 MemGPT 与人类手写开场白的相似度达到或超过裸模型基线，验证了记忆带来的"吸引力"。</li>
+<li>多文档问答中固定上下文基线被检索器性能封顶，MemGPT 可迭代翻页检索，性能几乎不随文档数增加而衰减。</li>
+<li>嵌套 KV 任务中 GPT-4 在 3 层嵌套即归零，MemGPT（GPT-4）不受嵌套深度影响，展现多跳查找能力。</li>
+<li>局限：整体效果依赖底层模型的函数调用能力（GPT-3.5 上明显退化）；MemGPT 本身不解决长上下文注意力利用率问题，而是绕开它。</li>
+</ul>
+      </div>
+    </article>
+    <nav class="pager"><a class="pager-prev" href="Letta2025_Agent_Memory_blog.html"><span>上一篇</span>&quot;Agent 记忆：如何构建能学习与记忆的 Agent&quot;</a><a class="pager-next" href="Park2023_Generative_Agents_UIST2023.html"><span>下一篇</span>&quot;生成式 Agent：人类行为的交互式拟真&quot;</a></nav>
+  </main>
+</div>
+<script src="../assets/site.js"></script>
+</body>
+</html>

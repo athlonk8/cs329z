@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>&quot;DyLAN:面向任务的动态 LLM 智能体协作网络&quot; · CS 329Z 中文学习站</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html"><span class="brand-mark">CS</span>329Z<span class="brand-sub">中文学习站</span></a>
+    <nav class="topnav">
+      <a href="../index.html#syllabus">课程表</a>
+      <a href="../index.html#dates">重要日期</a>
+      <a href="../index.html#about">关于本站</a>
+    </nav>
+    <div class="searchbox"><input id="search-input" type="search" placeholder="搜索材料 / 主题…" autocomplete="off"><div id="search-results" class="search-results" hidden></div></div>
+  </div>
+</header>
+<div class="read-layout">
+  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">论文精读</a><ul><li><a href="#_3">摘要(全译)</a></li><li><a href="#1">1. 引言</a></li><li><a href="#2">2. 相关工作</a></li><li><a href="#3-dylan">3. DyLAN 框架</a></li><li><a href="#4">4. 实验</a></li><li><a href="#5">5. 结论</a></li></ul></li><li><a href="#_4">要点速览</a></li></ul></aside>
+  <main class="read-main">
+    <div class="crumb"><a href="../index.html">首页</a> / <a href="../index.html#week-week05a_multi_agent">第5周 · 多智能体系统</a></div>
+    <article class="read-article">
+      <h1 class="read-title">&quot;DyLAN:面向任务的动态 LLM 智能体协作网络&quot;</h1>
+      <p class="read-title-en">&quot;A Dynamic LLM-Powered Agent Network for Task-Oriented Agent Collaboration&quot;</p>
+      <p class="read-meta">Zijun Liu, Yanzhe Zhang, Peng Li, Yang Liu, Diyi Yang · &quot;COLM 2024 · 清华大学 / Georgia Tech / Stanford&quot;</p>
+      <p class="read-badges"><span class="badge badge-supplementary">补充</span><span class="badge badge-kind">论文精读</span><button class="lang-toggle" id="lang-toggle" type="button">仅看中文</button><a class="orig-link" href="../originals/week05a_multi_agent/Liu2024_DyLAN_COLM2024.pdf" target="_blank" rel="noopener">查看原文(PDF) ↗</a></p>
+      <div class="markdown-body">
+<h2 id="_1">导读</h2>
+<p>本文是第 5 周「多智能体系统」的补充阅读(COLM 2024,清华 &amp; Stanford Diyi Yang 组)。现有大多数多智能体系统(辩论、自协作等)有两个静态假设:<strong>团队人数固定、通信结构固定</strong>——而人类团队(如多学科会诊)会随任务组建、随进程调整。DyLAN(Dynamic LLM-powered Agent Network)把协作形式化为<strong>时序前馈网络(T-FFN)</strong>:每一"层"是一个时间步,节点是智能体,边是通信通道;在此图上做两件事:(1)<strong>团队优化</strong>——先跑一次预试验,用受反向传播与神经元重要性分数启发的"智能体重要性分数(Agent Importance Score)"无监督量化每个候选智能体的贡献,选出精英小队;(2)<strong>任务求解</strong>——协作中由 LLM Ranker 每步给回答排序,只有靠前的智能体进入下一层(动态通信结构/团队重组),并借鉴拜占庭共识理论在超 2/3 智能体答案一致时早停。结果:代码生成(HumanEval 82.9 pass@1,超 LATS 且 API 调用仅其 35%)、决策(WebShop reward 68.3)、通用推理(MMLU 70.5)、算术推理全面占优;MMLU 单科目经团队选择最高提升 25%。它是"多智能体拓扑应当动态化、且可以原则化地优化"这一方向早期且完整的尝试。</p>
+<h2 id="_2">论文精读</h2>
+<h3 id="_3">摘要(全译)</h3>
+<p>近来的研究表明,协作多个 LLM 驱动的智能体是任务求解的有望途径。然而现有方法受限于固定数量的智能体与静态通信结构。本工作中,我们提出从候选中<strong>自动选择一个智能体团队</strong>,以面向不同任务与领域的<strong>动态通信结构</strong>进行协作。具体地,我们构建了名为 DyLAN 的 LLM 智能体协作框架,采用两阶段范式:(1) 团队优化;(2) 任务求解。第一阶段利用基于无监督指标"智能体重要性分数"的智能体选择算法,依据预试验中的贡献、面向给定任务选出最佳智能体;第二阶段被选中的智能体按查询动态协作。实验表明,DyLAN 在代码生成、决策、通用推理与算术推理任务上以适中的计算成本超过强基线。在 MMLU 的特定科目上,团队优化阶段的智能体选择为 DyLAN 带来最高 25.0% 的准确率提升。</p>
+<h3 id="1">1. 引言</h3>
+<ul>
+<li>动机来自人类社会团队的两特性:(1) <strong>按任务组建团队</strong>(不同疾病的多学科会诊初始阵容不同);(2) <strong>过程中团队动态变化</strong>(随讨论深入,某些医生相关性下降"离场",通信结构随之改变)。问题:<strong>动态变化的智能体团队是否同样有益于 LLM 协作?</strong></li>
+<li>现状缺口:辩论(推理)、自协作(编码)等通信结构一旦确定不再改变成员;多数工作靠人工先验手搓智能体或让 LLM 生成角色,却<strong>不验证协作过程</strong>,导致静态团队或无原则的重建。</li>
+<li>贡献三连:两阶段框架 + 智能体选择;T-FFN 形式化 + 智能体团队重组(agent team reformation);跨任务的准确率/效率/稳定性验证。</li>
+</ul>
+<h3 id="2">2. 相关工作</h3>
+<ul>
+<li><strong>团队优化</strong>:手工提示需精心设计且难按任务适配;LLM 生成的角色描述未经实际能力验证。人类团队研究(众包工人技能贡献、同伴互评管理在线工人)启发了本文"基于实际行为的后验选择"。</li>
+<li><strong>通信结构</strong>:辩论、LLM-Blender(单轮两两排序聚合)等;已有研究表明最优结构随任务与团队构成变化(与本文动态结构主张一致);GPTSwarm 等同期工作也探索动态图。</li>
+<li><strong>贡献评估</strong>:单轮设定下 LLM 互评有过度自信问题,两两比较需 O(n²);本文受神经元重要性分数(Yu et al. 2018)启发,以反向传播式的方式在多轮协作中聚合同伴评分。</li>
+</ul>
+<h3 id="3-dylan">3. DyLAN 框架</h3>
+<p><strong>3.1 总览</strong>:两阶段——Team Optimization(预试验+选团队)→ Task Solving(动态协作)。T-FFN 既是通信结构抽象也是计算图;表 1 对比显示 DyLAN 是唯一同时支持多角色/工具、早停、动态结构、团队优化的框架。</p>
+<p><strong>3.2 时序前馈网络(T-FFN)</strong>:智能体集合 A(LLM 智能体或独立工具);第 t 层节点 V_t 对应全部智能体;相邻层间边集 E_{t-1,t} 表示通信通道;G=(V_1..V_T; E)。消息传递:节点聚合收到的消息生成新消息——<strong>前向消息传递</strong>(取上一层全部相邻节点)与<strong>反向消息传递</strong>(取下一层全部相邻节点)。</p>
+<p><strong>3.3 任务求解</strong>:
+- <strong>推理(3.3.1)</strong>:查询注入第 1 层,各层响应前向传给下一层;智能体可批评、建议、精炼或质检。最终答案取末层响应的 argmax(以多数/一致性裁决)。
+- <strong>智能体团队重组(3.3.2)</strong>:额外引入 <strong>LLM Ranker</strong>,分析当前时间步所有智能体的回答并排序,<strong>只有排名靠前的智能体在下一时间步保留</strong>(为它们添加边),形成动态通信结构——低效智能体被"请出场"。
+- <strong>早停机制</strong>:借鉴拜占庭共识理论(容忍 p 个故障节点需 3p+1 个节点):<strong>单层超过 2/3 的智能体答案一致即终止</strong>;亦设最大时间步上限。此前的一致性度量(self-consistency 等)只适用单实例多次采样,不适用多轮多智能体交互。</p>
+<p><strong>3.4 团队优化(智能体选择三步,图 2 右)</strong>:
+1. <strong>传播(前向)</strong>:每个节点对其<strong>前驱</strong>的任务回答打分(同伴互评),得到边上的评分 w_{t-1,i,j};
+2. <strong>聚合(反向,类反向传播)</strong>:节点 v_{t-1,i} 的贡献 = Σ(后继的贡献 × 后继给它的评分),即 I_{t-1,i} = Σ_{(v_{t-1,i},v_{t,j})∈E} I_{t,j}·w_{t-1,i,j};从末层初始化起逐层回传,每层分数和为 1(保证公平比较);
+3. <strong>选择</strong>:对同一智能体在各时间步的贡献求和得 <strong>Agent Importance Score</strong> I_i = Σ_t I_{t,i},取 top-k 组成优化团队。</p>
+<h3 id="4">4. 实验</h3>
+<p><strong>设置</strong>:四任务——代码生成 CG(HumanEval,单执行/CodeT/Reflexion/CAMEL/AgentVerse)、决策 DM(WebShop 50 环境,ReAct/Reflexion/LATS/BOLAA)、通用推理 GR(MMLU 下采样 1/5,LLM-Blender/LLM Debate)、算术推理 AR(MATH 全测试集,CoT/PHP)。团队优化粒度:GR 按科目、DM 按网页、CG 按任务。成本以 API 调用数计量(主要计第二阶段)。</p>
+<p><strong>主结果</strong>:
+- <strong>CG(HumanEval)</strong>:DyLAN 82.9 pass@1(+9.7),16.85 次 API 调用;对比 LATS 81.1(+7.9)需 48 次( DyLAN 仅其 35%)、AgentVerse 75.0/22.5、Reflexion 68.3、CAMEL 69.5。
+- <strong>DM(WebShop)</strong>:reward 68.3(+17.7)、成功率 42%,24.85 次调用;超 BOLAA 66.0/32.4、LATS 64.5/&gt;400。
+- <strong>GR(MMLU)</strong>:70.5(+4.1),仅 4.39 次调用——是 LLM Debate(69.3, 12 次)的 36.6% 成本。
+- <strong>AR(MATH)</strong>:35.7(+4.1)超 LLM Debate 32.4;提升相对小,归因于 MATH 的高知识依赖。
+- <strong>效率解读</strong>:前馈结构让不同解法并行投递、快速确认;而 PHP/Reflexion 等串行结构中,错误中间结果易污染最终输出;DyLAN 中任何前驱反馈都可被后继节点打分,更易纠正无效动作。成本随任务难度自适应(MMLU 比 MATH 简单,平均少 2.76 次调用)。</p>
+<p><strong>团队优化的价值(表 5/7)</strong>:选出的团队更小更强——CG 12→8 个(pass@1 76.2→82.9,调用 23.04→16.85)、DM 8→4(reward 53.0→68.3)、GR 7→4(69.5→70.5);MMLU 单科目按重要性选阵容,大学数学选"经济学家+律师+程序员+数学家"提升 <strong>25.0</strong>(40.0→65.0),管理学 +14.3 等,且选择结果符合人类先验(相关科目选中相关角色)。</p>
+<p><strong>消融(表 6/8,图 3)</strong>:
+- <strong>早停</strong>:API 调用在 AR/GR/CG/DM 上分别减少 45.0%/66.2%/11.3%/54.2%,性能还略有提升;开放性任务(CG/DM 答案格式各异,用 BLEU≥0.9 判一致性)早停机会较少、效果打折。
+- <strong>团队重组(atr)</strong>:对最终答案正确性至关重要(CG 76.2 vs 82.9;DM 66.0 vs 68.3)——推测是过滤掉了 LLM 的临时性错误(幻觉等)。
+- <strong>团队规模</strong>:3 个精选智能体即可超过优化前的 7 个与 LLM Debate 的 4 个(70.5 vs 69.5/69.9),调用节省 52.9%/67.8%;未优化时无关智能体的意见会互相干扰。
+- <strong>角色失衡鲁棒性</strong>:重要性分数对角色失衡稳健;编码任务中写码者/审查者的比例失衡影响不大,但审查者数量影响略大(代码精炼需要足够审查)。一次 Team Optimization 的分数可供多次选择复用。</p>
+<h3 id="5">5. 结论</h3>
+<p>DyLAN 证明:面向任务的动态团队(选择 + 重组)+ 早停,能在四类任务上以更低成本取得更好成绩;Agent Importance Score 是有效且稳健的贡献度量。骨架模型更换后结论依然稳定(附录)。</p>
+<h2 id="_4">要点速览</h2>
+<ul>
+<li>形式化:<strong>多智能体协作 = 时序前馈网络(T-FFN)</strong>,层=时间步、节点=智能体、边=通信;前向传消息推理,反向传评分归因。</li>
+<li>两阶段:Team Optimization(预试验 + 重要性分数选精英)→ Task Solving(动态协作)。</li>
+<li><strong>Agent Importance Score</strong>:同伴互评(前向)× 后继贡献加权求和(反向,类反向传播),各层归一化;无监督、可复用、对角色失衡稳健。</li>
+<li><strong>动态结构</strong>:LLM Ranker 每步排序,末位智能体退出后续层;<strong>拜占庭式早停</strong>(&gt;2/3 一致即停)大幅省成本(最高省 66% 调用)。</li>
+<li>主结果:HumanEval 82.9(超 LATS、调用仅其 35%)、WebShop 68.3、MMLU 70.5(调用仅 Debate 的 36.6%);MMLU 单科目选团队最高 +25%。</li>
+<li>与课程关联:回应了 AutoGen(GroupChatManager 手动/生成式组队)的"团队怎么定"问题——答案是<strong>用数据后验地选</strong>;与《Why Multi-Agent LLM Systems Fail?》指出的"角色/成员配置失误"失效模式直接对应:先选对团队,多智能体才不添乱。</li>
+</ul>
+      </div>
+    </article>
+    <nav class="pager"><a class="pager-prev" href="Cemri2025_Why_Multi_Agent_LLM_Systems_Fail.html"><span>上一篇</span>&quot;为什么多智能体 LLM 系统会失败?&quot;</a><a class="pager-next" href="Neubig2024_Dont_Sleep_On_Single_Agent_Systems.html"><span>下一篇</span>别忽视单智能体系统</a></nav>
+  </main>
+</div>
+<script src="../assets/site.js"></script>
+</body>
+</html>
