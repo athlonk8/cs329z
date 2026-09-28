@@ -22,6 +22,9 @@
 <div class="read-layout">
   <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">全文对照翻译</a><ul><li><a href="#_3">摘要</a></li><li><a href="#1-introduction">1 引言(Introduction)</a></li><li><a href="#2-mt-bench-chatbot-arenamt-bench-and-chatbot-arena">2 MT-Bench 与 Chatbot Arena(MT-Bench and Chatbot Arena)</a></li><li><a href="#3-llm-llm-as-a-judge">3 LLM 作为评审(LLM as a Judge)</a></li><li><a href="#4-agreement-evaluation">4 一致性评测(Agreement Evaluation)</a></li><li><a href="#5-human-preference-benchmark-and-standardized-benchmark">5 人类偏好基准与标准化基准(Human Preference Benchmark and Standardized Benchmark)</a></li><li><a href="#6-discussion">6 讨论(Discussion)</a></li><li><a href="#7-conclusion">7 结论(Conclusion)</a></li><li><a href="#acknowledgement">致谢(Acknowledgement)</a></li><li><a href="#a-prompt-templates">附录 A 提示词模板(Prompt Templates)</a></li><li><a href="#b-case-study">附录 B 案例研究(Case Study)</a></li></ul></li><li><a href="#_4">要点速览</a></li></ul></aside>
   <main class="read-main">
+      <link rel="stylesheet" href="../assets/katex/katex.min.css">
+      <script defer src="../assets/katex/katex.min.js"></script>
+      <script defer src="../assets/katex/contrib/auto-render.min.js" onload="renderMathInElement(document.querySelector('.markdown-body'),{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}],ignoredTags:['script','noscript','style','textarea','pre','code']});"></script>
     <div class="crumb"><a href="../index.html">首页</a> / <a href="../index.html#week-week08a_llm_as_judge">第8周 · LLM-as-Judge</a></div>
     <article class="read-article">
       <h1 class="read-title">&quot;评审 LLM-as-a-Judge:MT-Bench 与 Chatbot Arena&quot;</h1>
@@ -832,10 +835,10 @@ Total cost = $100 + $90 + $90 = $295
 Assistant B's response is accurate and directly answers the user's question. Therefore, my final verdict is: [[B]]
 
 GPT-4's Answer (if asked separately):
-The cost of the sci-fi novels is 5 * $20 = $&lt;&lt;5*20=100&gt;&gt;100.
-The cost of the history books is 3 * $30 = $&lt;&lt;3*30=90&gt;&gt;90.
-The cost of the philosophy books is 2 * $45 = $&lt;&lt;2*45=90&gt;&gt;90.
-The total cost of his purchases is $100 + $90 + $90 = $&lt;&lt;100+90+90=280&gt;&gt;280. Answer: \boxed{280}.
+The cost of the sci-fi novels is 5 * <span class="math-inline">$20 = $</span>&lt;&lt;5*20=100&gt;&gt;100.
+The cost of the history books is 3 * <span class="math-inline">$30 = $</span>&lt;&lt;3*30=90&gt;&gt;90.
+The cost of the philosophy books is 2 * <span class="math-inline">$45 = $</span>&lt;&lt;2*45=90&gt;&gt;90.
+The total cost of his purchases is $100 + $90 + <span class="math-inline">$90 = $</span>&lt;&lt;100+90+90=280&gt;&gt;280. Answer: \boxed{280}.
 </code></pre>
 <p><strong>[图 13: With a default prompt, GPT-4 shows limited capability in grading math questions. Despite being able to answer the question itself, its judgment was influenced by the given answers, leading to arithmetic mistakes highlighted in yellow.]</strong></p>
 <p>中文说明:图 13 展示默认提示下 GPT-4 评审数学题的局限。这道题的正确答案是 5×20 + 3×30 + 2×45 = 100 + 90 + 90 = <strong>280 美元</strong>;助手 B 答 295(错)、助手 A 答 115(错)。GPT-4 在评审中虽然列出了 100、90、90 三个正确的分项,却在求和时照抄了助手 B 的「295」(原文中以黄色标出的算术错误),并判 B 正确;而单独解题时(下方「GPT-4's Answer」)它给出的恰是正确的 \boxed{280}——说明评审语境中的候选答案会把它带偏。</p>
@@ -891,9 +894,9 @@ Final verdict: [[B]]
 
 GPT-4's Answer (if asked separately):
 We can split the inequality into two cases:
-1) If $x+5\ge0$, then $|x+5|=x+5$. So, we have $x+5&lt;10$, which means $x&lt;5$. Since $x+5\ge0$, we have $x\ge-5$. So in this case, $x$ can be any integer from $-5$ to $4$, inclusive, which gives us $5-(-5)+1=10$ integers.
-2) If $x+5&lt;0$, then $|x+5|=-(x+5)$. So, we have $-(x+5)&lt;10$, which means $x+5&gt;-10$, which means $x&gt;-15$. Since $x+5&lt;0$, we have $x&lt;-5$. So in this case, $x$ can be any integer from $-14$ to $-6$, inclusive, which gives us $-6-(-14)+1=9$ integers.
-In total, there are $10+9=\boxed{19}$ integers in the solution.
+1) If <span class="math-inline">$x+5\ge0$</span>, then <span class="math-inline">$|x+5|=x+5$</span>. So, we have <span class="math-inline">$x+5&lt;10$</span>, which means <span class="math-inline">$x&lt;5$</span>. Since <span class="math-inline">$x+5\ge0$</span>, we have <span class="math-inline">$x\ge-5$</span>. So in this case, <span class="math-inline">$x$</span> can be any integer from <span class="math-inline">$-5$</span> to <span class="math-inline">$4$</span>, inclusive, which gives us <span class="math-inline">$5-(-5)+1=10$</span> integers.
+2) If <span class="math-inline">$x+5&lt;0$</span>, then <span class="math-inline">$|x+5|=-(x+5)$</span>. So, we have <span class="math-inline">$-(x+5)&lt;10$</span>, which means <span class="math-inline">$x+5&gt;-10$</span>, which means <span class="math-inline">$x&gt;-15$</span>. Since <span class="math-inline">$x+5&lt;0$</span>, we have <span class="math-inline">$x&lt;-5$</span>. So in this case, <span class="math-inline">$x$</span> can be any integer from <span class="math-inline">$-14$</span> to <span class="math-inline">$-6$</span>, inclusive, which gives us <span class="math-inline">$-6-(-14)+1=9$</span> integers.
+In total, there are <span class="math-inline">$10+9=\boxed{19}$</span> integers in the solution.
 </code></pre>
 <p><strong>[图 15: An example of GPT-4's wrong judgment with chain-of-thought prompt. We can see GPT-4 exactly copied Assistant B's answer (which contains arithmetic errors) and determined Assistant A's answer is incorrect. This suggest GPT-4's chain-of-thought process can be significantly influenced by the given answers despite we ask it to think independently.]</strong></p>
 <p>中文说明:图 15 是即便用思维链提示、GPT-4 仍被带偏的例子。不等式 |x+5|&lt;10 的解为 -15 &lt; x &lt; 5,其中整数共 <strong>19 个</strong>(助手 A 的答案正确)。但在评审中,GPT-4 的「独立解题」逐字复制了助手 B 的推理(包括把 -14 到 4 之间的整数数成 20 个这一数数错误),宣称「正确答案是 20」,判 B 胜([[B]]);而它单独解题时(下方)用分段讨论得出了正确的 \boxed{19}。这说明 CoT 提示要求「先独立思考」并不保险——上下文中的候选答案仍会显著影响其思维链。</p>

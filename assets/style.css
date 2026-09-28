@@ -254,3 +254,7 @@ body.zh-only .en-orig { display: none; }
   padding: 10px 16px; font-size: 14px; color: #33503a; margin: 0 0 26px;
 }
 .bi-progress b { font-size: 16px; }
+
+/* 数学公式 */
+.math-display { text-align: center; margin: 14px 0; overflow-x: auto; }
+.math-inline code, .math-inline { white-space: normal; }
