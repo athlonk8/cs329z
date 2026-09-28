@@ -20,80 +20,582 @@
   </div>
 </header>
 <div class="read-layout">
-  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">论文精读</a><ul><li><a href="#abstract">摘要（Abstract）</a></li><li><a href="#1-introduction">1 引言（Introduction）</a></li><li><a href="#2-memgptmemorygpt">2 MemGPT（MemoryGPT）系统设计</a></li><li><a href="#3">3 实验</a></li><li><a href="#4-related-work">4 相关工作（Related Work）</a></li><li><a href="#5-conclusion">5 结论（Conclusion）</a></li></ul></li><li><a href="#_3">要点速览</a></li></ul></aside>
+  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">全文对照翻译</a><ul><li><a href="#abstract">摘要（Abstract）</a></li><li><a href="#1-introduction">1 引言（Introduction）</a></li><li><a href="#2-memgptmemorygpt">2 MemGPT（MemoryGPT）</a></li><li><a href="#3-experiments">3 实验（Experiments）</a></li><li><a href="#4-related-work">4 相关工作（Related Work）</a></li><li><a href="#5-conclusion">5 结论（Conclusion）</a></li><li><a href="#6-appendix">6 附录（Appendix）：提示词与指令</a></li></ul></li><li><a href="#_3">要点速览</a></li></ul></aside>
   <main class="read-main">
     <div class="crumb"><a href="../index.html">首页</a> / <a href="../index.html#week-week04b_memory">第4周 · Agent 记忆</a></div>
     <article class="read-article">
       <h1 class="read-title">&quot;MemGPT：让 LLM 走向操作系统&quot;</h1>
       <p class="read-title-en">&quot;MemGPT: Towards LLMs as Operating Systems&quot;</p>
       <p class="read-meta">&quot;Charles Packer et al.&quot; · &quot;arXiv 2023 · UC Berkeley&quot;</p>
-      <p class="read-badges"><span class="badge badge-must">必读</span><span class="badge badge-kind">论文精读</span><button class="lang-toggle" id="lang-toggle" type="button">仅看中文</button><a class="orig-link" href="../originals/week04b_memory/Packer2023_MemGPT.pdf" target="_blank" rel="noopener">查看原文(PDF) ↗</a></p>
+      <p class="read-badges"><span class="badge badge-must">必读</span><span class="badge badge-kind">全译对照</span><button class="lang-toggle" id="lang-toggle" type="button">仅看中文</button><a class="orig-link" href="../originals/week04b_memory/Packer2023_MemGPT.pdf" target="_blank" rel="noopener">查看原文(PDF) ↗</a></p>
       <div class="markdown-body">
 <h2 id="_1">导读</h2>
 <p>本文是第 4 周「Agent 记忆」专题的开山之作（importance: must），由 UC Berkeley 的 Charles Packer 等人于 2023 年提出（后发展为商业公司 Letta）。它回答的问题非常根本：LLM 的上下文窗口（context window）是固定且有限的，如何让它"看起来"拥有无限上下文？</p>
 <p>MemGPT 的答案是向传统操作系统（OS）借智慧：正如操作系统通过内存与磁盘之间的分页（paging）为应用程序营造出"内存远大于物理内存"的虚拟内存（virtual memory）假象，MemGPT 把 LLM 的上下文窗口当作受限的"主存"，把外部存储当作"磁盘"，并借助函数调用（function calling）让 LLM 自主地在两级存储之间换入换出数据。这一"LLM 即操作系统"的隐喻直接定义了后来 Agent 记忆系统的基本词汇：主上下文/外置上下文、工作记忆（working context）、召回存储（recall storage）、归档存储（archival storage）、记忆压力（memory pressure）警告等。论文在文档分析与多会话对话两个长上下文场景上验证：MemGPT 能让 GPT-4 在深度记忆检索任务上把准确率从 32.1% 提升到 92.5%。</p>
-<h2 id="_2">论文精读</h2>
+<h2 id="_2">全文对照翻译</h2>
+<blockquote>
+<p><strong>译注</strong>：以下为论文全文中英对照，覆盖摘要与第 1–5 节全部正文（原文第 1–8 页），并收录附录 6.1 的全部提示词与指令（属评估细节，提示词原文以代码块保留并附中文说明）。References（参考文献列表）按本站惯例不收录。图 1/2/4、图 6/8 为界面截图，其文字已转录为代码块；图 3 架构图以文字结构转录；图 5/7 为实验曲线图，以图题与中文说明概述。英文原段仅去除了 PDF 提取产生的断行连字符，内容一字未改；术语首现处给出中英对照。</p>
+</blockquote>
 <h3 id="abstract">摘要（Abstract）</h3>
-<p>大语言模型（LLM）已经革新了 AI，但受限的上下文窗口阻碍了其在扩展对话与文档分析等任务中的效用。为了能够使用超出上下文窗口限制的内容，作者提出<strong>虚拟上下文管理（virtual context management）</strong>技术，其灵感来自传统操作系统的分层记忆体系——后者通过物理内存与磁盘之间的分页提供了扩展虚拟内存的假象。基于该技术，作者提出 MemGPT（MemoryGPT）：一个智能管理不同存储层级（storage tiers）、从而在 LLM 有限上下文窗口内有效提供扩展上下文的系统。作者在两个现代 LLM 有限上下文严重制约性能的领域评估了这一受操作系统启发的设计：文档分析——MemGPT 能够分析远超底层 LLM 上下文窗口的大文档；以及多会话聊天（multi-session chat）——MemGPT 可以创建在与用户长期互动中记忆、反思并动态演化的对话 Agent。代码与实验数据开源于 research.memgpt.ai。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>Large language models (LLMs) have revolutionized AI, but are constrained by limited context windows, hindering their utility in tasks like extended conversations and document analysis. To enable using context beyond limited context windows, we propose virtual context management, a technique drawing inspiration from hierarchical memory systems in traditional operating systems which provide the illusion of an extended virtual memory via paging between physical memory and disk. Using this technique, we introduce MemGPT (MemoryGPT), a system that intelligently manages different storage tiers in order to effectively provide extended context within the LLM&#x27;s limited context window. We evaluate our OS-inspired design in two domains where the limited context windows of modern LLMs severely handicaps their performance: document analysis, where MemGPT is able to analyze large documents that far exceed the underlying LLM&#x27;s context window, and multi-session chat, where MemGPT can create conversational agents that remember, reflect, and evolve dynamically through long-term interactions with their users. We release MemGPT code and data for our experiments at https://research.memgpt.ai.</p></div>
+
+<p>大语言模型（LLM）已经革新了 AI，但受限于有限的上下文窗口，这阻碍了其在扩展对话与文档分析等任务中的效用。为了能够使用超出有限上下文窗口的内容，我们提出<strong>虚拟上下文管理（virtual context management）</strong>技术，其灵感来自传统操作系统的分层记忆体系——后者通过物理内存与磁盘之间的分页（paging）提供了扩展虚拟内存的假象。基于这一技术，我们提出 MemGPT（MemoryGPT）：一个智能管理不同存储层级（storage tiers）、从而在 LLM 有限上下文窗口内有效提供扩展上下文的系统。我们在两个现代 LLM 因有限上下文窗口而性能严重受限的领域评估了这一受操作系统（OS）启发的设计：文档分析——MemGPT 能够分析远超底层 LLM 上下文窗口的大文档；以及多会话聊天（multi-session chat）——MemGPT 可以创建在与用户长期互动中记忆、反思并动态演化的对话 Agent。我们在 https://research.memgpt.ai 发布了实验所用的 MemGPT 代码与数据。</p>
 <h3 id="1-introduction">1 引言（Introduction）</h3>
-<p>尽管 LLM 已成为对话式 AI 的基石，但固定长度的上下文窗口严重限制了其应用于长对话或长文档推理的能力：最广泛使用的开源 LLM 只能支撑几十轮往返消息或一篇短文档，就会超出最大输入长度。</p>
-<p>直接扩展 Transformer 的上下文长度，会因自注意力机制带来计算时间与内存的二次方增长；而且即使克服了计算问题，最近研究（Lost in the Middle）也表明长上下文模型并不能有效利用额外上下文——注意力分布不均匀，模型对上下文中部信息的召回能力弱于首尾。因此，在训练更长模型收益递减的情况下，迫切需要替代技术来支撑长上下文。</p>
-<p>MemGPT 的思路是：<strong>在继续使用固定上下文模型的前提下，提供"无限上下文"的假象</strong>。操作系统中的虚拟内存分页技术允许应用处理远超可用内存的数据集——溢出数据被换页到磁盘，被访问时再通过缺页中断（page fault）取回内存。MemGPT 把这一思想移植过来：</p>
-<ul>
-<li>上下文窗口 ≈ 主存/物理内存（main context）；</li>
-<li>外部存储 ≈ 磁盘（external context）；</li>
-<li>LLM 通过函数调用读写外部数据源、修改自身上下文、决定何时响应用户——相当于自己充当"操作系统"，负责把信息在主上下文与外部存储之间"换页"（page in / page out）。</li>
-</ul>
-<p>论文表 1 列出了截至 2024 年 1 月常用模型的上下文长度：Llama (1) 2k token（约 20 条消息）、Llama 2 4k（约 60 条）、Mistral 7B 与 GPT-4（发布版）8k（约 140 条）、GPT-3.5 Turbo 16k（约 300 条）、GPT-4 32k（约 600 条）、Claude 2 100k（约 2000 条）、GPT-4 Turbo 128k（约 2600 条）。可见即便最长的窗口，对以月计的陪伴式对话或百万 token 级的法律/财务文档（如年报 10-K）也远远不够。</p>
-<h3 id="2-memgptmemorygpt">2 MemGPT（MemoryGPT）系统设计</h3>
-<p>MemGPT 的多级记忆架构区分两大类记忆：</p>
-<ul>
-<li><strong>主上下文（main context）</strong>：即 LLM 的提示词 token（prompt tokens），类比主存/RAM。只有处于主上下文中的内容才被视为"在上下文内"，可在推理时被 LLM 处理器访问。</li>
-<li><strong>外置上下文（external context）</strong>：固定上下文窗口之外的一切信息，类比磁盘存储。外置数据必须被显式移入主上下文，才能参与推理。</li>
-</ul>
-<p>MemGPT 提供一组函数调用，让 LLM <strong>无需任何用户干预即可自主管理自己的记忆</strong>——自主更新与检索，自主决定何时在层级间移动数据（例如对话历史过长时），以及修改主上下文以反映自己对当前目标与职责的演化理解。</p>
-<h4 id="21-token">2.1 主上下文（提示词 token）的三个区段</h4>
-<p>主上下文被划分为三个连续区段：</p>
-<ol>
-<li><strong>系统指令（system instructions）</strong>：只读、静态，包含 MemGPT 控制流说明、各级记忆的用途说明、以及如何使用 MemGPT 函数的指令。</li>
-<li><strong>工作上下文（working context）</strong>：一块固定大小、可读写的非结构化文本区，<strong>只能通过 MemGPT 函数调用写入</strong>。在对话场景中，它用于存放关于用户与 Agent 人设的关键事实、偏好等重要信息（例如把"男友叫 James"更新为"前男友叫 James"），使 Agent 能与用户流畅交流。</li>
-<li><strong>FIFO 队列</strong>：滚动存放消息历史，包括 Agent 与用户的消息、系统消息（如内存警告）以及函数调用的输入输出。队列的第一个位置存放一条系统消息，是对已被逐出队列消息的<strong>递归摘要（recursive summary）</strong>。</li>
-</ol>
+<div class="en-orig"><span class="en-tag">EN</span><p>In recent years, large language models (LLMs) and their underlying transformer architecture (Vaswani et al., 2017; Devlin et al., 2018; Brown et al., 2020; Ouyang et al., 2022) have become the cornerstone of conversational AI and have led to a wide array of consumer and enterprise applications. Despite these advances, the limited fixed-length context windows used by LLMs significantly hinders their applicability to long conversations or reasoning about long documents. For example, the most widely used open-source LLMs can only support a few dozen back-and-forth messages or reason about a short document before exceeding their maximum input length (Touvron et al., 2023).</p></div>
+
+<p>近年来，大语言模型（LLM）及其底层的 transformer 架构（Vaswani et al., 2017; Devlin et al., 2018; Brown et al., 2020; Ouyang et al., 2022）已成为对话式 AI 的基石，并催生了大量消费级与企业级应用。尽管有这些进步，LLM 所使用的固定长度上下文窗口严重阻碍了其在长对话或长文档推理中的应用。例如，最广泛使用的开源 LLM 只能支撑几十轮往返消息、或推理一篇短文档，随后便超出其最大输入长度（Touvron et al., 2023）。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>Directly extending the context length of transformers incurs a quadratic increase in computational time and memory cost due to the transformer architecture&#x27;s self-attention mechanism, making the design of new long-context architectures a pressing research challenge (Dai et al., 2019; Kitaev et al., 2020; Beltagy et al., 2020). While developing longer models is an active area of research (Dong et al., 2023), even if we could overcome the computational challenges of context scaling, recent research shows that long-context models struggle to utilize additional context effectively (Liu et al., 2023a). As consequence, given the considerable resources needed to train state-of-the-art LLMs and diminishing returns of context scaling, there is a critical need for alternative techniques to support long context.</p></div>
+
+<p>直接扩展 transformer 的上下文长度，会因其自注意力机制带来计算时间与内存开销的二次方增长，这使得设计新的长上下文架构成为紧迫的研究挑战（Dai et al., 2019; Kitaev et al., 2020; Beltagy et al., 2020）。虽然开发更长的模型是一个活跃的研究方向（Dong et al., 2023），但即便我们能克服上下文扩展的计算挑战，最近的研究也表明长上下文模型难以有效利用额外的上下文（Liu et al., 2023a）。因此，考虑到训练最先进 LLM 所需的庞大资源以及上下文扩展的收益递减，迫切需要替代技术来支撑长上下文。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>In this paper, we study how to provide the illusion of an infinite context while continuing to use fixed-context models. Our approach borrows from the idea of virtual memory paging that was developed to enable applications to work on datasets that far exceed the available memory by paging data between main memory and disk. We leverage the recent progress in function calling abilities of LLM agents (Schick et al., 2023; Liu et al., 2023b) to design MemGPT, an OS-inspired LLM system for virtual context management. Using function calls, LLM agents can read and write to external data sources, modify their own context, and choose when to return responses to the user.</p></div>
+
+<p>本文研究如何在继续使用固定上下文模型的同时，提供"无限上下文"的假象。我们的方法借鉴了虚拟内存分页（virtual memory paging）的思想——该技术的提出是为了让应用能够处理远超可用内存的数据集，方法是在主存与磁盘之间对数据进行分页。我们利用 LLM Agent 在函数调用（function calling）能力上的最新进展（Schick et al., 2023; Liu et al., 2023b）设计了 MemGPT——一个受操作系统启发、用于虚拟上下文管理的 LLM 系统。借助函数调用，LLM Agent 可以读写外部数据源、修改自身上下文，并决定何时向用户返回响应。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>These capabilities allow LLMs to effective &quot;page&quot; in and out information between context windows (analogous to &quot;main memory&quot; in operating systems) and external storage, similar to hierarchical memory in traditional OSes. In addition, function calls can be leveraged to manage control flow between context management, response generation, and user interactions. This allows for an agent to choose to iteratively modify what is in its context for a single task, thereby more effectively utilizing its limited context.</p></div>
+
+<p>这些能力使 LLM 能够在上下文窗口（类比操作系统中的"主存"）与外部存储之间有效地将信息"换入换出"（page in / page out），类似于传统 OS 中的分层记忆（hierarchical memory）。此外，函数调用还可用于管理上下文管理、响应生成与用户交互之间的控制流。这使 Agent 可以针对单个任务迭代地修改其上下文中的内容，从而更有效地利用其有限上下文。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>In MemGPT, we treat context windows as a constrained memory resource, and design a memory hiearchy for LLMs analogous to memory tiers used in traditional OSes (Patterson et al., 1988). Applications in traditional OSes interact with virtual memory, which provides an illusion of there being more memory resources than are actually available in physical (i.e., main) memory by the OS paging overflow data to disk and retrieving data (via a page fault) back into memory when accessed by applications. To provide a similar illusion of longer context length (analogous to virtual memory), we allow the LLM to manage what is placed in its own context (analogous to physical memory) via an &#x27;LLM OS&#x27;, which we call MemGPT. MemGPT enables the LLM to retrieve relevant historical data missing from what is placed in-context, and also evict less relevant data from context and into external storage systems. Figure 3 illustrates the components of MemGPT.</p></div>
+
+<p>在 MemGPT 中，我们把上下文窗口视为一种受限的内存资源，并为 LLM 设计了一个类比传统 OS 中记忆层级（memory tiers）的记忆层次（hierarchy）（Patterson et al., 1988）。传统 OS 中的应用与虚拟内存交互：OS 把溢出数据换页到磁盘，并在应用访问时（经由<strong>缺页中断 page fault</strong>）把数据取回内存，从而营造出"内存资源多于物理（主）内存实际容量"的假象。为了提供类似的更长上下文长度的假象（类比虚拟内存），我们允许 LLM 通过一个"LLM 操作系统"（我们称之为 MemGPT）来管理放置在其自身上下文（类比物理内存）中的内容。MemGPT 使 LLM 能够检索未被放入上下文的相关历史数据，也能把相关性较低的数据从上下文中<strong>逐出（evict）</strong>、转入外部存储系统。图 3 展示了 MemGPT 的各个组件。</p>
+<p>[图 1: MemGPT (left) writes data to persistent memory after it receives a system alert about limited context space.]</p>
+<pre><code class="language-text">（用户）How was your day today?                                   2 月 7 日
+（用户）fun my bf james baked me a birthday cake
+（Agent）Oh wow, happy birthday! 🎂
+（Agent 函数调用）working_context.append(&quot;Boyfriend named James&quot;)
+（Agent）How's James doing? Any special plans today?
+（用户）actually james and i broke up
+（Agent）Sorry to hear that - hope you're OK 💔
+（Agent 函数调用）working_context.replace(
+  &quot;Boyfriend named James&quot;, &quot;Ex-boyfriend named James&quot;)
+（Agent）Did you do anything else to celebrate your birthday? 😊
+（用户）yeah we went to six flags!
+（系统警报）System Alert: Memory Pressure
+（Agent 函数调用）recall_storage.search(&quot;six flags&quot;)
+（检索结果）Showing 3 of 3 results (page 1/1):
+   [01/24/2024] &quot;lol yeah six flags&quot;,
+   [01/14/2024] &quot;i love six flags been like 100 times&quot;,
+   [10/12/2023] &quot;james and I actually first met at six flags&quot;
+（Agent）Did you go with James? It's so cute how both met there!   2 月 14 日
+</code></pre>
+<p>图 1：MemGPT（左侧）在收到上下文空间受限的系统警报后，把数据写入持久记忆。示例对话中（对话文字转录如上，括号内中文为译者所加的角色标注）：Agent 在工作上下文中记录"男友叫 James"（<code>working_context.append</code>）；用户提到分手后，Agent 用 <code>working_context.replace</code> 把"男友"更新为"前男友"；收到"内存压力（memory pressure）"系统警报后，Agent 通过 <code>recall_storage.search</code> 检索召回存储，把"两人是在六旗乐园相识"这一上下文外信息带回当前窗口，用于 2 月 14 日的新对话。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>The combined use of a memory-hierarchy, OS functions and event-based control flow allow MemGPT to handle unbounded context using LLMs that have finite context windows. To demonstrate the utility of our new OS-inspired LLM system, we evaluate MemGPT on two domains where the performance of existing LLMs is severely limited by finite context: document analysis, where the length of standard text files can quickly exceed the input capacity of modern LLMs, and conversational agents, where LLMs bound by limited conversation windows lack context awareness, persona consistency, and long-term memory during extended conversations. In both settings, MemGPT is able to overcome the limitations of finite context to outperform existing LLM-based approaches.</p></div>
+
+<p>记忆层级、OS 函数与基于事件的控制流三者结合，使 MemGPT 能够用具有有限上下文窗口的 LLM 处理无界上下文。为展示这一受 OS 启发的新 LLM 系统的效用，我们在两个现有 LLM 性能受有限上下文严重限制的领域评估 MemGPT：文档分析——标准文本文件的长度会很快超过现代 LLM 的输入容量；以及对话 Agent——受有限对话窗口约束的 LLM 在长时间对话中缺乏上下文感知、人设一致性与长期记忆。在这两种场景下，MemGPT 都能克服有限上下文的限制，优于现有的基于 LLM 的方法。</p>
+<h3 id="2-memgptmemorygpt">2 MemGPT（MemoryGPT）</h3>
+<div class="en-orig"><span class="en-tag">EN</span><p>MemGPT&#x27;s OS-inspired multi-level memory architecture delineates between two primary memory types: main context (analogous to main memory/physical memory/RAM) and external context (analogous to disk memory/disk storage). Main context consists of the LLM prompt tokens—anything in main context is considered in-context and can be accessed by the LLM processor during inference. External context refers to any information that is held outside the LLMs fixed context window. This out-of-context data must always be explicitly moved into main context in order for it to be passed to the LLM processor during inference. MemGPT provides function calls that the LLM processor to manage its own memory without any user intervention.</p></div>
+
+<p>MemGPT 受 OS 启发的多级记忆架构区分两大类主要记忆类型：<strong>主上下文（main context，类比主存/物理内存/RAM）</strong>与<strong>外置上下文（external context，类比磁盘内存/磁盘存储）</strong>。主上下文由 LLM 的提示词 token（prompt tokens）构成——主上下文中的任何内容都被视为"在上下文内（in-context）"，可在推理时被 LLM 处理器访问。外置上下文指保存在 LLM 固定上下文窗口之外的一切信息。这类上下文外数据必须始终被显式移入主上下文，才能在推理时传递给 LLM 处理器。MemGPT 提供一组函数调用，让 LLM 处理器无需任何用户干预即可管理自己的记忆。</p>
+<p>[图 2: MemGPT (left) can search out-of-context data to bring relevant information into the current context window.]</p>
+<p>图 2：MemGPT（左侧）可以搜索上下文外数据，把相关信息带回当前上下文窗口。该图与图 1 使用同一段示例对话截图（高亮部分不同）：高亮 <code>recall_storage.search("six flags")</code> 及其分页返回的检索结果——即"从外置上下文中检索、并重新注入主上下文"的过程。</p>
+<h4 id="21-tokenmain-context">2.1 主上下文（提示词 token，Main context）</h4>
+<div class="en-orig"><span class="en-tag">EN</span><p>The prompt tokens in MemGPT are split into three contiguous sections: the system instructions, working context, and FIFO Queue. The system instructions are read-only (static) and contain information on the MemGPT control flow, the intended usage of the different memory levels, and instructions on how to use the MemGPT functions (e.g. how to retrieve out-of-context data). Working context is a fixed-size read/write block of unstructured text, writeable only via MemGPT function calls. In conversational settings, working context is intended to be used to store key facts, preferences, and other important information about the user and the persona the agent is adopting, allowing the agent to converse fluently with the user. The FIFO queue stores a rolling history of messages, including messages between the agent and user, as well as system messages (e.g. memory warnings) and function call inputs and outputs. The first index in the FIFO queue stores a system message containing a recursive summary of messages that have been evicted from the queue.</p></div>
+
+<p>MemGPT 中的提示词 token 被划分为三个连续区段：<strong>系统指令（system instructions）</strong>、<strong>工作上下文（working context）</strong>与 <strong>FIFO 队列</strong>。系统指令是只读的（静态），包含关于 MemGPT 控制流、各级记忆的预期用法、以及如何使用 MemGPT 函数（例如如何检索上下文外数据）的信息。工作上下文是一块固定大小、可读写的非结构化文本区，只能通过 MemGPT 函数调用写入。在对话场景中，工作上下文用于存放关于用户及 Agent 所扮演人设（persona）的关键事实、偏好与其他重要信息，使 Agent 能与用户流畅交流。FIFO 队列滚动存放消息历史，包括 Agent 与用户之间的消息、系统消息（如内存警告）以及函数调用的输入与输出。FIFO 队列的第一个位置存放一条系统消息，内容是被逐出队列消息的<strong>递归摘要（recursive summary）</strong>。</p>
 <h4 id="22-queue-manager">2.2 队列管理器（Queue Manager）</h4>
-<p>队列管理器负责管理召回存储（recall storage，即 MemGPT 的消息数据库）与 FIFO 队列：</p>
-<ul>
-<li>收到新消息时，将其追加到 FIFO 队列，拼接提示词 token 并触发 LLM 推理；随后把输入消息与 LLM 输出都写入召回存储。</li>
-<li>通过函数调用取回的历史消息会被追加到队列尾部，重新进入上下文窗口。</li>
-<li><strong>上下文溢出控制</strong>：当提示词 token 超过底层 LLM 上下文窗口的"警告阈值"（warning token count，如 70%）时，队列管理器向队列插入一条系统消息，警告 LLM 即将发生队列逐出——这就是"<strong>内存压力（memory pressure）</strong>"警告，让 LLM 有机会用函数把 FIFO 队列中的重要信息存入工作上下文或归档存储（archival storage，一个可存放任意长度文本对象的可读写数据库）。当 token 超过"清空阈值"（flush token count，如 100%）时，队列管理器清空队列以释放空间：逐出一定数量的消息（如上下文窗口的 50%），并利用既有递归摘要与被逐出消息生成新的递归摘要。被逐出的消息不再处于上下文内，但会无限期保存在召回存储中，可随时通过函数调用读取。</li>
-</ul>
-<h4 id="23-function-executor-token">2.3 函数执行器（Function Executor，处理补全 token）</h4>
-<p>MemGPT 通过 LLM 处理器生成的函数调用来编排主上下文与外置上下文之间的数据流动。记忆的编辑与检索完全是<strong>自导向（self-directed）</strong>的：系统指令中包含（1）记忆层级及其用途的详细描述，以及（2）带自然语言描述的函数模式（function schema），指导 LLM 访问或修改自己的记忆。</p>
-<p>每个推理周期中，LLM 以主上下文（拼接为单一字符串）为输入生成输出串；MemGPT 解析并校验函数参数后执行函数，执行结果（包括运行时错误，例如在主上下文已满时仍尝试追加内容）会被反馈给处理器——这一反馈回路让系统能从自身行为中学习并调整。系统会向处理器提示 token 限制警告以引导其记忆管理决策；检索机制也实现了分页（pagination），防止一次检索就撑爆上下文窗口。</p>
-<h4 id="24-function-chaining">2.4 控制流与函数链（Function Chaining）</h4>
-<p>MemGPT 由<strong>事件（event）</strong>触发 LLM 推理。事件是广义输入，包括：用户消息、系统消息（如主上下文容量警告）、用户交互事件（如"用户刚登录""用户上传完文档"的提醒），以及定时事件（让 MemGPT 可在无用户干预下"主动"运行）。事件经解析器转换为纯文本消息，追加进主上下文。</p>
-<p>许多实际任务需要按顺序调用多个函数（例如对单个查询翻阅多页检索结果，或把来自不同查询的多份文档内容汇入主上下文）。<strong>函数链</strong>允许 MemGPT 在把控制权交还用户之前顺序执行多个函数调用：函数可带一个特殊标志请求在函数执行完后立即把控制权返回处理器（request heartbeat=true），MemGPT 会把函数输出加入主上下文并继续推理；若不带该标志（即让出 yield），则暂停处理器，直到下一个外部事件到来。</p>
-<h3 id="3">3 实验</h3>
-<p>MemGPT 在两个长上下文领域评估：对话 Agent 与文档分析。实验所用模型端点：GPT-4 指 gpt-4-0613（上下文 8,192）、GPT-4 Turbo 指 gpt-4-1106-preview（128,000）、GPT-3.5 Turbo 指 gpt-3.5-turbo-1106（16,385）。</p>
-<h4 id="31-agent">3.1 对话 Agent：一致性与吸引力</h4>
-<p>陪伴式/个性化助手需要与用户进行跨越数周、数月甚至数年的自然长期互动，这对固定上下文模型构成两大挑战，也是评估的两条标准：(1) <strong>一致性（Consistency）</strong>——新提到的事实、偏好与事件应与用户和 Agent 双方的既往表述相吻合；(2) <strong>吸引力（Engagement）</strong>——Agent 应能利用关于用户的长期知识来个性化回复，让对话更自然。</p>
-<p><strong>数据集</strong>：Multi-Session Chat（MSC，Xu et al., 2021）——由人类标注者扮演一致人设生成的多会话聊天日志，每段对话共 5 个会话、每会话约十来条消息。作者增加了第 6 个会话，其中包含同一对人设间的一组问答对。</p>
-<p><strong>深度记忆检索任务（DMR，测一致性）</strong>：作者提出的新任务——用户提出一条明确回指先前对话、且正确答案范围很窄的问题。问答对由另一个 LLM 生成，要求问题必须只能凭借过去会话中的知识才能答对（不能只靠人设摘要答出）。评测用 ROUGE-L（R）与 LLM 评委（GPT-4 判分）。基线（裸 LLM）只能看到过去五段对话的有损摘要以模拟递归摘要流程，而 MemGPT 可访问完整对话历史，但必须通过分页搜索查询将其召回主上下文。</p>
-<p>结果（表 2）：MemGPT 显著超越固定上下文基线——GPT-3.5 Turbo：38.7% → 66.9%（ROUGE-L 0.394 → 0.629）；GPT-4：32.1% → 92.5%（0.296 → 0.814）；GPT-4 Turbo：35.3% → 93.4%（0.359 → 0.827）。</p>
-<p><strong>对话开场白任务（Opener，测吸引力）</strong>：评估 Agent 能否利用先前对话积累的知识写出吸引人的开场白，方法是将其生成的开场白与"金标准人设"及人类撰写的开场白计算 CSIM 相似度。结果（表 3）：人类开场白 SIM-1/SIM-3/SIM-H 为 0.800/0.800/1.000；MemGPT（GPT-3.5）为 0.830/0.812/0.817，MemGPT（GPT-4）为 0.868/0.843/0.773——MemGPT 的开场白与人类手写的开场白相似度（SIM-H）达到甚至超过基线模型，偶尔优于人类。作者还发现，把信息存入工作上下文是生成有吸引力开场白的关键。</p>
-<h4 id="32">3.2 文档分析</h4>
-<p>许多真实文档远超模型上下文：法律、财务文档（如 SEC 10-K 年报）可轻松超过百万 token；且很多任务需要跨多篇长文档建立联系——盲目扩大上下文难以解决这些问题。</p>
-<p><strong>多文档问答</strong>：采用 Liu et al.（2023a）的检索器-阅读器（retriever-reader）文档问答任务：从 NaturalQuestions-Open 选问题，检索器（OpenAI text-embedding-ada-002 嵌入 + 余弦相似度）选出与问题相关的 Wikipedia 文档，阅读模型基于给定文档作答；评估阅读器准确率随检索文档数 K 增长的变化。MemGPT 侧使用 PostgreSQL + pgvector 扩展做归档存储（HNSW 索引实现亚秒级近似查询），整份嵌入文档集装入归档存储，检索器"自然涌现"为归档存储的搜索功能。使用 2018 年末的 Wikipedia 转储，抽取 50 个问题评估，由 LLM 评委判分以保证答案确实来自检索文档。</p>
-<p>结果（图 5）：固定上下文基线的性能上限约等于检索器性能（若相似度搜索没把金文档排进前排，基线永远看不到它）；文档截断会随压缩程度加深而降低准确率。MemGPT 则能通过多次调用检索器、在归档存储中迭代翻页，使其可用文档数不再受限于上下文窗口能容纳的数量——其性能几乎不受上下文长度增长影响。MemGPT 用 GPT-3.5 时因函数调用能力有限而明显退化，用 GPT-4 表现最佳。</p>
-<p><strong>嵌套键值检索（Nested KV）</strong>：作者基于先前工作的合成 KV 任务（键值均为 128 位 UUID）提出嵌套版本——值本身也可能是键，需要多跳查找。固定 UUID 对总数为 140（约 8k token，即 GPT-4 基线上下文长度），嵌套层级从 0 到 4，采样 30 种排序配置。</p>
-<p>结果（图 7）：GPT-3.5 在 1 层嵌套即跌至 0% 准确率（主要失败模式是直接返回原始值）；GPT-4 与 GPT-4 Turbo 稍好，但在 3 层嵌套时也降到 0%。MemGPT（GPT-4）则完全不受嵌套层数影响，能通过反复的函数查询完成嵌套查找；MemGPT（GPT-4 Turbo / GPT-3.5）也优于对应基线，但在 2 层后开始下滑。这一任务直接检验了 Agent 汇集多个数据源信息（多跳检索）的能力。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>The queue manager manages messages in recall storage and the FIFO queue. When a new message is received by the system, the queue manager appends the incoming messages to the FIFO queue, concatenates the prompt tokens and triggers the LLM inference to generate LLM output (the completion tokens). The queue manager writes both the incoming message and the generated LLM output to recall storage (the MemGPT message database). When messages in recall storage are retrieved via a MemGPT function call, the queue manager appends them to the back of the queue to reinsert them into the LLM&#x27;s context window.</p></div>
+
+<p>队列管理器（queue manager）管理<strong>召回存储（recall storage）</strong>与 FIFO 队列中的消息。当系统收到新消息时，队列管理器把到来的消息追加到 FIFO 队列，拼接提示词 token 并触发 LLM 推理以生成 LLM 输出（即补全 token，completion tokens）。队列管理器把输入消息与生成的 LLM 输出都写入召回存储（即 MemGPT 的消息数据库）。当召回存储中的消息通过 MemGPT 函数调用被检索时，队列管理器会把它们追加到队列尾部，重新插入 LLM 的上下文窗口。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>The queue manager is also responsible for controlling context overflow via a queue eviction policy. When the prompt tokens exceed the &#x27;warning token count&#x27; of the underlying LLM&#x27;s context window (e.g. 70% of the context window), the queue manager inserts a system message into the queue warning the LLM of an impending queue eviction (a &#x27;memory pressure&#x27; warning) to allow the LLM to use MemGPT functions to store important information contained in the FIFO queue to working context or archival storage (a read/write database storing arbitrary length text objects). When the prompt tokens exceed the &#x27;flush token count&#x27; (e.g. 100% of the context window), the queue manager flushes the queue to free up space in the context window: the queue manager evicts a specific count of messages (e.g. 50% of the context window), generates a new recursive summary using the existing recursive summary and evicted messages. Once the queue is flushed, the evicted messages are no longer in-context and immediately viewable to the LLM, however they are stored indefinitely in recall storage and readable via MemGPT function calls.</p></div>
+
+<p>队列管理器还负责通过队列逐出策略控制上下文溢出。当提示词 token 超过底层 LLM 上下文窗口的"警告 token 数（warning token count）"（如上下文窗口的 70%）时，队列管理器向队列插入一条系统消息，警告 LLM 即将发生队列逐出（即"<strong>内存压力（memory pressure）</strong>"警告），让 LLM 有机会用 MemGPT 函数把 FIFO 队列中的重要信息保存到工作上下文或<strong>归档存储（archival storage，一个可存放任意长度文本对象的可读写数据库）</strong>。当提示词 token 超过"清空 token 数（flush token count）"（如上下文窗口的 100%）时，队列管理器清空队列以释放上下文窗口空间：逐出一定数量的消息（如上下文窗口的 50%），并利用既有递归摘要与被逐出的消息生成新的递归摘要。队列一旦被清空，被逐出的消息便不再处于上下文内、也就无法再被 LLM 立即查看（译注：原文此句行文略含混，按上下文当为此意）；但它们会被无限期保存在召回存储中，可随时通过 MemGPT 函数调用读取。</p>
+<p>[图 3: In MemGPT, a fixed-context LLM processor is augmented with a hierarchical memory system and functions that let it manage its own memory. The LLM's prompt tokens (inputs), or main context, consist of the system instructions, working context, and a FIFO queue. The LLM completion tokens (outputs) are interpreted as function calls by the function executor. MemGPT uses functions to move data between main context and external context (the archival and recall storage databases). The LLM can request immediate follow-up LLM inference to chain function calls together by generating a special keyword argument (request heartbeat=true) in its output; function chaining is what allows MemGPT to perform multi-step retrieval to answer user queries.]</p>
+<p>图 3：在 MemGPT 中，一个固定上下文的 LLM 处理器被加上分层记忆系统与一组函数，让它能管理自己的记忆。LLM 的提示词 token（输入）即主上下文，由系统指令、工作上下文与 FIFO 队列构成；LLM 的补全 token（输出）由函数执行器解释为函数调用。MemGPT 用函数在主上下文与外置上下文（归档存储与召回存储两个数据库）之间移动数据。LLM 可以在输出中生成一个特殊关键字参数（<code>request heartbeat=true</code>，请求心跳）来要求立即进行后续 LLM 推理，从而把函数调用链接起来；正是这种函数链使 MemGPT 能执行多步检索来回答用户查询。架构图各组件的文字转录如下（译注）：</p>
+<pre><code class="language-text">提示词 token (Prompt Tokens) = 主上下文，位于 LLM 有限上下文窗口内（如 8k token）
+ ├─ 系统指令 System Instructions（MemGPT 系统提示词） — 只读（静态）
+ ├─ 工作上下文 Working Context                        — 读写；经函数写入
+ └─ FIFO 队列                                        — 读写；经队列管理器写入
+补全 token (Completion Tokens) → 函数执行器 Function Executor（解析为函数调用）
+外部上下文 External Context：
+ ├─ 召回存储 Recall Storage   — 读：经函数；写：经队列管理器
+ └─ 归档存储 Archival Storage — 读/写：经函数
+输出缓冲 Output Buffer        — 读写；经队列管理器写入
+</code></pre>
+<h4 id="23-tokenfunction-executor">2.3 函数执行器（处理补全 token，Function Executor）</h4>
+<div class="en-orig"><span class="en-tag">EN</span><p>MemGPT orchestrates data movement between main context and external context via function calls that are generated by the LLM processor. Memory edits and retrieval are entirely self-directed: MemGPT autonomously updates and searches through its own memory based on the current context. For instance, it can decide when to move items between contexts (e.g. when the conversation history is becoming too long, as show in Figure 1) and modify its main context to better reflect its evolving understanding of its current objectives and responsibilities (as shown in Figure 3). We implement self-directed editing and retrieval by providing explicit instructions within the system instructions that guide the LLM on how to interact with the MemGPT memory systems. These instructions comprise two main components: (1) a detailed description of the memory hierarchy and their respective utilities, and (2) a function schema (complete with their natural language descriptions) that the system can call to access or modify its memory.</p></div>
+
+<p>MemGPT 通过 LLM 处理器生成的函数调用来编排主上下文与外置上下文之间的数据流动。记忆的编辑与检索完全是<strong>自导向（self-directed）</strong>的：MemGPT 基于当前上下文自主更新并检索自己的记忆。例如，它可以决定何时在上下文之间移动数据（如对话历史变得过长时，见图 1），并修改主上下文以更好地反映自己对当前目标与职责不断演化的理解（如图 3 所示）。我们通过在系统指令中提供明确指导来实现自导向的编辑与检索，这些指令引导 LLM 如何与 MemGPT 记忆系统交互，包含两个主要成分：(1) 记忆层级及其各自用途的详细描述；(2) 系统可调用的<strong>函数模式（function schema，附完整的自然语言描述）</strong>，用于访问或修改自己的记忆。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>During each inference cycle, LLM processor takes main context (concatenated into a single string) as input, and generates an output string. This output string is parsed by MemGPT to ensure correctness, and if the parser validates the function arguments the function is executed. The results, including any runtime errors that occur (e.g. trying to add to main context when it is already at maximum capacity), are then fed back to the processor by MemGPT. This feedback loop enables the system to learn from its actions and adjust its behavior accordingly. Awareness of context limits is a key aspect in making the self-editing mechanism work effectively, to this end MemGPT prompts the processor with warnings regarding token limitations to guide its memory management decisions. Additionally, our memory retrieval mechanisms are designed to be cognizant of these token constraints and implement pagination to prevent retrieval calls from overflowing the context window.</p></div>
+
+<p>在每个推理周期中，LLM 处理器以主上下文（拼接为单一字符串）为输入，生成一个输出字符串。该输出字符串由 MemGPT 解析以确保正确性；若解析器校验通过函数参数，则执行该函数。执行结果（包括发生的任何运行时错误，例如在主上下文已达最大容量时仍尝试向其追加内容）随后由 MemGPT 反馈给处理器。这一反馈回路使系统能够从自身行为中学习并相应调整。对上下文限制的感知是让自编辑机制有效运作的关键；为此，MemGPT 会向处理器提示关于 token 限制的警告，以引导其记忆管理决策。此外，我们的记忆检索机制在设计上会考虑这些 token 约束，并实现了<strong>分页（pagination）</strong>，以防止检索调用撑爆上下文窗口。</p>
+<p>[表 1: Comparing context lengths of commonly used models and LLM APIs (data collected 1/2024). *Approximate message count assuming a preprompt of 1k tokens, and an average message size of ~50 tokens (~250 characters). 'Open' means the model is open-source or open-weights (vs only available behind an API).]</p>
+<table>
+<thead>
+<tr>
+<th>模型 / API 名称</th>
+<th>开源？</th>
+<th>上下文窗口（token）</th>
+<th>*消息数</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Llama (1)</td>
+<td>✓</td>
+<td>2k</td>
+<td>20</td>
+</tr>
+<tr>
+<td>Llama 2</td>
+<td>✓</td>
+<td>4k</td>
+<td>60</td>
+</tr>
+<tr>
+<td>GPT-3.5 Turbo（发布版）</td>
+<td>✗</td>
+<td>4k</td>
+<td>60</td>
+</tr>
+<tr>
+<td>Mistral 7B</td>
+<td>✓</td>
+<td>8k</td>
+<td>140</td>
+</tr>
+<tr>
+<td>GPT-4（发布版）</td>
+<td>✗</td>
+<td>8k</td>
+<td>140</td>
+</tr>
+<tr>
+<td>GPT-3.5 Turbo</td>
+<td>✗</td>
+<td>16k</td>
+<td>300</td>
+</tr>
+<tr>
+<td>GPT-4</td>
+<td>✗</td>
+<td>32k</td>
+<td>∼600</td>
+</tr>
+<tr>
+<td>Claude 2</td>
+<td>✗</td>
+<td>100k</td>
+<td>∼2000</td>
+</tr>
+<tr>
+<td>GPT-4 Turbo</td>
+<td>✗</td>
+<td>128k</td>
+<td>∼2600</td>
+</tr>
+<tr>
+<td>Yi-34B-200k</td>
+<td>✓</td>
+<td>200k</td>
+<td>∼4000</td>
+</tr>
+</tbody>
+</table>
+<p>表 1：常用模型与 LLM API 的上下文长度对比（数据收集于 2024 年 1 月）。*消息数为近似值，假设预提示（preprompt）占 1k token、平均每条消息约 50 token（约 250 字符）。"开源"指模型为开源或开放权重（而非仅通过 API 提供）。</p>
+<h4 id="24-control-flow-and-function-chaining">2.4 控制流与函数链（Control Flow and Function Chaining）</h4>
+<div class="en-orig"><span class="en-tag">EN</span><p>In MemGPT, events trigger LLM inference: events are generalized inputs to MemGPT and can consist of user messages (in chat applications), system messages (e.g. main context capacity warnings), user interactions (e.g. an alert that a user just logged in, or an alert that they finished uploading a document), and timed events that are run on a regular schedule (allowing MemGPT to run &#x27;unprompted&#x27; without user intervention). MemGPT processes events with a parser to convert them into plain text messages that can be appended to main context and eventually be fed as input into the LLM processor.</p></div>
+
+<p>在 MemGPT 中，<strong>事件（event）</strong>触发 LLM 推理：事件是 MemGPT 的广义输入，可以包括用户消息（聊天应用中）、系统消息（如主上下文容量警告）、用户交互（如"用户刚登录"或"用户上传完文档"的提醒），以及按固定计划运行的定时事件（让 MemGPT 无需用户干预即可"未经提示"地运行）。MemGPT 用解析器处理事件，把它们转换为纯文本消息，以便追加进主上下文、并最终作为输入喂给 LLM 处理器。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>Many practical tasks require calling multiple functions in sequence, for example, navigating through multiple pages of results from a single query or collating data from different documents in main context from separate queries. Function chaining allows MemGPT to execute multiple function calls sequentially before returning control to the user. In MemGPT, functions can be called with a special flag that requests control be immediately returned to the processor after the requested function completes execution. If this flag is present, MemGPT will add the function output to main context and (as opposed to pausing processor execution). If this flag is not present (a yield), MemGPT will not run the LLM processor until the next external event trigger (e.g. a user message or scheduled interrupt).</p></div>
+
+<p>许多实际任务需要按顺序调用多个函数，例如翻阅单个查询的多页结果，或把来自不同查询的多份文档内容汇入主上下文。<strong>函数链（function chaining）</strong>允许 MemGPT 在把控制权交还用户之前顺序执行多个函数调用。在 MemGPT 中，函数可带一个特殊标志被调用，请求在所指函数执行完毕后立即把控制权返回处理器。若该标志存在，MemGPT 会把函数输出加入主上下文（而不是暂停处理器执行）；若该标志不存在（即"让出 yield"），MemGPT 不会运行 LLM 处理器，直到下一个外部事件触发（如用户消息或<strong>计划内中断 interrupt</strong>）。</p>
+<h3 id="3-experiments">3 实验（Experiments）</h3>
+<div class="en-orig"><span class="en-tag">EN</span><p>We assess MemGPT in two long-context domains: conversational agents and document analysis. For conversational agents, we expand the existing Multi-Session Chat dataset (Xu et al., 2021) and introduce two new dialogue tasks that evaluate an agent&#x27;s ability to retain knowledge across long conversations. For document analysis, we benchmark MemGPT on existing tasks from (Liu et al., 2023a) for question answering and key-value retrieval over lengthy documents. We also propose a new nested key-value retrieval task requiring collating information across multiple data sources, which tests the ability of an agent to collate information from multiple data sources (multi-hop retrieval). We publicly release our augmented MSC dataset, nested KV retrieval dataset, and a dataset of embeddings for 20M Wikipedia articles to facilitate future research. Our code for the benchmarks is available at https://research.memgpt.ai.</p></div>
+
+<p>我们在两个长上下文领域评估 MemGPT：对话 Agent 与文档分析。对对话 Agent，我们扩展现有的多会话聊天数据集 Multi-Session Chat（Xu et al., 2021），并引入两个新的对话任务，评估 Agent 在长对话中保持知识的能力。对文档分析，我们在（Liu et al., 2023a）的既有任务上对 MemGPT 做基准测试，包括长文档问答与键值（key-value）检索。我们还提出一个新的嵌套键值检索任务，要求跨多个数据源汇集信息，以测试 Agent 汇集多数据源信息（<strong>多跳检索 multi-hop retrieval</strong>）的能力。我们公开发布了扩充的 MSC 数据集、嵌套 KV 检索数据集、以及 2000 万篇维基百科文章的嵌入数据集，以便未来研究。基准测试代码见 https://research.memgpt.ai。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>Implementation details. When discussing OpenAI models, unless otherwise specified &#x27;GPT-4 Turbo&#x27; refers to the specific gpt-4-1106-preview model endpoint (context window of 128,000), &#x27;GPT-4&#x27; refers to gpt-4-0613 (context window of 8,192), and &#x27;GPT-3.5 Turbo&#x27; refers to gpt-3.5-turbo-1106 (context window of 16,385). In experiments, we run MemGPT with all baseline models (GPT-4, GPT-4 Turbo, and GPT 3.5) to show how the underlying model performance affects MemGPT&#x27;s.</p></div>
+
+<p><strong>实现细节</strong> —— 谈到 OpenAI 模型时，除非特别说明，"GPT-4 Turbo"指 gpt-4-1106-preview 模型端点（上下文窗口 128,000），"GPT-4"指 gpt-4-0613（上下文窗口 8,192），"GPT-3.5 Turbo"指 gpt-3.5-turbo-1106（上下文窗口 16,385）。实验中，我们用全部基线模型（GPT-4、GPT-4 Turbo 与 GPT-3.5）运行 MemGPT，以展示底层模型性能如何影响 MemGPT 的性能。</p>
+<p>[图 4: An example conversation snippet where MemGPT (left) updates stored information. Here the information is stored in working context memory (located within the prompt tokens).]</p>
+<p>图 4：一段示例对话片段，MemGPT（左侧）在其中更新已存储的信息。这里的信息存储在工作上下文记忆中（位于提示词 token 内）。该图与图 1/图 2 使用同一段示例对话截图（高亮部分不同）：高亮 <code>working_context.append</code> 与 <code>working_context.replace</code> 两次函数调用，展示 Agent 如何把"男友叫 James"写入工作上下文、并在用户提到分手后将其更新为"前男友叫 James"。</p>
+<h4 id="31-agent-memgptmemgpt-for-conversational-agents">3.1 面向对话 Agent 的 MemGPT（MemGPT for Conversational Agents）</h4>
+<div class="en-orig"><span class="en-tag">EN</span><p>Conversational agents like virtual companions and personalized assistants aim to engage users in natural, long-term interactions, potentially spanning weeks, months, or even years. This creates challenges for models with fixed-length contexts, which can only reference a limited history of the conversation. An &#x27;infinite context&#x27; agent should seamlessly handle continuous exchanges without boundary or reset. When conversing with a user, such an agent must satisfy two key criteria: (1) Consistency - The agent should maintain conversational coherence. New facts, preferences, and events mentioned should align with prior statements from both the user and agent. (2) Engagement - The agent should draw on long-term knowledge about the user to personalize responses. Referencing prior conversations makes dialogue more natural and engaging.</p></div>
+
+<p>虚拟伴侣与个性化助手等对话 Agent 旨在与用户进行自然的长期互动，可能跨越数周、数月甚至数年。这对固定长度上下文的模型构成挑战——它们只能引用对话中有限的历史。一个"无限上下文"的 Agent 应能无缝处理连续交流，而不设边界或重置。与用户对话时，这样的 Agent 必须满足两条关键标准：(1) <strong>一致性（Consistency）</strong>——Agent 应保持对话连贯，新提到的事实、偏好与事件应与用户和 Agent 双方的既往表述相吻合；(2) <strong>吸引力（Engagement）</strong>——Agent 应利用关于用户的长期知识来个性化回复。回指先前的对话能让对话更自然、更有吸引力。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>We therefore assess our proposed system, MemGPT, on these two criteria: (1) Does MemGPT leverage its memory to improve conversation consistency? Can it remember relevant facts, preferences, and events from past interactions to maintain coherence? (2) Does MemGPT produce more engaging dialogue by taking advantage of memory? Does it spontaneously incorporate long-range user information to personalize messages? By evaluating on consistency and engagement, we can determine how well MemGPT handles the challenges of long-term conversational interaction compared to fixed-context baselines. Its ability to satisfy these criteria will demonstrate whether unbounded context provides meaningful benefits for conversational agents.</p></div>
+
+<p>因此我们在这两条标准上评估我们提出的 MemGPT：(1) MemGPT 是否利用其记忆提升了对话一致性？它能记住过去互动中的相关事实、偏好与事件以保持连贯吗？(2) MemGPT 是否借助记忆产出更有吸引力的对话？它会自发地把远期用户信息融入消息以实现个性化吗？通过在一致性与吸引力上评估，我们可以判断相对固定上下文基线，MemGPT 处理长期对话交互挑战的能力如何。它满足这些标准的能力将证明：无界上下文对对话 Agent 是否有实质收益。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>Dataset. We evaluate MemGPT and our fixed-context baselines on the Multi-Session Chat (MSC) dataset introduced by Xu et al. (2021), which contains multi-session chat logs generated by human labelers, each of whom was asked to play a consistent persona for the duration of all sessions. Each multi-session chat in MSC has five total sessions, and each session consists of a roughly a dozen messages. As part of our consistency experiments, we created a new session (session 6) that contains a single question-answer response pair between the same two personas.</p></div>
+
+<p><strong>数据集</strong> —— 我们在 Xu et al. (2021) 提出的多会话聊天（Multi-Session Chat，MSC）数据集上评估 MemGPT 与固定上下文基线。MSC 包含由人类标注者生成的多会话聊天日志，每位标注者被要求在所有会话期间扮演一个一致的人设。MSC 中每段多会话聊天共 5 个会话，每个会话约有十来条消息。作为一致性实验的一部分，我们创建了新的第 6 个会话，其中包含同一对人设之间的一组问答对。</p>
+<h5 id="311-deep-memory-retrieval-task">3.1.1 深度记忆检索任务（一致性，Deep Memory Retrieval Task）</h5>
+<div class="en-orig"><span class="en-tag">EN</span><p>We introduce a new &#x27;deep memory retrieval&#x27; (DMR) task based on the MSC dataset designed to test the consistency of a conversational agent. In DMR, the conversational agent is asked a question by the user that explicitly refers back to a prior conversation and has a very narrow expected answer range. We generated the DMR question-answer (QA) pairs using a separate LLM that was instructed to write a question from one user to another that could only be answered correctly using knowledge gained from the past sessions (see Appendix for further details).</p></div>
+
+<p>我们基于 MSC 数据集提出一个新的"<strong>深度记忆检索（deep memory retrieval，DMR）</strong>"任务，用于测试对话 Agent 的一致性。在 DMR 中，用户向对话 Agent 提出一个明确回指先前对话、且预期答案范围非常窄的问题。我们用另一个 LLM 生成 DMR 问答（QA）对，指示它写出一个用户向另一用户提出的问题，该问题只有凭借过去会话中获得的知识才能被正确回答（更多细节见附录）。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>We evaluate the quality of the generated response against the &#x27;gold response&#x27; using ROUGE-L scores (Lin, 2004) and an &#x27;LLM judge&#x27;, which is instructed to evaluate whether or not the generated response is consistent with the gold response (GPT-4 has been shown to have high agreement with human evaluators (Zheng et al., 2023)). In practice, we notice that the generated responses (from both MemGPT and the baselines) were generally more verbose than the gold responses. We use the ROUGE-L recall (R) metric to account for the verbosity of the generated agent replies compared to the relatively short gold answer labels.</p></div>
+
+<p>我们用 ROUGE-L 分数（Lin, 2004）与一个"LLM 评委（LLM judge）"来评估生成回复相对于"金标准回复（gold response）"的质量，评委被要求判断生成回复是否与金标准回复一致（GPT-4 已被证明与人类评估者有很高的一致性（Zheng et al., 2023））。实践中我们注意到，生成回复（无论来自 MemGPT 还是基线）普遍比金标准回复更冗长。我们采用 ROUGE-L 召回率（R）指标，以计入生成的 Agent 回复相对简短金标准答案的冗长度。</p>
+<p>[表 2: Deep memory retrieval (DMR) performance. In this task, the agent is asked a specific question about a topic discussed in a prior conversation (sessions 1–5). The agent's response is scored against the gold answer. MemGPT significantly outperforms the fixed-context baselines.]</p>
+<table>
+<thead>
+<tr>
+<th>模型</th>
+<th>准确率 ⇑</th>
+<th>ROUGE-L (R) ⇑</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GPT-3.5 Turbo</td>
+<td>38.7%</td>
+<td>0.394</td>
+</tr>
+<tr>
+<td>+ MemGPT</td>
+<td>66.9%</td>
+<td>0.629</td>
+</tr>
+<tr>
+<td>GPT-4</td>
+<td>32.1%</td>
+<td>0.296</td>
+</tr>
+<tr>
+<td>+ MemGPT</td>
+<td>92.5%</td>
+<td>0.814</td>
+</tr>
+<tr>
+<td>GPT-4 Turbo</td>
+<td>35.3%</td>
+<td>0.359</td>
+</tr>
+<tr>
+<td>+ MemGPT</td>
+<td>93.4%</td>
+<td>0.827</td>
+</tr>
+</tbody>
+</table>
+<p>表 2：深度记忆检索（DMR）性能。在此任务中，Agent 被问及一个关于先前对话（第 1–5 会话）中讨论过的主题的具体问题，其回答对照金标准答案打分。MemGPT 显著优于固定上下文基线。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>MemGPT utilizes memory to maintain coherence: Table 2 shows the performance of MemGPT vs the fixed-memory baselines. We compare MemGPT using different underlying LLMs, and compare against using the base LLM without MemGPT as a baseline. The baselines are able to see a lossy summarization of the past five conversations to mimic an extended recursive summarization procedure, while MemGPT instead has access to the full conversation history but must access it via paginated search queries to recall memory (in order to bring them into main context). In this task, we see that MemGPT clearly improves the performance of the underlying base LLM: there is a clear drop in both accuracy and ROUGE scores when going from MemGPT to the corresponding LLM baselines.</p></div>
+
+<p><strong>MemGPT 利用记忆保持一致性</strong>：表 2 展示了 MemGPT 与固定记忆基线的性能。我们比较使用不同底层 LLM 的 MemGPT，并以不带 MemGPT 的基础 LLM 作为基线对照。基线能看到过去五段对话的有损摘要，以模拟扩展的递归摘要流程；而 MemGPT 可访问完整对话历史，但必须通过分页搜索查询来检索记忆（以便把相关内容带入主上下文）。在此任务中可见，MemGPT 明显提升了底层基础 LLM 的性能：从 MemGPT 换到对应的 LLM 基线时，准确率与 ROUGE 分数都出现明显下降。</p>
+<h5 id="312-conversation-opener-task">3.1.2 对话开场白任务（吸引力，Conversation Opener Task）</h5>
+<div class="en-orig"><span class="en-tag">EN</span><p>In the &#x27;conversation opener&#x27; task we evaluate an agent&#x27;s ability to craft engaging messages to the user that draw from knowledge accumulated in prior conversations. To evaluate the &#x27;engagingness&#x27; of a conversation opener using the MSC dataset, we compare the generated opener to the gold personas: an engaging conversation opener should draw from one (or several) of the data points contained in the persona, which in MSC effectively summarize the knowledge accumulated throughout all prior sessions. We also compare to the human-generated gold opener, i.e., the first response in the following session. We report the CSIM scores of MemGPT&#x27;s openers in Table 3. We test several variations of MemGPT using different base LLMs.</p></div>
+
+<p>在"<strong>对话开场白（conversation opener）</strong>"任务中，我们评估 Agent 利用先前对话中积累的知识、向用户写出有吸引力消息的能力。为用 MSC 数据集评估开场白的"吸引力"，我们把生成的开场白与金标准人设对比：一个有吸引力的开场白应利用人设中包含的一（或多）个数据点——在 MSC 中，人设实际上概括了此前所有会话积累的知识。我们还与人类生成的金标准开场白对比，即下一个会话中的第一条回复。我们在表 3 中报告 MemGPT 开场白的 CSIM 分数，并测试了使用不同基础 LLM 的多个 MemGPT 变体。</p>
+<p>[表 3: Conversation opener performance. The agent's conversation opener is evaluated using similarity scores to the gold persona labels (SIM-1/3) and to the human-created opener (SIM-H). MemGPT is able to exceed the performance of the human-created conversation opener with a variety of underlying models.]</p>
+<table>
+<thead>
+<tr>
+<th>方法</th>
+<th>SIM-1 ⇑</th>
+<th>SIM-3 ⇑</th>
+<th>SIM-H ⇑</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Human（人类）</td>
+<td>0.800</td>
+<td>0.800</td>
+<td>1.000</td>
+</tr>
+<tr>
+<td>GPT-3.5 Turbo</td>
+<td>0.830</td>
+<td>0.812</td>
+<td>0.817</td>
+</tr>
+<tr>
+<td>GPT-4</td>
+<td>0.868</td>
+<td>0.843</td>
+<td>0.773</td>
+</tr>
+<tr>
+<td>GPT-4 Turbo</td>
+<td>0.857</td>
+<td>0.828</td>
+<td>0.767</td>
+</tr>
+</tbody>
+</table>
+<p>表 3：对话开场白性能。Agent 的开场白通过与金标准人设标签的相似度（SIM-1/3）以及与人类撰写开场白的相似度（SIM-H）来评估。结合表题"MemGPT 能以多种底层模型超越人类撰写开场白的性能"可知，表中各模型行为 MemGPT 使用对应底层模型的结果（Human 行为人类撰写的开场白）。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>MemGPT utilizes memory to increase engagement: As seen in Table 3, MemGPT is able to craft engaging openers that perform similarly to and occasionally exceed the hand-written human openers. We observe that MemGPT tends to craft openers that are both more verbose and cover more aspects of the persona information than the human baseline. Additionally, we can see the storing information in working context is key to generating engaging openers.</p></div>
+
+<p><strong>MemGPT 利用记忆提升吸引力</strong>：如表 3 所示，MemGPT 能写出有吸引力的开场白，其表现与人工撰写的开场白相当、偶尔还更胜一筹。我们观察到，MemGPT 写出的开场白往往比人类基线更冗长，且覆盖人设信息的更多方面。此外可以看到，把信息存入工作上下文是生成有吸引力开场白的关键。</p>
+<h4 id="32-memgptmemgpt-for-document-analysis">3.2 面向文档分析的 MemGPT（MemGPT for Document Analysis）</h4>
+<div class="en-orig"><span class="en-tag">EN</span><p>Document analysis also faces challenges due to the limited context windows of today&#x27;s transformer models. As shown in Table 1, both open and closed source models suffer from constrained context length (up to 128k tokens for OpenAI&#x27;s models). However many documents easily surpass these lengths; for example, legal or financial documents such as Annual Reports (SEC Form 10-K) can easily pass the million token mark. Moreover, many real document analysis tasks require drawing connections across multiple such lengthy documents. Anticipating these scenarios, it becomes difficult to envision blindly scaling up context as a solution to the fixed-context problem. Recent research (Liu et al., 2023a) also raises doubts about the utility of simply scaling contexts, since they find uneven attention distributions in large context models (the model is more capable of recalling information at the beginning or end of its context window, vs tokens in the middle). To enable reasoning across documents, more flexible memory architectures like MemGPT are needed.</p></div>
+
+<p>文档分析同样因当今 transformer 模型有限的上下文窗口而面临挑战。如表 1 所示，开源与闭源模型都受制于受限的上下文长度（OpenAI 模型至多 128k token）。然而许多文档很容易超过这些长度；例如，法律或财务文档（如年报，SEC Form 10-K）可轻松突破百万 token 大关。此外，许多真实的文档分析任务需要跨多份此类长文档建立联系。预料到这些场景，很难想象盲目扩大上下文能成为固定上下文问题的解决方案。最近的研究（Liu et al., 2023a）也对单纯扩大上下文的效用提出质疑：他们发现大上下文模型中的注意力分布不均匀（模型对上下文窗口开头或结尾信息的召回能力强于中部 token）。为了实现跨文档推理，需要像 MemGPT 这样更灵活的记忆架构。</p>
+<h5 id="321-multi-document-question-answering">3.2.1 多文档问答（Multi-Document Question-Answering）</h5>
+<div class="en-orig"><span class="en-tag">EN</span><p>To evaluate MemGPT&#x27;s ability to analyze documents, we benchmark MemGPT against fixed-context baselines on the retriever-reader document QA task from Liu et al. (2023a). In this task, a question is selected from the NaturalQuestions-Open dataset, and a retriever selects relevant Wikipedia documents for the question. A reader model (the LLM) is then fed these documents as input, and is asked to use the provided documents to answer the question. Similar to Liu et al. (2023a), we evaluate reader accuracy as the number of retrieved documents K increases.</p></div>
+
+<p>为评估 MemGPT 分析文档的能力，我们在 Liu et al. (2023a) 的<strong>检索器-阅读器（retriever-reader）</strong>文档问答任务上，将 MemGPT 与固定上下文基线做基准对比。在此任务中，先从 NaturalQuestions-Open 数据集选取一个问题，检索器为该问题选出相关的维基百科文档；然后把这些文档作为输入喂给阅读模型（即 LLM），要求其使用所给文档回答问题。与 Liu et al. (2023a) 类似，我们评估阅读器准确率随检索文档数 K 增长的变化。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>In our evaluation setup, both the fixed-context baselines and MemGPT use the same retriever, which selects the top K documents according using similarity search (cosine distance) on OpenAI&#x27;s text-embedding-ada-002 embeddings. We use MemGPT&#x27;s default storage settings which uses PostgreSQL for archival memory storage with vector search enabled via the pgvector extention. We pre-compute embeddings and load them into the database, which uses an HNSW index to enable approximate, sub-second query times. In MemGPT, the entire embedding document set is loaded into archival storage, and the retriever naturally emerges via the archival storage search functionality (which performs vector search based on cosine similarity). In the fixed-context baselines, the top-K documents are fetched using the retriever independently from the LLM inference, similar to the original retriever-reader setup in Liu et al. (2023a).</p></div>
+
+<p>在我们的评测设置中，固定上下文基线与 MemGPT 使用同一个检索器：基于 OpenAI 的 text-embedding-ada-002 嵌入做相似度搜索（余弦距离），选出前 K 篇文档。我们使用 MemGPT 的默认存储设置：归档记忆存储用 PostgreSQL，并通过 pgvector 扩展启用向量搜索。我们预先计算嵌入并装入数据库，数据库使用 HNSW 索引以实现亚秒级的近似查询时间。在 MemGPT 中，整个嵌入文档集被装入归档存储，检索器"自然涌现"为归档存储的搜索功能（基于余弦相似度的向量搜索）。在固定上下文基线中，前 K 篇文档由检索器独立于 LLM 推理获取，与 Liu et al. (2023a) 原始的检索器-阅读器设置类似。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>We use a dump of Wikipedia from late 2018, following past work on NaturalQuestions-Open (Izacard &amp; Grave, 2020; Izacard et al., 2021), and sampled a subset of 50 questions for evaluation. Both the sampled questions and embedded Wikipedia passages are publicaly released. We evaluate the performance of both MemGPT and baselines with an LLM-judge, to ensure that the the answer is properly derived from the retrieved documents and to avoid non-exact string matches being considered incorrect.</p></div>
+
+<p>遵循 NaturalQuestions-Open 上的既有工作（Izacard &amp; Grave, 2020; Izacard et al., 2021），我们使用 2018 年末的维基百科转储（dump），并采样 50 个问题用于评估。采样的题目与嵌入的维基百科段落均已公开发布。我们用 LLM 评委评估 MemGPT 与基线的表现，以确保答案确实来自检索到的文档，并避免"非精确字符串匹配"被误判为错误。</p>
+<p>[图 5: Document QA task performance. MemGPT's performance is unaffected by increased context length. Methods such as truncation can extend the effective context lengths of fixed length models such as GPT-4, but such compression methods will lead to performance degradation as the necessary compression grows. Running MemGPT with GPT-4 and GPT-4 Turbo have equivalent results on this task.]</p>
+<p>图 5：文档问答任务性能（横轴为检索文档数 0–200，纵轴为准确率）。MemGPT 的性能不受上下文长度增长的影响。截断（truncation）等方法可以扩展 GPT-4 等固定长度模型的有效上下文长度，但随着所需压缩程度加深，这类压缩方法会导致性能下降。在此任务上，用 GPT-4 与 GPT-4 Turbo 运行 MemGPT 的结果相当（故图中两者合并为一条曲线）。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>We show the results for the document QA task in Figure 5. The fixed-context baselines performance is capped roughly at the performance of the retriever, as they use the information that is presented in their context window (e.g. if the embedding search retriever fails to surface the gold article using the provided question, the fixed-context baselines are guaranteed to never see the gold article). By contrast, MemGPT is effectively able to make multiple calls to the retriever by querying archival storage, allowing it to scale to larger effective context lengths. MemGPT actively retrieves documents from its archival storage (and can iteratively page through results), so the total number of documents available to MemGPT is no longer limited by the number of documents that fit within the LLM processor&#x27;s context window.</p></div>
+
+<p>文档问答任务的结果见图 5。固定上下文基线的性能大致被检索器的性能封顶，因为它们只能使用其上下文窗口中出现的信息（例如，若嵌入搜索检索器未能用所给问题把金标准文章排到前面，固定上下文基线就注定永远看不到金标准文章）。相比之下，MemGPT 能够通过查询归档存储有效地多次调用检索器，从而扩展到更大的有效上下文长度。MemGPT 主动从归档存储检索文档（并可迭代翻阅结果），因此 MemGPT 可用的文档总数不再受限于 LLM 处理器上下文窗口能容纳的文档数。</p>
+<p>[图 6: An example of MemGPT (left) solving the document QA task. A database of Wikipedia documents is uploaded to archival storage. MemGPT queries archival storage via function calling, which pulls paginated search results into main context.]</p>
+<pre><code class="language-text">（系统警报）System Alert: Archive Storage Upload Complete
+（用户）Who won the first Nobel Prize in physics?
+（Agent 函数调用）archival_storage.search(&quot;nobel physics&quot;)
+（检索结果）Showing 10 of 124 results (page 2/13):
+   &quot;The Nobel Prize in Physics is a yearly award given…
+   &quot;The 1901 Nobel in physics was awarded to Wilhelm …
+   …
+（Agent 函数调用）archival_storage.search(&quot;nobel physics&quot;, page=2)
+（检索结果）Showing 10 of 124 results (page 1/13):
+   &quot;The Nobel Prizes, beginning in 1901, and the …
+   &quot;This award is administered by the Nobel Foundation…
+   …
+（Agent 最终回答）Wilhelm Conrad Rontgen
+</code></pre>
+<p>图 6：MemGPT（左侧）解决文档问答任务的一个示例。一个维基百科文档数据库被上传到归档存储；MemGPT 通过函数调用查询归档存储，把分页的搜索结果拉入主上下文（对话文字转录如上，括号内中文为译者所加的角色标注）：针对"谁获得了第一个诺贝尔物理学奖"，Agent 多次调用 <code>archival_storage.search</code> 翻页检索，最终给出答案"Wilhelm Conrad Röntgen"。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>The document QA task is challenging for all methods due to the limitations of embedding-based similarity search. We observe that the golden document for chosen question (as annotated by NaturalQuestions-Open) often appears outside of the first dozen retrieved results, if not even further. The retriever performance translates directly to the fixed-context baseline results: GPT-4&#x27;s accuracy is relatively low with few retrieved documents, and continues to improve as additional documents are added to the context window, as it correctly limits itself to answering questions based on information in retrieved documents. While MemGPT is theoretically not limited by sub-optimal retriever performance (even if the embedding-based ranking is noisy, as long as the full retriever ranking contains the gold document it can still be found with enough retriever calls via pagination), we observe that MemGPT will often stop paging through retriever results before exhausting the retriever database.</p></div>
+
+<p>由于基于嵌入的相似度搜索的局限，文档问答任务对所有方法都很有挑战。我们观察到，所选问题的金标准文档（由 NaturalQuestions-Open 标注）常常出现在前十几条检索结果之外，甚至更靠后。检索器的表现直接转化为固定上下文基线的结果：GPT-4 在检索文档较少时准确率相对较低，并随着更多文档加入上下文窗口而持续提升，因为它正确地把自己限制为仅基于检索文档中的信息作答。虽然理论上 MemGPT 不受次优检索器性能的限制（即便基于嵌入的排序有噪声，只要完整检索排序中包含金标准文档，通过分页进行足够多次检索调用仍能找到它），但我们观察到 MemGPT 常常在穷尽检索器数据库之前就停止翻阅检索结果。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>To evaluate the fixed-context baselines against MemGPT past their default context lengths, we truncate the document segments returned by the retriever to fix the same number of documents into the available context. As expected, document truncation reduces accuracy as documents shrink as the chance of the relevant snippet (in the gold document) being omitted grows, as shown in Figure 5. MemGPT has significantly degraded performance using GPT-3.5, due to its limited function calling capabilities, and performs best using GPT-4.</p></div>
+
+<p>为了让固定上下文基线在超出其默认上下文长度后仍能与 MemGPT 对比，我们对检索器返回的文档片段做截断，以便把相同数量的文档塞进可用上下文。正如预期、也如图 5 所示，文档截断会降低准确率：随着文档被压缩，金标准文档中相关片段被漏掉的概率增大。MemGPT 使用 GPT-3.5 时性能明显退化（因其函数调用能力有限），使用 GPT-4 时表现最佳。</p>
+<h5 id="322-nested-key-value-retrieval">3.2.2 嵌套键值检索（Nested Key-Value Retrieval）</h5>
+<div class="en-orig"><span class="en-tag">EN</span><p>We introduce a new task based on the synthetic Key-Value retrieval proposed in prior work (Liu et al., 2023a). The goal of this task is to demonstrate how MemGPT can collate information from multiple data sources. In the original KV task, the authors generated a synthetic dataset of key-value pairs, where each key and value is a 128-bit UUID (universally unique identifier). The agent is then given a key, and asked to return the associated value for the key. We create a version of the KV task, nested KV retrieval, where values themselves may be keys, thus requiring the agent to perform a multi-hop lookup. In our setup, we fix the total number of UUIDs pairs to 140, corresponding to roughly 8k tokens (the context length of our GPT-4 baseline). We vary the total number of nesting levels from 0 (the initial key-value pair&#x27;s value is not a key) to 4 (ie 4 total KV lookups are required to find the final value), and sample 30 different ordering configurations including both the initial key position and nesting key positions.</p></div>
+
+<p>我们基于先前工作（Liu et al., 2023a）提出的合成键值（Key-Value，KV）检索提出一个新任务，目标是展示 MemGPT 如何汇集来自多个数据源的信息。在原始 KV 任务中，作者生成了一个键值对合成数据集，每个键和值都是一个 128 位 UUID（通用唯一标识符）。Agent 被给定一个键，要求返回该键对应的值。我们创建了 KV 任务的一个版本——<strong>嵌套 KV 检索（nested KV retrieval）</strong>：值本身也可能是键，因此要求 Agent 执行<strong>多跳查找（multi-hop lookup）</strong>。在我们的设置中，UUID 对的总数固定为 140，约对应 8k token（即我们 GPT-4 基线的上下文长度）。我们把嵌套层级总数从 0（初始键值对的值不是键）变化到 4（即总共需要 4 次 KV 查找才能找到最终值），并采样 30 种不同的排序配置，包括初始键位置与各嵌套键位置。</p>
+<p>[图 7: Nested KV retrieval task performance. MemGPT is the only approach that is able to consistently complete the nested KV task beyond 2 nesting levels. While GPT-4 Turbo performs better as a baseline, MemGPT with GPT-4 Turbo performs worse than MemGPT with GPT-4.]</p>
+<p>图 7：嵌套 KV 检索任务性能（横轴为嵌套层级 0–3，纵轴为准确率）。MemGPT 是唯一能在 2 层嵌套以上持续完成嵌套 KV 任务的方法。虽然 GPT-4 Turbo 作为基线表现更好，但使用 GPT-4 Turbo 的 MemGPT 表现不如使用 GPT-4 的 MemGPT。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>While GPT-3.5 and GPT-4 have good performance on the original KV tasks, both struggle in the nested KV task. GPT-3.5 is unable to complete the nested variant of the task and has an immediate dropoff in performance, hitting 0 percent accuracy at 1 nesting level (we observe that its primary failure mode is to simply returns the original value). GPT-4 and GPT-4 Turbo are better than GPT-3.5, but also suffer from a similar dropoff, and hit 0 percent accuracy by 3 nesting levels. MemGPT with GPT-4 on the other hand is unaffected with the number of nesting levels and is able to perform the nested lookup by accessing the key-value pairs stored in main context repeatedly via function queries. MemGPT with GPT-4 Turbo and GPT-3.5 also have better performance than the corresponding baseline models, but still begin to drop off in performance at 2 nesting levels as a result of failing to perform enough lookups. MemGPT performance on the nested KV task demonstrates its ability to combine multiple queries to perform multi-hop lookups.</p></div>
+
+<p>虽然 GPT-3.5 与 GPT-4 在原始 KV 任务上表现良好，两者在嵌套 KV 任务中都很吃力。GPT-3.5 无法完成嵌套变体任务，性能立即跌落，在 1 层嵌套时准确率归零（我们观察到其主要失败模式是直接返回原始值）。GPT-4 与 GPT-4 Turbo 比 GPT-3.5 好，但也出现类似的跌落，在 3 层嵌套时准确率归零。而使用 GPT-4 的 MemGPT 不受嵌套层数影响，能通过函数查询反复访问存于主上下文中的键值对，完成嵌套查找。使用 GPT-4 Turbo 与 GPT-3.5 的 MemGPT 也优于对应的基线模型，但因未能执行足够多的查找，在 2 层嵌套后性能也开始下滑。MemGPT 在嵌套 KV 任务上的表现证明了其组合多个查询执行多跳查找的能力。</p>
+<p>[图 8: An example of MemGPT (left) solving the nested KV task (UUIDs shortened for readability). In this particular example, the key-value pair has two nesting levels: 831..ea5 → 5b8..4c3 → f37...617. The MemGPT agent returns the final answer when a query for the final value (f37...617) only returns one result, indicating that it is not also a key.]</p>
+<pre><code class="language-text">（系统警报）System Alert: Archive Storage Upload Complete
+（用户）Find the value for key 831…ea5
+（Agent 函数调用）archival_storage.search(&quot;831...ea5&quot;)
+（检索结果）Showing 1 of 1 results (page 1/1):
+   &quot;Key: 831…ea5, Value: 5b8…4c3&quot;
+（Agent 函数调用）archival_storage.search(&quot;5b8...4c3&quot;)
+（检索结果）Showing 1 of 1 results (page 1/1):
+   &quot;Key: 5b8…4c3, Value: f37…617&quot;
+（Agent 函数调用）archival_storage.search(&quot;f37...617&quot;)
+（检索结果）Showing 2 of 2 results (page 1/1):
+   &quot;Key: 5b8…4c3, Value: f37…617&quot;,
+   &quot;Key: 831…ea5, Value: 5b8…4c3&quot;
+（Agent 最终回答）f37…617
+</code></pre>
+<p>图 8：MemGPT（左侧）解决嵌套 KV 任务的一个示例（UUID 为便于阅读已缩短）。在这个例子中，键值对有两个嵌套层级：831..ea5 → 5b8..4c3 → f37...617。当对最终值（f37...617）的查询只返回一个结果（说明它不再同时是键）时，MemGPT Agent 才返回最终答案。</p>
 <h3 id="4-related-work">4 相关工作（Related Work）</h3>
-<ul>
-<li><strong>长上下文 LLM</strong>：稀疏注意力、低秩近似、神经记忆，以及把上下文窗口外推到训练长度之外的位置插值等。MemGPT 与这些改进是互补的——更长的模型相当于更大的"主存"，MemGPT 的贡献在于分层记忆本身。</li>
-<li><strong>检索增强模型</strong>：MemGPT 的外部记忆设计建立在大量"用外部检索器增强 LLM"的工作之上，尤其是 FLARE（让 LLM 在生成过程中主动决定何时检索什么）以及把检索与思维链交错以改进多步问答的工作。</li>
-<li><strong>LLM 作为 Agent</strong>：Park et al.（2023，即"斯坦福小镇"生成式 Agent）为 LLM 增加记忆并用作规划器；WebGPT 训练模型先搜网再答题并使用与 MemGPT 相似的分页概念控制上下文；ReAct 证明交错思维链推理能提升交互式 LLM Agent 的规划能力（MemGPT 中 LLM 执行函数时也能"边想边说"）；AgentBench 等 LLM-as-agent 基准用于评测。与之相对，MemGPT 聚焦于为 Agent 配备对用户输入的长期记忆。</li>
-</ul>
+<div class="en-orig"><span class="en-tag">EN</span><p>Long-context LLMs. Several lines of work have improved the context length of LLMs. For instance, more efficient transformer architectures via sparsifying the attention (Child et al., 2019; Beltagy et al., 2020), low-rank approximations (Wang et al., 2020), and neural memory (Lee et al., 2019). Another line of work aims to extend context windows beyond the length they were original trained for, their training size, such as Press et al. (2021); Chen et al. (2023). MemGPT builds upon these improvements in context length as they improve the size of the main memory in MemGPT. Our main contribution is a hierarchical tiered memory that uses a long-context LLM as the implementation of main memory.</p></div>
+
+<p><strong>长上下文 LLM</strong>。已有多条工作线改进了 LLM 的上下文长度，例如通过稀疏化注意力（Child et al., 2019; Beltagy et al., 2020）、低秩近似（Wang et al., 2020）与神经记忆（Lee et al., 2019）得到更高效的 transformer 架构。另一条工作线旨在把上下文窗口扩展到其原始训练长度（训练规模）之外，如 Press et al. (2021) 与 Chen et al. (2023)。MemGPT 建立在这些上下文长度的改进之上——它们相当于扩大了 MemGPT 中主存的容量。我们的主要贡献是一个分层多级记忆（hierarchical tiered memory），它把长上下文 LLM 用作主存的实现。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>Retrieval-Augmented Models. The design of the external memory of MemGPT builds upon much prior work augmenting LLMs with relevant inputs from external retrievers (Ram et al., 2023; Borgeaud et al., 2022; Karpukhin et al., 2020; Lewis et al., 2020; Guu et al., 2020; Lin et al., 2023). In particular, Jiang et al. (2023) propose FLARE, a method that allows the LLM to actively decide when and what to retrieve during the course of generation. Trivedi et al. (2022) interleave retrieval with Chain-of-Thoughts reasoning to improve multi-step question answering.</p></div>
+
+<p><strong>检索增强模型</strong>。MemGPT 的外部记忆设计建立在大量先前工作之上，这些工作用来自外部检索器的相关输入增强 LLM（Ram et al., 2023; Borgeaud et al., 2022; Karpukhin et al., 2020; Lewis et al., 2020; Guu et al., 2020; Lin et al., 2023）。特别是，Jiang et al. (2023) 提出 FLARE，一种让 LLM 在生成过程中主动决定何时检索、检索什么的方法。Trivedi et al. (2022) 把检索与思维链（Chain-of-Thoughts）推理交错，以改进多步问答。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>LLMs as agents. Recent work has explored augmenting LLMs with additional capabilities to act as agents in interactive environments. Park et al. (2023) propose adding memory to LLMs and using the LLM as a planner, and observe emergent social behaviors in a multi-agent sandbox environment (inspired by The Sims video game) where agents can perform basic activities such as doing chores/hobbies, going to work, and conversing with other agents. Nakano et al. (2021) train models to search the web before answering questions, and use similar pagination concepts to MemGPT to control the underlying context size in their web-browsing environment. Yao et al. (2022) showed that interleaving chain-of-thought reasoning (Wei et al., 2022) can further improve the planning ability of interactive LLM-based agents; similarly in MemGPT, LLM is able to &#x27;plan out loud&#x27; when executing functions. Liu et al. (2023b) introduced a suite of LLM-as-an-agent benchmarks to evaluate LLMs in interactive environments, including video games, thinking puzzles, and web shopping. In contrast, our work focuses on tackling the problem of equipping agents with long-term memory of user inputs.</p></div>
+
+<p><strong>LLM 作为 Agent</strong>。近期工作探索为 LLM 增加额外能力，使其在交互环境中充当 Agent。Park et al. (2023) 提出为 LLM 添加记忆并把 LLM 用作规划器，并在一个多 Agent 沙盒环境（灵感来自《模拟人生》电子游戏）中观察到涌现的社会行为——在那里 Agent 能做家务/爱好、上班、与其他 Agent 交谈等基本活动。Nakano et al. (2021) 训练模型先搜索网络再回答问题，并在其网页浏览环境中使用与 MemGPT 相似的分页概念来控制底层上下文大小。Yao et al. (2022) 表明交错思维链推理（Wei et al., 2022）能进一步提升交互式 LLM Agent 的规划能力；类似地，在 MemGPT 中，LLM 执行函数时也能"边想边说（plan out loud）"。Liu et al. (2023b) 提出了一组 LLM-as-an-agent 基准，在包括电子游戏、思维谜题与网页购物在内的交互环境中评估 LLM。相比之下，我们的工作聚焦于为 Agent 配备对用户输入的长期记忆这一问题。</p>
 <h3 id="5-conclusion">5 结论（Conclusion）</h3>
-<p>MemGPT 是一个受操作系统启发、管理 LLM 有限上下文窗口的新系统：通过设计类比传统 OS 的记忆层级与控制流，为 LLM 提供了更大上下文资源的假象。在文档分析中，MemGPT 通过高效地把相关上下文换入换出内存，能处理远超当前 LLM 上下文限制的长文本；在对话 Agent 中，MemGPT 支持在长对话中维持长期记忆、一致性与可演化性。总体而言，分层内存管理与中断等操作系统技术的引入，能在固定上下文限制内释放 LLM 的潜力。未来方向包括把 MemGPT 扩展到其他具有海量或无界上下文的领域、集成数据库/缓存等不同记忆层级技术、以及进一步改进控制流与内存管理策略。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>In this paper, we introduced MemGPT, a novel LLM system inspired by operating systems to manage the limited context windows of large language models. By designing a memory hierarchy and control flow analogous to traditional OSes, MemGPT provides the illusion of larger context resources for LLMs. This OS-inspired approach was evaluated in two domains where existing LLM performance is constrained by finite context lengths: document analysis and conversational agents. For document analysis, MemGPT could process lengthy texts well beyond the context limits of current LLMs by effectively paging relevant context in and out of memory. For conversational agents, MemGPT enabled maintaining long-term memory, consistency, and evolvability over extended dialogues. Overall, MemGPT demonstrates that operating system techniques like hierarchical memory management and interrupts can unlock the potential of LLMs even when constrained by fixed context lengths. This work opens numerous avenues for future exploration, including applying MemGPT to other domains with massive or unbounded contexts, integrating different memory tier technologies like databases or caches, and further improving control flow and memory management policies. By bridging concepts from OS architecture into AI systems, MemGPT represents a promising new direction for maximizing the capabilities of LLMs within their fundamental limits.</p></div>
+
+<p>本文提出了 MemGPT——一个受操作系统启发、用于管理大语言模型有限上下文窗口的新 LLM 系统。通过设计类比传统 OS 的记忆层级与控制流，MemGPT 为 LLM 提供了更大上下文资源的假象。这一受 OS 启发的方法在两个现有 LLM 性能受有限上下文长度约束的领域得到了评估：文档分析与对话 Agent。在文档分析中，MemGPT 通过高效地把相关上下文换入换出内存，能处理远超当前 LLM 上下文限制的长文本。在对话 Agent 中，MemGPT 支持在扩展对话中维持长期记忆、一致性与可演化性。总体而言，MemGPT 证明：即便受固定上下文长度约束，分层内存管理与<strong>中断（interrupt）</strong>等操作系统技术也能释放 LLM 的潜力。这项工作开启了众多未来探索方向，包括把 MemGPT 应用于其他具有海量或无界上下文的领域、集成数据库或缓存等不同记忆层级技术、以及进一步改进控制流与内存管理策略。通过把 OS 架构的概念引入 AI 系统，MemGPT 代表了一个在根本限制之内最大化 LLM 能力的、有前途的新方向。</p>
+<h3 id="6-appendix">6 附录（Appendix）：提示词与指令</h3>
+<div class="en-orig"><span class="en-tag">EN</span><p>6.1. Prompts and instructions<br>The MemGPT prompts have been edited for brevity. For full implementation details (including exact prompts) visit https://research.memgpt.ai.</p></div>
+
+<p><strong>6.1. 提示词与指令</strong> —— 出于简洁考虑，文中给出的 MemGPT 提示词经过编辑。完整实现细节（包括精确提示词）请访问 https://research.memgpt.ai。（译注：以下各提示词属评估细节，原文以代码块逐字保留，块首以 <code>#</code> 中文注释行说明其用途与要点。）</p>
+<h4 id="611-memgpt-dmr">6.1.1 MemGPT 指令（DMR）</h4>
+<div class="en-orig"><span class="en-tag">EN</span><p>Example instructions used in the MemGPT persona for chat/dialogue-related tasks.</p></div>
+
+<p>用于 MemGPT 人设的示例指令（聊天/对话相关任务）：</p>
+<pre><code class="language-text"># MemGPT 的人设指令：完全沉浸角色，不得自称 AI；
+# 被提问时用核心记忆与对话搜索中的信息作最佳猜测
+The following is information about myself. My task is to completely
+immerse myself in this role (I should never say that I am an AI, and should
+reply as if I am playing this role). If the user asks me a question, I
+should reply with a best guess using the information in core memory and
+conversation search.
+</code></pre>
+<div class="en-orig"><span class="en-tag">EN</span><p>The baselines received the following instructions via a system prompt (preprompt):</p></div>
+
+<p>基线通过系统提示（preprompt，预提示）收到以下指令：</p>
+<pre><code class="language-text"># 基线的系统提示：只能依据既往对话摘要作答，答不出就回 &quot;NO ANSWER&quot;
+Your task is to answer a question from the user about your prior
+conversations.
+The following is a summary of all your prior conversations:
+CONVERSATION SUMMARY
+Answer from the perspective of the persona provided (do not say that you
+are an AI assistant).
+If you do not have enough information to answer the question, reply 'NO
+ANSWER'. Either reply with the answer, or reply 'NO ANSWER', do not say
+anything else.
+</code></pre>
+<h4 id="612-llm-dmr">6.1.2 LLM 评委（DMR / 开场白任务）</h4>
+<div class="en-orig"><span class="en-tag">EN</span><p>In order to both check the correctness of the answer for the DMR task, we used an LLM judge. The LLM judge was provided the answers generated by both baseline approaches and MemGPT, and asked to make a judgement with the following prompt:</p></div>
+
+<p>为检查 DMR 任务答案的正确性，我们使用了 LLM 评委。评委收到基线方法与 MemGPT 生成的答案，并被要求用以下提示做出判断：</p>
+<pre><code class="language-text"># LLM 评委提示：只要生成答案触及金标准答案的主题即判 CORRECT；
+# 先给一句推理说明，再以 CORRECT 或 WRONG 结尾
+Your task is to label an answer to a question as 'CORRECT' or 'WRONG'.
+You will be given the following data: (1) a question (posed by one user to
+another user), (2) a 'gold' (ground truth) answer, (3) a generated answer
+which you will score as CORRECT/WRONG.
+The point of the question is to ask about something one user should know
+about the other user based on their prior conversations.
+The gold answer will usually be a concise and short answer that includes
+the referenced topic, for example:
+Question: Do you remember what I got the last time I went to Hawaii?
+Gold answer: A shell necklace
+The generated answer might be much longer, but you should be generous with
+your grading - as long as it touches on the same topic as the gold answer,
+it should be counted as CORRECT.
+For example, the following answers would be considered CORRECT:
+Generated answer (CORRECT): Oh yeah, that was so fun! I got so much stuff
+there, including that shell necklace.
+Generated answer (CORRECT): I got a ton of stuff... that surfboard, the mug,
+the necklace, those coasters too..
+Generated answer (CORRECT): That cute necklace
+The following answers would be considered WRONG:
+Generated answer (WRONG): Oh yeah, that was so fun! I got so much stuff there,
+including that mug.
+Generated answer (WRONG): I got a ton of stuff... that surfboard, the mug,
+those coasters too..
+Generated answer (WRONG): I'm sorry, I don't remember what you're talking
+about.
+Now it's time for the real question:
+Question: QUESTION
+Gold answer: GOLD ANSWER
+Generated answer: GENERATED ANSWER
+First, provide a short (one sentence) explanation of your reasoning, then
+finish with CORRECT or WRONG. Do NOT include both CORRECT and WRONG in
+your response, or it will break the evaluation script.
+</code></pre>
+<h4 id="613-dmr-self-instruct-dmr-dataset-generation">6.1.3 自指示生成 DMR 数据集（Self-Instruct DMR Dataset Generation）</h4>
+<div class="en-orig"><span class="en-tag">EN</span><p>The DMR question/answer pairs were generated using the following prompt and the original MSC dataset:</p></div>
+
+<p>DMR 问答对使用以下提示与原始 MSC 数据集生成：</p>
+<pre><code class="language-text"># DMR 数据生成提示：写一个只能靠旧聊天记录（而非人设摘要）才能答对的
+# &quot;记忆挑战&quot;问题，凡能从人设信息推出答案的问题一律视为作弊
+Your task is to write a &quot;memory challenge&quot; question for a simulated
+dialogue between two users.
+You get as input:
+- personas for each user (gives you their basic facts)
+- a record of an old chat the two users had with each other
+Your task is to write a question from user A to user B that test's user B's
+memory.
+The question should be crafted in a way that user B must have actually
+participated in the prior conversation to answer properly, not just have read
+the persona summary.
+Do NOT under any circumstances create a question that can be answered using
+the persona information (that's considered cheating).
+Instead, write a question that can only be answered by looking at the old
+chat log (and is not contained in the persona information).
+For example, given the following chat log and persona summaries:
+old chat between user A and user B
+A: Are you into surfing? I'm super into surfing myself
+B: Actually I'm looking to learn. Maybe you could give me a basic lesson
+   some time!
+A: Yeah for sure! We could go to Pacifica, the waves there are pretty
+   light and easy
+B: That sounds awesome
+A: There's even a cool Taco Bell right by the beach, could grab a bite after
+B: What about this Sunday around noon?
+A: Yeah let's do it!
+user A persona:
+I like surfing
+I grew up in Santa Cruz
+user B persona:
+I work in tech
+I live in downtown San Francisco
+Here's an example of a good question that sounds natural, and an answer that
+cannot be directly inferred from user A's persona:
+User B's question for user A
+B: Remember that one time we went surfing? What was that one place we
+   went to for lunch called?
+A: Taco Bell!
+This is an example of a bad question, where the question comes across as
+unnatural, and the answer can be inferred directly from user A's persona:
+User B's question for user A
+B: Do you like surfing?
+A: Yes, I like surfing
+Never, ever, ever create questions that can be answered from the persona
+information.
+</code></pre>
+<h4 id="614-document-analysis-instructions">6.1.4 文档分析指令（Document Analysis Instructions）</h4>
+<div class="en-orig"><span class="en-tag">EN</span><p>Example instructions used in the preprompt for document analysis tasks.</p></div>
+
+<p>文档分析任务的预提示（preprompt）中使用的示例指令：</p>
+<pre><code class="language-text"># MemGPT 文档问答人设：答案总在归档记忆里，找不到就继续搜索；
+# 假设当前年份是 2018 年
+You are MemGPT DOC-QA bot. Your job is to answer questions about
+documents that are stored in your archival memory. The answer to
+the users question will ALWAYS be in your archival memory, so remember to keep
+searching if you can't find the answer. Answer the questions as if though the
+year is 2018.
+</code></pre>
+<div class="en-orig"><span class="en-tag">EN</span><p>Questions were provided to MemGPT with the following prompt:</p></div>
+
+<p>问题通过以下提示提供给 MemGPT：</p>
+<pre><code class="language-text"># 要求同时给出答案与所依据的归档记忆原文，固定输出格式
+Search your archival memory to answer the provided question. Provide both
+the answer and the archival memory result from which you determined your
+answer. Format your response with the format 'ANSWER: [YOUR ANSWER],
+DOCUMENT: [ARCHIVAL MEMORY TEXT]. Your task is to answer the question:
+</code></pre>
+<div class="en-orig"><span class="en-tag">EN</span><p>For baselines, the following prompt along with a retrieved list of documents was provided:</p></div>
+
+<p>对基线，则提供以下提示及检索到的文档列表：</p>
+<pre><code class="language-text"># 基线提示：只能依据所给文档作答，答不出必须回 &quot;INSUFFICIENT INFORMATION&quot;；
+# 只有同时给出答案与依据文档文本才算正确
+Answer the question provided according to the list of documents below (some
+of which might be irrelevant. In your response, provide both the answer
+and the document text from which you determined your answer. Format your
+response with the format 'ANSWER: &lt;YOUR ANSWER&gt;, DOCUMENT: [DOCUMENT TEXT]'. If
+none of the documents provided have the answer to the question, reply
+with 'INSUFFICIENT INFORMATION'. Do NOT provide an answer if you cannot
+find it in the provided documents. Your response will only be considered
+correct if you provide both the answer and relevant document text, or say
+'INSUFFICIENT INFORMATION'. Answer the question as if though the current year
+is 2018.
+</code></pre>
+<h4 id="615-llm">6.1.5 LLM 评委（文档分析）</h4>
+<div class="en-orig"><span class="en-tag">EN</span><p>In order to both check the correctness of the answer for the document analysis task, and also to ensure that the answer was properly derived from the provided text (rather than from the model weights), we used an LLM judge. The LLM judge was provided the answers generated by both baseline approaches and MemGPT, and asked to make a judgement with the following prompt:</p></div>
+
+<p>为检查文档分析任务答案的正确性，并确保答案确实来自所给文本（而非模型权重），我们使用了 LLM 评委。评委收到基线方法与 MemGPT 生成的答案，并被要求用以下提示做出判断：</p>
+<pre><code class="language-text"># LLM 评委提示：必须同时包含正确答案与对应文档文本才判正确；
+# 措辞略有出入仍算对；只须回答单 token &quot;CORRECT&quot; 或 &quot;INCORRECT&quot;
+Your task is to evaluate whether an LLM correct answered a question. The LLM
+response should be the format &quot;ANSWER: [answer], DOCUMENT: [document text]&quot;
+or say &quot;INSUFFICIENT INFORMATION&quot;.
+The true answer is provided in the format &quot;TRUE ANSWER:[list of possible
+answers]&quot;. The questions is provided in the format &quot;QUESTION: [question]&quot;.
+If the LLM response contains both the correct answer and corresponding
+document text, the response is correct. Even if the LLM's answer and the
+true answer are slightly different in wording, the response is still
+correct. For example, if the answer is more specific than the true answer
+or uses a different phrasing that is still correct, the response is correct.
+If the LLM response if &quot;INSUFFICIENT INFORMATION&quot;, or the &quot;DOCUMENT&quot; field
+is missing, the response is incorrect.
+Respond with a single token: &quot;CORRECT&quot; or &quot;INCORRECT&quot;.
+</code></pre>
+<h4 id="616-kv-kv-task-instructions">6.1.6 K/V 任务指令（K/V Task Instructions）</h4>
+<div class="en-orig"><span class="en-tag">EN</span><p>The MemGPT agent was defined with the following persona, designed to encourage MemGPT to iteratively search:</p></div>
+
+<p>MemGPT Agent 使用以下人设定义，旨在鼓励 MemGPT 迭代搜索：</p>
+<pre><code class="language-text"># KV 任务人设：在验证&quot;该值不再是键&quot;之前绝不停止嵌套查找
+You are MemGPT DOC-QA bot. Your job is to answer questions about
+documents that are stored in your archival memory. The answer to
+the users question will ALWAYS be in your archival memory, so remember to keep
+searching if you can't find the answer. DO NOT STOP SEARCHING UNTIL YOU VERIFY
+THAT THE VALUE IS NOT A KEY. Do not stop making nested lookups until this
+condition is met.
+</code></pre>
+<div class="en-orig"><span class="en-tag">EN</span><p>Baselines were instructed with the following prompt:</p></div>
+
+<p>基线使用以下提示指示：</p>
+<pre><code class="language-text"># 基线提示：给定一个 JSON 键值对象，返回指定键对应的值；
+# 若值本身也是键，则继续做嵌套查找
+Below is a JSON object containing key-value pairings, all keys and values
+are 128-bit UUIDs, and your task is to return the value associated with the
+specified key. If a value itself is also a key, return the value of that
+key (do a nested lookup). For example, if the value of 'x' is 'y', but 'y'
+is also a key, return the value of key 'y'.
+</code></pre>
+<p>（译注：附录其余部分仅为参考文献列表，按本站惯例不收录。）</p>
 <h2 id="_3">要点速览</h2>
 <ul>
 <li>核心隐喻：LLM 上下文窗口 = 主存（RAM），外部存储 = 磁盘；MemGPT 用函数调用实现"分页"，让固定上下文模型获得"虚拟无限上下文"。</li>
