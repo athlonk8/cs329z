@@ -12,6 +12,7 @@
   <div class="topbar-inner">
     <a class="brand" href="../index.html"><span class="brand-mark">CS</span>329Z<span class="brand-sub">中文学习站</span></a>
     <nav class="topnav">
+      <a href="../materials.html">材料总目录</a>
       <a href="../index.html#syllabus">课程表</a>
       <a href="../index.html#dates">重要日期</a>
       <a href="../index.html#about">关于本站</a>
@@ -20,7 +21,7 @@
   </div>
 </header>
 <div class="read-layout">
-  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">论文精读</a><ul><li><a href="#_3">摘要(全译)</a></li><li><a href="#1">1. 引言</a></li><li><a href="#2">2. 问题陈述</a></li><li><a href="#3-gepa">3. GEPA:反思式提示进化</a></li><li><a href="#4">4. 评测(六大观察)</a></li><li><a href="#5">5. 扩展应用</a></li><li><a href="#_4">结论与意义</a></li></ul></li><li><a href="#_5">要点速览</a></li></ul></aside>
+  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">全文对照翻译</a><ul><li><a href="#_3">摘要</a></li><li><a href="#1">1 引言</a></li><li><a href="#2">2 问题陈述</a></li><li><a href="#3-gepa">3 GEPA:反思式提示进化</a></li><li><a href="#4">4 评测</a></li><li><a href="#5-gepa">5 GEPA 的扩展应用</a></li><li><a href="#6">6 相关工作</a></li><li><a href="#7">7 结论</a></li></ul></li><li><a href="#_4">要点速览</a></li></ul></aside>
   <main class="read-main">
       <link rel="stylesheet" href="../assets/katex/katex.min.css">
       <script defer src="../assets/katex/katex.min.js"></script>
@@ -30,60 +31,433 @@
       <h1 class="read-title">&quot;GEPA:反思式提示进化可以胜过强化学习&quot;</h1>
       <p class="read-title-en">&quot;GEPA: Reflective Prompt Evolution Can Outperform Reinforcement Learning&quot;</p>
       <p class="read-meta">Lakshya A Agrawal, Shangyin Tan, Dilara Soylu, et al. (Omar Khattab 组) · &quot;ICLR 2026 (Oral) · UC Berkeley / Stanford / MIT 等&quot;</p>
-      <p class="read-badges"><span class="badge badge-must">必读</span><span class="badge badge-kind">论文精读</span><button class="lang-toggle" id="lang-toggle" type="button">仅看中文</button><a class="orig-link" href="../originals/week05b_optimization/Agrawal2026_GEPA.pdf" target="_blank" rel="noopener">查看原文(PDF) ↗</a></p>
+      <p class="read-badges"><span class="badge badge-must">必读</span><span class="badge badge-kind">全译对照</span><button class="lang-toggle" id="lang-toggle" type="button">仅看中文</button><a class="orig-link" href="../originals/week05b_optimization/Agrawal2026_GEPA.pdf" target="_blank" rel="noopener">查看原文(PDF) ↗</a></p>
       <div class="markdown-body">
 <h2 id="_1">导读</h2>
-<p>这是第 5 周「优化」一讲的另一篇核心论文(ICLR 2026 Oral),与同讲的 MIPROv2、Soylu et al. 构成"提示优化 vs 微调"的完整光谱。GEPA(Genetic-Pareto)回答一个尖锐的问题:<strong>优化一个由 LLM 模块组成的系统,一定要动权重(RL/微调)吗?</strong> 作者注意到:RL(如 GRPO)靠稀疏标量奖励估计策略梯度,动辄需要数万 rollout;而任何 LLM 系统的执行轨迹(推理链、工具调用、编译器报错)本身就是<strong>自然语言</strong>,对 LLM 来说是远比标量丰富的学习介质。GEPA 因此让"反思 LLM"阅读执行轨迹与评估轨迹,诊断问题、改写提示,并以<strong>帕累托前沿</strong>维护多样候选避免局部最优。结果:6 个任务上平均超 GRPO 6%、最多 20%,rollout 少 35 倍;全面超越最强提示优化器 MIPROv2(+10% 以上);提示还更短(最多 9.2 倍)、可跨模型迁移。它是"语言反思 &gt; 标量梯度"这一论点的代表作。</p>
-<h2 id="_2">论文精读</h2>
-<h3 id="_3">摘要(全译)</h3>
-<p>LLM 越来越多地通过 GRPO 等强化学习方法适配下游任务,而这通常需要数千个 rollout 才能学会新任务。我们 argue:与从稀疏标量奖励导出的策略梯度相比,语言的<strong>可解释本质</strong>为 LLM 提供了丰富得多的学习介质。为验证这一点,我们提出 GEPA(Genetic-Pareto),一个充分引入<strong>自然语言反思</strong>的提示优化器,从试错中学习高层规则。给定任一包含一个或多个 LLM 提示的 AI 系统,GEPA 采样轨迹(如推理、工具调用与工具输出),用自然语言对其反思,以诊断问题、提出并检验提示更新,并把自身尝试的帕累托前沿上的互补经验结合起来。得益于该设计,GEPA 常能把<strong>哪怕很少的 rollout 转化为大幅质量提升</strong>。在六个任务上,GEPA 平均超出 GRPO 6%、最多 20%,同时 rollout 少 35 倍;超过此前最强的提示优化器 MIPROv2 10% 以上(如 AIME-2025 上 +12% 准确率),并展示了作为代码优化推理时搜索策略的可观前景。代码已开源(github.com/gepa-ai/gepa)。</p>
-<h3 id="1">1. 引言</h3>
-<ul>
-<li>复合 AI 系统把模糊的自然语言规范与检索、代码执行等工具结合;如何优化它们?主流是 <strong>RLVR</strong>(可验证奖励的强化学习,如 GRPO),把成功指标当作 rollout 末端的标量奖励来估计策略梯度。有效但<strong>样本效率极低</strong>——近期用 GRPO 的工作动辄数十万 rollout。这在工具调用昂贵、推理预算有限、或根本无法微调最强闭源模型权重时成为瓶颈。</li>
-<li><strong>关键观察</strong>:任何 LLM 系统的 rollout 都可以序列化为自然语言轨迹——模块指令、推理链、工具调用、乃至奖励函数的内部过程(如编译器报错在被压缩成标量之前的原文)。LLM 天然读得懂这些,因此<strong>用自然语言在轨迹上"刻意学习"的算法,能比标准 RL 更好地利用 LLM 的语言先验</strong>。</li>
-<li>GEPA = 文本反思 + 多目标进化搜索:迭代地用新 rollout 的自然语言反馈"变异"提示;为避免贪心提示优化陷入局部最优,维护<strong>帕累托前沿</strong>——不只进化全局最优提示,而是对每个题目实例的最优提示做随机探索。</li>
-<li>评测:HotpotQA(多跳推理)、AIME/LiveBench-Math(数学)、IFBench(指令遵循)、PUPA(隐私感知委托)、HoVer(检索增强验证),模型用 Qwen3 8B(开源)与 GPT-4.1 Mini(闭源)。Qwen3 8B 上 GEPA 以最多 35× 少的 rollout 超 GRPO(24k rollouts)最多 20%、平均 +6%;全面超 MIPROv2,聚合提升 +13%,是 MIPROv2(+5.6%)的两倍多。</li>
-</ul>
-<h3 id="2">2. 问题陈述</h3>
-<ul>
-<li><strong>复合 AI 系统</strong>形式化为 Φ=(M, C, X, Y):语言模块 M(每个含提示 π、权重 θ、输入输出 schema)、控制流 C、全局输入输出 schema。该定义涵盖 agent、多智能体系统与 ReAct、Archon 等脚手架。</li>
-<li>可学习参数是 ⟨Π, Θ⟩(所有提示 + 所有权重),优化目标是最大化任务分布上的指标 μ 期望。</li>
-<li><strong>样本高效优化约束</strong>:rollout(执行 Φ 并评估 μ)在算力/金钱/时间上昂贵,预算至多 B 次。核心挑战:<strong>如何从每次昂贵 rollout 中榨取最大学习信号</strong>。(该设定使 GEPA[只动提示]与 GRPO[动权重]可在同一问题定义下公平对比。)</li>
-</ul>
-<h3 id="3-gepa">3. GEPA:反思式提示进化</h3>
-<p>三大原则:遗传式提示进化、自然语言反馈反思、帕累托候选选择。GEPA 只进化提示 Π,权重 Θ 冻结。</p>
-<p><strong>遗传优化循环</strong>:候选池初始只有基系统;每轮 (i) 选出有希望的候选;(ii) 在任务 minibatch 上提出并评估变体;(iii) 若超过父代则加入池中并在验证集 D_pareto 上评估;预算耗尽后返回 D_pareto 上聚合分最高的候选。变体来自两种算子:<strong>反思式变异</strong>(主)与 <strong>System-Aware Merge 交叉</strong>(附录 D.1)。</p>
-<p><strong>反思式提示变异(核心)</strong>:
-- 系统执行轨迹暴露各模块行为与职责;与最终成败配对后有很强<strong>诊断价值</strong>。LLM 通过反思做<strong>隐式信用分配</strong>(把成败归因到具体模块),再对目标模块做定点更新——单次更新也常带来大幅提升(图 5:PUPA 任务上从 82.26 → 97.6 的进化轨迹,每步累积一条"隐私改写"高层经验)。
-- 流程:选候选 → 在 minibatch 上执行并追踪轨迹 → 提取模块输入/输出/推理 → <strong>反馈函数 μ_f</strong> 返回数值分 + 文本反馈 → 轮询选一个模块 → 反思 LLM 看到(当前提示、轨迹、分数、反馈),把成败归因到提示元素并提出改写 → minibatch 复评,有提升才入库。
-- <strong>评估轨迹也是诊断信号</strong>:很多指标在被压缩为标量前会产生丰富文本(编译错误、失败 rubric)。GEPA 把 μ 扩展为 <strong>μ_f</strong> 返回 feedback_text;人类评分者的解释性反馈也可作为辅助反馈注入。</p>
-<p><strong>3.1 帕累托候选选择</strong>:
-- 每轮总选全局最优候选会陷入局部最优(图 6a:第一个"新策略"出现后反复精炼失败,耗尽预算)。
-- GEPA 用"illumination"式策略:对<strong>每个训练实例</strong>记录所有候选的最高分,构成帕累托前沿;至少在一个实例上最优的候选保留,被严格支配的剪枝;再按"领先实例数"加权随机采样。既逃出局部最优又不膨胀搜索,平衡探索/利用。</p>
-<h3 id="4">4. 评测(六大观察)</h3>
-<p>设置:标准 train/val/test 切分;六个基准各配已有复合系统与反馈函数;对比 MIPROv2、Trace(OptoPrime)、TextGrad、GRPO(LoRA,亦验证全参微调)。</p>
-<p><strong>主结果(Qwen3 8B,表 1)</strong>:GEPA 聚合 54.85(基线 45.23,+9.62),GRPO 48.91(+3.68,24k rollouts),MIPROv2 47.84(+2.61);GEPA 总预算仅 ~3.9k rollouts。IFBench 上 GEPA 用 678 个 rollout 达 38.61%,超过 GRPO 用 24000 rollout 的 35.88%。单项:HotpotQA 62.33 vs GRPO 43.33;HoVer 52.33 vs 38.67;PUPA 91.85 vs 86.66(AIME 上 GRPO 略高)。</p>
-<p><strong>GPT-4.1 Mini(表 2)</strong>:GEPA+Merge 聚合 66.36(+13.33),GEPA 65.22(+12.19),均超 TextGrad(59.14)、MIPROv2(58.67)、Trace(56.30)。</p>
-<ul>
-<li><strong>观察 1(样本效率)</strong>:GEPA 以 4-35× 少的 rollout 达到最优测试性能;在 6 任务中 5 个超 GRPO(最多 +19%)。与 GRPO 最佳验证分匹配所需 rollout:HotpotQA 243、IFBench 402、HoVer 330、PUPA 1143、AIME 1179、LiveBench-Math 306——<strong>最高 78× 样本效率</strong>。若只算训练集 rollout(验证开销不计),GEPA 到达最优仅需 79-737 次。</li>
-<li><strong>观察 2(仅优化指令就够了)</strong>:GEPA 在所有设定下超 MIPROv2(最高 +11.1% GPT-4.1 mini / +10.3% Qwen3 8B)。此前研究认为少样本示例优化强于指令优化;GEPA 反转了这一趋势,归功于 LLM 指令遵循与自我反思能力的进步 + GEPA 的设计。反思进化出的指令<strong>泛化差距(generalization gap)也更小</strong>。</li>
-<li><strong>观察 3(帕累托选择的价值)</strong>:固定进化框架只换候选选择策略:GEPA 帕累托采样聚合 +12.44%,显著超 SelectBestCandidate(TextGrad 式贪心,+6.05)与 BeamSearch(APO 式,+5.11);最多超 11.33%/8.17%。搜索树可视化显示贪心一步后即停滞,帕累托采样长出均衡的树。</li>
-<li><strong>观察 4(提示更短更省)</strong>:反思进化的指令比 MIPROv2 的(多示例)提示<strong>最多短 9.2 倍</strong>;性能更高的优化器总体产出更短的提示——直接降低 API 输入 token 成本与延迟。</li>
-<li><strong>观察 5(交叉/Merge)</strong>:System-Aware Merge 把不同谱系各自进化出的最优模块拼成一个候选,最多再 +5%(GPT-4.1 Mini 上聚合再 +2%);但 Qwen3 8B 上超参未调时可能负收益,何时触发 Merge 需自适应,留作未来工作。</li>
-<li><strong>观察 6(跨模型迁移)</strong>:用弱模型 Qwen3-8B 优化出的提示直接给 GPT-4.1-Mini 用,聚合 <strong>+9.00%</strong>(HotpotQA 最高 +27.67%),竟超过直接在 GPT-4.1-Mini 上优化的 MIPROv2/TextGrad/Trace。</li>
-</ul>
-<h3 id="5">5. 扩展应用</h3>
-<ul>
-<li><strong>作为推理时搜索</strong>:把待解任务全集当作"训练集"(D_train = D_pareto = 全部任务),GEPA"过拟合"任务集,把一个任务 rollout 中学到的经验迁移给其他任务。在 NPUEval(AMD XDNA2 NPU 内核)与 KernelBench(NVIDIA V100 CUDA)上做代码生成:<strong>μ_f 动态注入领域知识</strong>——按编译报错检索技术手册相关章节,把架构最佳实践带入提示进化;温度采样用缓存消除后,提升可归因于提示更新本身。GPT-4o 的 Sequential10 精炼 agent 在 NPU 上平均向量利用率仅 4.25%(加 RAG 后改善,论文续表给出 GEPA 的进一步增益)。</li>
-<li><strong>对抗性提示搜索</strong>(5.2):GEPA 亦可用于搜索越狱提示等对抗用途,展示同一框架的双刃性。</li>
-</ul>
-<h3 id="_4">结论与意义</h3>
-<ul>
-<li><strong>"语言是比标量奖励更丰富的学习介质"</strong> 是本文的中心论点,证据是样本效率数量级的提升。</li>
-<li>对工程的启示:在预算受限、无法微调(闭源模型/昂贵工具调用)的场景,反思式提示进化是比 RL 更实用的第一选择;且优化产物(短指令)可跨模型、跨家族迁移。</li>
-<li>与课程脉络的关系:GEPA 是 MIPROv2(同讲、同作者群)之后的下一代提示优化器,也是 DSPy 生态的最新成果;其"执行轨迹 + 评估轨迹都可用于反思"的思想与 AutoLibra(第 8 周)的元评测一脉相承。</li>
-</ul>
-<h2 id="_5">要点速览</h2>
+<p>这是第 5 周「优化」一讲的另一篇核心论文(ICLR 2026 Oral),与同讲的 MIPROv2、Soylu et al. 构成"提示优化 vs 微调"的完整光谱。GEPA(Genetic-Pareto)回答一个尖锐的问题:<strong>优化一个由 LLM 模块组成的系统,一定要动权重(RL/微调)吗?</strong> 作者注意到:RL(如 GRPO)靠稀疏标量奖励估计策略梯度,动辄需要数万 rollout;而任何 LLM 系统的执行轨迹(推理链、工具调用、编译器报错)本身就是<strong>自然语言</strong>,对 LLM 来说是远比标量丰富的学习介质。GEPA 因此让"反思 LLM"阅读执行轨迹与评估轨迹,诊断问题、改写提示,并以<strong>帕累托前沿</strong>维护多样候选避免局部最优。结果:6 个任务上平均超 GRPO 6%、最多 20%,rollout 少 35 倍;全面超越最强提示优化器 MIPROv2(+10% 以上);提示还更短(最多 9.2 倍)、可跨模型迁移。它是"语言反思 &gt; 标量梯度"这一论点的代表作。本页为<strong>全文中英对照</strong>版本(正文全部,附录略),可用顶部按钮切换"仅看中文"。</p>
+<h2 id="_2">全文对照翻译</h2>
+<blockquote>
+<p><strong>译注</strong>:以下为论文全文中英对照,覆盖摘要至第 7 节结论的全部正文(原文第 1-15 页)。References(参考文献)按本站惯例不收录;<strong>附录 A-N 未收录</strong>——含 B 节 LLM 使用声明、C 节 GEPA 反思元提示词、E 节评测设置、G-N 节补充实验、各任务完整优化后提示与搜索树等,可查原文 PDF。正文性质的关键附录内容(如 D.1 Merge 算法)在文末译注中以数句中文概述。英文原段仅合并了 PDF 提取产生的断行与连字符,内容一字未改;术语首现处给出中英对照(帕累托前沿 Pareto frontier、反思式变异 reflective mutation、反馈函数 feedback function 等),LLM/Agent/rollout 等通用缩写保留英文。</p>
+</blockquote>
+<h3 id="_3">摘要</h3>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Large language models (LLMs) are increasingly adapted to downstream tasks via reinforcement learning (RL) methods like Group Relative Policy Optimization (GRPO), which often require thousands of rollouts to learn new tasks. We argue that the interpretable nature of language often provides a much richer learning medium for LLMs, compared to policy gradients derived from sparse, scalar rewards. To test this, we introduce GEPA (Genetic-Pareto), a prompt optimizer that thoroughly incorporates natural language reflection to learn high-level rules from trial and error. Given any AI system containing one or more LLM prompts, GEPA samples trajectories (e.g., reasoning, tool calls, and tool outputs) and reflects on them in natural language to diagnose problems, propose and test prompt updates, and combine complementary lessons from the Pareto frontier of its own attempts. As a result of GEPA&#x27;s design, it can often turn even just a few rollouts into a large quality gain. Across six tasks, GEPA outperforms GRPO by 6% on average and by up to 20%, while using up to 35x fewer rollouts. GEPA also outperforms the leading prompt optimizer, MIPROv2, by over 10% (e.g., +12% accuracy on AIME-2025), and demonstrates promising results as an inference-time search strategy for code optimization. We release our code at https://github.com/gepa-ai/gepa.</p></div><p>大语言模型(LLM)正越来越多地通过 GRPO(Group Relative Policy Optimization,组相对策略优化)等强化学习(RL)方法适配下游任务,而这通常需要数千个 rollout 才能学会新任务。我们主张:与从稀疏标量奖励导出的策略梯度相比,语言的<strong>可解释本质</strong>往往为 LLM 提供了丰富得多的学习介质。为验证这一点,我们提出 GEPA(Genetic-Pareto,遗传-帕累托),一个充分引入<strong>自然语言反思</strong>的提示优化器,从试错中学习高层规则。给定任一包含一个或多个 LLM 提示的 AI 系统,GEPA 采样轨迹(如推理、工具调用与工具输出),用自然语言对其反思,以诊断问题、提出并检验提示更新,并把自身尝试的<strong>帕累托前沿</strong>(Pareto frontier)上的互补经验结合起来。得益于该设计,GEPA 常能把哪怕很少的 rollout 转化为大幅质量提升。在六个任务上,GEPA 平均超出 GRPO 6%、最多 20%,同时 rollout 少 35 倍;超出此前最强的提示优化器 MIPROv2 10% 以上(如 AIME-2025 上 +12% 准确率),并展示了作为代码优化推理时搜索策略的可观前景。代码已开源:https://github.com/gepa-ai/gepa。</p></div>
+<p>[图 1: A comparison of learning behavior of the GEPA prompt optimizer against a state-of-the-art prompt optimizer (MIPROv2) and GRPO (24,000 rollouts). As more rollouts are sampled, the prompt optimizers can learn much more quickly than GRPO. GEPA substantially outperforms both GRPO and MIPROv2 in final score. The Test-set star markers demonstrate the performance gap in a held-out set of questions.]</p>
+<p>图 1 说明:比较 GEPA、最先进的提示优化器 MIPROv2 与 GRPO(24,000 rollouts)的学习行为。随着采样 rollout 增多,提示优化器的学习速度远快于 GRPO;GEPA 在最终得分上大幅领先两者;测试集星标展示了在留出问题集上的性能差距。图中 (a) 为 HotpotQA、(b) 为 IFBench(均为 Qwen3 8B):横轴为 rollout 数(0-25000),纵轴为得分,曲线为验证性能,星标为测试集性能。</p>
+<h3 id="1">1 引言</h3>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Large language models (LLMs) have enabled development of agents and systems that combine fuzzy natural-language specifications with tools like retrieval and code execution. This raises the question of how LLMs should be optimized for downstream performance. One popular approach is Reinforcement Learning with Verifiable Rewards (RLVR), e.g. with Group Relative Policy Optimization (GRPO) (Shao et al., 2024), which treats success metrics as end-of-rollout scalar rewards used to estimate policy gradients (Lambert, 2025). While these RL approaches are effective, they typically require tens of thousands of rollouts in practice to fit new tasks. For example, recent works leveraging GRPO typically use up to hundreds of thousands of rollouts for training (Chen et al., 2025b; Wu et al., 2025b; Zhang et al., 2025; Jin et al., 2025; Si et al., 2025; Wang et al., 2025a; Chen et al., 2025a; Sha et al., 2025; Lin et al., 2025a; Peng et al., 2025; Song et al., 2025). This sample inefficiency can quickly become a serious bottleneck: many downstream LLM applications invoke expensive tool calls, have limited inference budget for sampling from the LLM itself, or simply cannot finetune the weights of the largest or best-performing LLMs.</p></div><p>大语言模型(LLM)催生了把模糊的自然语言规范与检索、代码执行等工具结合起来的智能体与系统。这就引出了一个问题:应如何优化 LLM 的下游性能?一种流行方法是<strong>可验证奖励的强化学习</strong>(Reinforcement Learning with Verifiable Rewards, RLVR),例如 GRPO(Shao et al., 2024),它把成功指标当作 rollout 末端的标量奖励,用于估计策略梯度(Lambert, 2025)。这些 RL 方法虽然有效,但在实践中通常需要数万个 rollout 才能拟合新任务。例如,近期利用 GRPO 的工作动辄使用多达数十万个 rollout 进行训练(Chen et al., 2025b; Wu et al., 2025b; Zhang et al., 2025; Jin et al., 2025; Si et al., 2025; Wang et al., 2025a; Chen et al., 2025a; Sha et al., 2025; Lin et al., 2025a; Peng et al., 2025; Song et al., 2025)。这种样本低效可能很快成为严重瓶颈:许多下游 LLM 应用要调用昂贵的工具、用于从 LLM 本身采样的推理预算有限,或者根本无法微调那些最大或性能最好的 LLM 的权重。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>We observe that rollouts sampled from even highly sophisticated LLM systems can be serialized into traces of natural language: they contain nothing but the instructions of each LLM module, the resulting LLM reasoning chains, tool calls, and potentially the internal workings of the reward function (e.g., compiler error messages, before they are collapsed into scalar rewards). Because such serialized trajectories are readily understood by modern LLMs, we argue that algorithms that learn deliberately in natural language by reflecting on these trajectories can make more effective use of the strong language priors that LLMs have, compared with standard RL approaches.</p></div><p>我们观察到:即使从高度复杂的 LLM 系统中采样的 rollout,也可以被序列化为自然语言轨迹:它们包含的不过是各 LLM 模块的指令、由此产生的 LLM 推理链、工具调用,以及(可能的)奖励函数的内部过程(例如编译器报错在被压缩为标量奖励之前的原文)。由于此类序列化轨迹能被现代 LLM 轻松读懂,我们主张:<strong>通过在自然语言中反思这些轨迹而"刻意学习"的算法,能比标准 RL 方法更有效地利用 LLM 天生强大的语言先验</strong>。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>We introduce GEPA (Genetic-Pareto), a reflective prompt optimizer for compound AI systems that merges textual reflection with multi-objective evolutionary search. GEPA iteratively mutates prompts using natural language feedback drawn from new rollouts. In each mutation, the candidate prompt is derived from an ancestor, accumulating high-level lessons derived from observations and LLM feedback. To avoid local optima that afflict greedy prompt optimization, GEPA maintains a Pareto front: instead of evolving only the global best prompt, it stochastically explores the top-performing prompts for each problem instance. This diversification enables robust generalization and mitigates getting stuck in local minima.</p></div><p>我们提出 GEPA(Genetic-Pareto),一个面向<strong>复合 AI 系统</strong>(compound AI system)的反思式提示优化器,它把文本反思与多目标进化搜索融合在一起。GEPA 利用从新 rollout 中提取的自然语言反馈迭代地<strong>变异</strong>提示。每次变异中,候选提示都派生自某个祖先,累积由观察与 LLM 反馈提炼出的高层经验。为避免贪心提示优化常陷入的局部最优,GEPA 维护一个<strong>帕累托前沿</strong>(Pareto front):它不只进化全局最优的提示,而是随机探索在每个问题实例上表现最好的提示。这种多样化带来了稳健的泛化,并缓解陷入局部极小的问题。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>We evaluate GEPA across multi-hop reasoning (HotpotQA; Yang et al. 2018), Math (AIME, LiveBench-Math; Balunović et al. (2025); White et al. (2025)), instruction following (IFBench; Pyatkin et al. 2025b), privacy-aware delegation (PUPA; Li et al. 2025a), and retrieval-augmented verification (HoVer; Jiang et al. 2020), using both open (Qwen3 8B; Yang et al. 2025; Team 2025) and proprietary (GPT-4.1 Mini; OpenAI 2025) models. We find that GEPA generalizes well and is highly sample-efficient: on Qwen3 8B, it outperforms GRPO (24k rollouts) by up to 20% while using up to 35× fewer rollouts, with an average gain of +6% across six tasks. GEPA also surpasses the prior state-of-the-art, MIPROv2 (Opsahl-Ong et al., 2024), on all benchmarks and models, achieving +13% aggregate gains, over double MIPROv2&#x27;s +5.6%.</p></div><p>我们在多跳推理(HotpotQA;Yang et al. 2018)、数学(AIME、LiveBench-Math;Balunović et al. (2025);White et al. (2025))、指令遵循(IFBench;Pyatkin et al. 2025b)、隐私感知委托(PUPA;Li et al. 2025a)与检索增强验证(HoVer;Jiang et al. 2020)上评测 GEPA,同时使用开源(Qwen3 8B;Yang et al. 2025;Team 2025)与闭源(GPT-4.1 Mini;OpenAI 2025)模型。我们发现 GEPA 泛化良好且高度样本高效:在 Qwen3 8B 上,它以最多 35 倍少的 rollout 超出 GRPO(24k rollouts)最多 20%,六个任务平均提升 +6%;并在所有基准与模型上超过此前最强的 MIPROv2(Opsahl-Ong et al., 2024),聚合提升 +13%,是 MIPROv2 +5.6% 的两倍多。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Qualitatively, GEPA-learned prompts are quite rich. Figure 2 shows excerpts from a prompt crafted for the query-creation module of a multi-hop question answering system used in HotpotQA, and Figure 5 shows that even a single reflective update often yields large gains. These results highlight that reflective prompt evolution with language feedback enables improved sample efficiency and robust generalization, offering a practical approach to optimizing complex AI workflows in data- or budget-constrained environments. We also demonstrate GEPA as an inference-time search strategy for code optimization on NPUEval (Kalade &amp; Schelle, 2025) &amp; KernelBench (Ouyang et al., 2025) in Sec 5.1, and for adversarial prompt search in Sec 5.2.</p></div><p>从定性上看,GEPA 学到的提示相当丰富。图 2 展示了为 HotpotQA 所用多跳问答系统的查询构造模块打造的提示摘录,图 5 则显示<strong>哪怕单次反思式更新也常带来大幅提升</strong>。这些结果凸显:带语言反馈的反思式提示进化能带来更高的样本效率与稳健泛化,为在数据或预算受限环境中优化复杂 AI 工作流提供了实用途径。我们还在 5.1 节展示了把 GEPA 用作代码优化的推理时搜索策略(在 NPUEval(Kalade &amp; Schelle, 2025)与 KernelBench(Ouyang et al., 2025)上),并在 5.2 节展示了用于对抗性提示搜索。</p></div>
+<p>[图 2: This figure shows an example prompt generated by GEPA for the second-hop document retrieval to be performed in a multi-hop question-answer system, along with the seed prompt it started with. Appendix L compares GEPA's prompts for all tasks with prompts generated by MIPROv2.]</p>
+<p>图 2 说明:展示 GEPA 为多跳问答系统的第二跳文档检索生成的示例提示,及其起始的种子提示。种子提示只有一句话("给定字段 question、summary_1,产出字段 query");而 GEPA 优化后的提示(GPT-4.1 Mini)演化为结构化的长指令:解释两跳检索的背景(第一跳用原始问题取回初始文档,第二跳要找的是<strong>未在第一跳出现</strong>但补全答案所必需的文档)、给出"关键观察与经验"(如第一跳文档常只覆盖一个实体,剩余相关文档常涉及 summary_1 中提到但原问题未明示的上层概念;并举出"教区人口 vs 更大区域总人口"、"歌曲 vs 专辑"两个例子)、给出构造查询的实操步骤(识别 summary_1 中指向更大上下文的实体、改写查询显式提及这些更宽泛的相关实体、保留关键上下文但把焦点移到缺失部分),并明确禁止简单复述原问题或重复第一跳已覆盖的信息。附录 L 将 GEPA 各任务的提示与 MIPROv2 生成的提示做了对比。</p>
+<h3 id="2">2 问题陈述</h3>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>We follow related work in defining a compound AI system as any modular system composed of one or more language model (LLM) invocations, potentially interleaved with external tool calls, orchestrated through arbitrary control flow. This definition subsumes a broad class of real-world LLM-based AI systems, including agents, multi-agent systems, and general-purpose scaffolding techniques like ReAct (Yao et al., 2023), Archon (Saad-Falcon et al., 2025), etc. Following Soylu et al. (2024); Khattab et al. (2024); Opsahl-Ong et al. (2024); Tan et al. (2025), we formalize such a system as Φ = (M, C, X, Y), where M = ⟨M₁, ..., M_|M|⟩ denotes language modules, C specifies control flow logic, and X, Y are global input/output schemas. Each module Mᵢ = (πᵢ, θᵢ, Xᵢ, Yᵢ) is an LLM subcomponent: πᵢ is its (system) prompt including instructions and few-shot demonstrations; θᵢ the underlying model weights; Xᵢ, Yᵢ are input/output schemas. At runtime, C orchestrates the sequencing and invocation of modules—e.g., passing outputs from one module to another, invoking modules conditionally, or leveraging tool APIs. This way, C can invoke different modules in any order multiples of times.</p></div><p>我们沿用相关工作的定义,把<strong>复合 AI 系统</strong>(compound AI system)定义为:由一次或多次语言模型(LLM)调用组成、可能穿插外部工具调用、通过任意控制流编排的任何模块化系统。该定义涵盖一大类现实中的 LLM 型 AI 系统,包括智能体(agent)、多智能体系统,以及 ReAct(Yao et al., 2023)、Archon(Saad-Falcon et al., 2025)等通用脚手架技术。沿循 Soylu et al. (2024); Khattab et al. (2024); Opsahl-Ong et al. (2024); Tan et al. (2025),我们把这样的系统形式化为 Φ = (M, C, X, Y):M = ⟨M₁, …, M_|M|⟩ 表示语言模块,C 指定控制流逻辑,X、Y 是全局输入/输出 schema。每个模块 Mᵢ = (πᵢ, θᵢ, Xᵢ, Yᵢ) 是一个 LLM 子组件:πᵢ 是它的(系统)提示,含指令与少样本示例;θᵢ 是底层模型权重;Xᵢ、Yᵢ 是输入/输出 schema。运行时,C 负责编排各模块的调用顺序与方式——例如把一个模块的输出传给另一个模块、按条件调用模块、或调用工具 API。这样,C 可以以任意顺序、多次调用不同模块。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Given Φ, let Π_Φ = ⟨π₁, ..., π_|M|⟩ denote the collection of all module prompts and Θ_Φ = ⟨θ₁, ..., θ_|M|⟩ the set of module weights. The learnable parameters are thus ⟨Π, Θ⟩_Φ. For a task instance (x, m)—where x maps to the input schema X and m contains evaluator metadata (e.g., gold answers, evaluation rubrics, code unit tests)—the system induces an output y = Φ(x; ⟨Π, Θ⟩_Φ). A metric µ : Y × M → [0, 1] then measures the output quality of y with respect to metadata m (for example by calculating, exact match, F1, pass rate, etc.). The optimization problem is thus defined as follows, where T is a task distribution.:</p></div><p>给定 Φ,令 Π_Φ = ⟨π₁, …, π_|M|⟩ 表示所有模块提示的集合,Θ_Φ = ⟨θ₁, …, θ_|M|⟩ 表示模块权重集合,可学习参数即为 ⟨Π, Θ⟩_Φ。对一个任务实例 (x, m)——x 映射到输入 schema X,m 包含评估器元数据(如标准答案、评分 rubric、代码单元测试)——系统产生输出 y = Φ(x; ⟨Π, Θ⟩_Φ)。指标 µ : Y × M → [0, 1] 随后依据元数据 m 度量 y 的输出质量(例如计算精确匹配、F1、通过率等)。优化问题于是定义如下,其中 T 是任务分布:</p></div>
+<p><div class="math-display">$$\langle \Pi^*, \Theta^* \rangle_\Phi = \arg\max_{\langle \Pi, \Theta \rangle_\Phi} \; \mathbb{E}_{(x,m)\sim T} \big[ \mu(\Phi(x; \langle \Pi, \Theta \rangle_\Phi),\, m) \big]. \tag{1}$$</div></p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>We adopt this general problem formulation, allowing updates to both prompts and weights of language modules, to enable comparisons between optimization algorithms that operate in different parameter spaces (e.g., GEPA vs. GRPO).</p></div><p>我们采用这一一般性问题表述,允许同时更新语言模块的提示与权重,以便在<strong>不同参数空间</strong>中运行的优化算法(如 GEPA 与 GRPO)之间进行公平比较。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Sample-Efficient Optimization. In many real-world scenarios, rollouts—concretely, invocations of Φ plus evaluation by µ—are often computationally, monetarily, or timewise expensive. The optimizer is thus limited to at most B rollouts on a dataset D_train = {(x, m)ᵢ}ᵢ₌₁ᴺ with full access to µ. The goal is to identify parameters ⟨Π*, Θ*⟩_Φ that maximize held-out performance, subject to not exceeding the rollout budget B:</p></div><p><strong>样本高效优化</strong>(Sample-Efficient Optimization)。在许多现实场景中,rollout——具体地说,即调用 Φ 并用 µ 评估——在算力、金钱或时间上往往昂贵。因此优化器在数据集 D_train = {(x, m)ᵢ}ᵢ₌₁ᴺ 上至多只能做 B 次 rollout,且可以完全访问 µ。目标是在不超过 rollout 预算 B 的前提下,识别使留出集(held-out)性能最大化的参数 ⟨Π<em>, Θ</em>⟩_Φ:</p></div>
+<p><div class="math-display">$$\langle \Pi^*, \Theta^* \rangle_\Phi = \arg\max_{\langle \Pi, \Theta \rangle_\Phi} \; \mathbb{E}_{(x,m)\sim T} \big[ \mu(\Phi(x; \langle \Pi, \Theta \rangle_\Phi),\, m) \big], \quad \text{s.t. } \#\text{rollouts} \le B. \tag{2}$$</div></p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>The core challenge, then, is: How do we extract maximal learning signal from every expensive rollout to enable effective adaptation of complex, modular AI systems in low-data or budget-constrained settings?</p></div><p>于是,核心挑战是:<strong>如何从每一次昂贵的 rollout 中榨取最大的学习信号,使复杂、模块化的 AI 系统在低数据或预算受限的设定下仍能有效适配?</strong></p></div>
+<h3 id="3-gepa">3 GEPA:反思式提示进化</h3>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>We introduce GEPA (Genetic-Pareto), a sample-efficient optimizer for compound AI systems motivated by three core principles: genetic prompt evolution (Section 3), reflection using natural language feedback (Section 3), and Pareto-based candidate selection (Section 3.1). Figure 3 gives an overview of GEPA and the full GEPA algorithm is formalized in Figure 4. GEPA receives the following inputs: A system Φ instantiated with simple prompts to be optimized, training dataset D_train (consisting of task instances (x, m) as described in Section 2), the standard evaluation metric µ for the task, a feedback function µ_f (introduced in Section 3) and the total rollout budget B. Note that GEPA evolves only the set of prompts, denoted as Π_Φ, whereas the underlying LLM weights, denoted by Θ_Φ remains fixed.</p></div><p>我们提出 GEPA(Genetic-Pareto),一个面向复合 AI 系统的样本高效优化器,其动机来自三大核心原则:<strong>遗传式提示进化</strong>(genetic prompt evolution,第 3 节)、<strong>基于自然语言反馈的反思</strong>(reflection using natural language feedback,第 3 节)与<strong>基于帕累托的候选选择</strong>(Pareto-based candidate selection,3.1 节)。图 3 给出 GEPA 概览,图 4 形式化了完整算法。GEPA 接收如下输入:一个以待优化的简单提示实例化的系统 Φ、训练数据集 D_train(由第 2 节所述任务实例 (x, m) 组成)、该任务的标准评估指标 µ、<strong>反馈函数</strong>(feedback function)µ_f(在第 3 节引入)以及总 rollout 预算 B。注意 GEPA 只进化提示集合 Π_Φ,底层 LLM 权重 Θ_Φ 保持冻结。</p></div>
+<p>[图 3: GEPA proposes a new candidate in every iteration by improving existing candidates using one of the two strategies (Reflective Prompt Mutation (Section 3) or System Aware Merge (Appendix D.1)), first evaluating them on a minibatch, and if improved, evaluating on a larger dataset. Instead of selecting the best performing candidate to mutate always, which can lead to a local-optimum, GEPA introduces Pareto-based candidate sampling (Section 3.1), which filters and samples from the list of best candidates per task, ensuring sufficient diversity. Overall, these design decisions allow GEPA to be highly sample-efficient while demonstrating strong generalization.]</p>
+<p>图 3 说明:GEPA 每轮迭代用两种策略之一——<strong>反思式提示变异</strong>(Reflective Prompt Mutation,第 3 节)或 <strong>System-Aware Merge</strong>(系统感知合并,附录 D.1)——改进现有候选来提出新候选:先在一个 minibatch 上评估,若有提升再在更大的数据集(选择集)上评估。GEPA 不总是选表现最好的候选去做变异(那会导致局部最优),而是引入<strong>基于帕累托的候选采样</strong>(3.1 节):从"每个任务的最优候选"列表中过滤并采样,确保足够多样性。总体而言,这些设计决策使 GEPA 在具备强泛化的同时高度样本高效。图中展示了候选池 P(P0-P4)及其在各任务上的得分矩阵,按"每个任务的最佳候选"过滤出帕累托前沿,再从中采样候选执行变异或合并;新候选经 minibatch 评估,性能提升则加入池中并在全部任务上评估,否则丢弃,如此循环直至预算耗尽。</p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Genetic Optimization Loop: Given an AI system Φ, the goal is to identify parameters Π_Φ that maximize task performance. GEPA begins with a candidate pool P containing only the base system, where each candidate is a concrete instantiation of ⟨Π, Θ_frozen⟩_Φ. It then enters an optimization loop, repeatedly proposing new candidates until the evaluation budget is exhausted. Candidates are derived from existing ones via reflective mutation or crossover, guided by feedback from rollouts, with each inheriting learning signals from its parents and its own rollout so that GEPA accumulates knowledge along the genetic tree. In each iteration, GEPA (i) selects promising candidates, (ii) proposes and evaluates a variant on a minibatch of tasks, and (iii) if it outperforms its parent(s), adds it to P with ancestry records and evaluate on D_pareto, the validation set used for selection. After the budget is exhausted, GEPA returns the candidate with the best aggregate performance on D_pareto.</p></div><p><strong>遗传优化循环</strong>(Genetic Optimization Loop):给定 AI 系统 Φ,目标是识别使任务性能最大化的参数 Π_Φ。GEPA 从一个只含基础系统的<strong>候选池</strong>(candidate pool)P 出发,每个候选都是 ⟨Π, Θ_frozen⟩_Φ 的一个具体实例化。随后进入优化循环,反复提出新候选,直至评估预算耗尽。候选经由<strong>反思式变异</strong>(reflective mutation)或<strong>交叉</strong>(crossover)从既有候选派生而来,由 rollout 的反馈引导;每个候选从其父代与自身的 rollout 中继承学习信号,使 GEPA 沿遗传树累积知识。每轮迭代中,GEPA:(i) 选出有希望的候选;(ii) 在一个任务 minibatch 上提出并评估一个变体;(iii) 若变体胜过其父代(单亲或双亲),则连同谱系记录加入 P,并在用于选择的验证集 <strong>D_pareto</strong> 上评估。预算耗尽后,GEPA 返回在 D_pareto 上聚合性能最好的候选。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Reflective Prompt Mutation: Natural language traces generated during the execution of a compound AI system offer rich visibility into the behavior and responsibilities of each module, as they capture the intermediate inferences and underlying reasoning steps. When these traces are paired with the final outcome of the system (e.g., success or failure), they provide substantial diagnostic value, allowing practitioners to trace errors or successes back to specific decisions made at the module level. LLMs can leverage these traces via reflection to perform implicit credit assignment, attributing responsibility for the final outcome to the relevant modules. This process of reflection can then be used to make targeted updates to individual modules, making large and effective updates to the whole system&#x27;s behavior.</p></div><p><strong>反思式提示变异</strong>(Reflective Prompt Mutation):复合 AI 系统执行过程中产生的自然语言<strong>执行轨迹</strong>(execution trace),为每个模块的行为与职责提供了丰富的可观测性,因为它们记录了中间推断与底层推理步骤。当这些轨迹与系统的最终结果(如成功或失败)配对时,便具有很高的<strong>诊断价值</strong>,使实践者能把错误或成功回溯到模块层面的具体决策。LLM 可以通过<strong>反思</strong>(reflection)利用这些轨迹完成<strong>隐式信用分配</strong>(implicit credit assignment),把最终结果的责任归因到相关模块。这一反思过程进而可用于对单个模块做定点更新,从而对整个系统的行为做出大而有效的改动。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Given a candidate to mutate in the current iteration of the optimization loop (stochastically selected from the Pareto-frontier, see Section 3.1 below), GEPA executes the selected candidate on a stochastically sampled minibatch of input queries from the trainset, tracing the program&#x27;s execution. From the execution traces, GEPA extracts the module&#x27;s inputs, outputs, and reasoning, and calls the feedback function µ_f, which returns a numeric score and text feedback including details about the evaluation (like compiler error messages, failed rubrics, etc.). GEPA selects the module (among the |M| modules that the language program contains) to be updated based on a policy (round-robin), and a reflection LM is then shown the (current prompt, language program trajectory, score, feedback) with the task to reflectively attribute successes or failures to prompt elements and propose revised instructions. The updated module, with the rest of the language program, is evaluated again on the minibatch, and if the score improves, then the new program is added to the candidate pool. The meta-prompt for reflective prompt updates is shown in Appendix C and the full algorithm is presented in Algorithm 1.</p></div><p>在优化循环的当前迭代中,给定一个待变异的候选(从帕累托前沿随机选出,见下文 3.1 节),GEPA 在从训练集随机采样的一批输入查询(minibatch)上执行该候选,并追踪程序执行。GEPA 从执行轨迹中提取各模块的输入、输出与推理,调用<strong>反馈函数</strong> µ_f——它返回一个数值分数与文本反馈,反馈中包含评估细节(如编译器报错、未通过的 rubric 等)。GEPA 依据某种策略(轮询 round-robin)选出要更新的模块(语言程序共有 |M| 个模块),然后向<strong>反思 LM</strong>(reflection LM)展示(当前提示、语言程序轨迹、分数、反馈),任务是把成功或失败反思式地归因到提示的具体元素并提出改写后的指令。更新后的模块连同语言程序其余部分在 minibatch 上重新评估,若分数提升,则新程序加入候选池。反思式提示更新所用的元提示(meta-prompt)见附录 C,完整算法见算法 1。</p></div>
+<pre><code>算法 1  GEPA:反思式进化提示优化器(GEPA: Reflective Evolutionary Prompt Optimizer)
+输入:系统 Φ、数据集 D_train、评估指标 µ、反馈函数 µ_f、预算 B
+超参数:minibatch 大小 b、Pareto 集大小 n_pareto
+ 1: 将 D_train 划分为 D_feedback 与 D_pareto,使 |D_pareto| = n_pareto
+ 2: 初始化候选 P ← [Φ],父代记录 A ← [None]
+ 3: for D_pareto 中每个 (x_i, m_i) do            // 先为基础系统打分
+ 4:     S_Φ[i] ← µ(Φ(x_i), m_i)
+ 5: end for
+ 6: while 预算 B 未耗尽 do
+ 7:     k ← SELECTCANDIDATE(P, S)                 // 帕累托采样选候选(算法 2)
+ 8:     j ← SELECTMODULE(Φ_k)                     // 轮询选模块
+ 9:     M ← 从 D_feedback 抽大小为 b 的 minibatch
+10:     用 µ_f 为 Φ_k[j] 在 M 上收集反馈、分数、轨迹
+11:     π'_j ← UPDATEPROMPT(π_j, feedbacks, traces[j])   // 反思 LM 改写提示
+12:     Φ' ← Φ_k 的副本,其中模块 j 换成 π'_j
+13:     σ, σ' ← M 上的平均分(改前, 改后)
+14:     if σ' 有提升 then
+15:         将 Φ' 加入 P;将 k 记入 A(标记父代)
+16:         for D_pareto 中每个 (x_i, m_i) do      // 在选择集上全面评估
+17:             S_Φ'[i] ← µ(Φ'(x_i), m_i)
+18:         end for
+19:     end if
+20: end while
+21: return 在 D_pareto 上平均分最高的 Φ*
+</code></pre>
+<pre><code>算法 2  基于帕累托的候选选择(Pareto-based candidate selection)
+ 1: function SELECTCANDIDATE(P, S)
+ 2:     // 构建逐实例(instance-wise)的 Pareto 集
+ 3:     for 每个实例 i do
+ 4:         s*[i] ← max_k S_P[k][i]                // 所有候选在实例 i 上的最高分
+ 5:         P*[i] ← {P[k] : S_P[k][i] = s*[i]}     // 在 i 上并列最优的候选集合
+ 6:     end for
+ 7:     C ← 各 P*[i] 的并集中的去重候选
+ 8:     D ← ∅
+ 9:     while 存在 Φ ∈ C\D 被 C\D 中另一候选支配 do
+10:         D ← D ∪ {Φ}                            // 剪除被严格支配的候选
+11:     end while
+12:     从每个 P*[i] 中移除 D 中的候选,得到 P̂*[i]
+13:     令 f[Φ] = Φ ∈ P̂*[i] 的实例个数             // 该候选&quot;领先&quot;的实例数
+14:     以正比于 f[Φ_k] 的概率从 Ĉ 中采样 Φ_k
+15:     return Φ_k 在 P 中的下标 k
+16: end function
+</code></pre>
+<p>[图 4: (Left) GEPA's core algorithm for reflective prompt evolution. GEPA works iteratively, in each iteration, selecting some of the current candidates to evolve (line 7), executing the identified candidate on a minibatch of rollouts, while utilizing a special feedback function µ_f to gather module specific feedback when available (lines 9-10, described in detail in Section 3), using an LLM to reflectively update the prompt (line 11), and evaluating whether the system instantiated with the new prompt improved the performance on the minibatch (line 14). If improved, GEPA then proceeds to evaluate the new system candidate on the full D_pareto set, adding it to the list of candidates tracked and marking the new system's parent. (Right) The SelectCandidate subprocedure used by GEPA's core algorithm is tasked with identifying the best candidate to evolve in the next optimization iteration. GEPA's chief candidate selection strategy is to find non-dominated candidates in the Pareto frontier (of all task instances), and stochastically select one of them based on their appearance frequency in the Pareto front.]</p>
+<p>图 4 说明:(左)GEPA 反思式提示进化的核心算法,即上方算法 1。GEPA 迭代运行:每轮选出当前要进化的候选(第 7 行),在被选候选上执行一个 minibatch 的 rollout,同时利用特殊的反馈函数 µ_f 尽可能收集模块级反馈(第 9-10 行,详见第 3 节),用一个 LLM 反思式地更新提示(第 11 行),并评估以新提示实例化的系统是否改进了 minibatch 性能(第 14 行)。若有改进,GEPA 进一步在完整 D_pareto 集上评估新系统候选,将其加入跟踪列表并标记父代。(右)GEPA 核心算法使用的 SelectCandidate 子过程(即上方算法 2)负责识别下一轮迭代要进化的最佳候选:GEPA 的主要候选选择策略是找出(所有任务实例构成的)帕累托前沿上的<strong>非支配</strong>候选,并按其在前沿上的出现频率随机选择其一。</p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Evaluation traces as diagnostic signals: The text that LLMs produce is the execution trace of the AI system. The text that the environment produces to compute the reward (e.g. compiler error messages before giving reward 0) is the evaluation trace. Beyond reflection on execution traces, we identify a second valuable source of diagnostic information in the evaluation traces. Many evaluation metrics apply rich strategies (e.g., code evaluation may involve compilation, execution, and profiling), producing natural language traces before computing a scalar reward. We propose leveraging these evaluation traces for reflective credit assignment and targeted prompt updates. GEPA achieves this by extending rewards µ into a feedback function µ_f that extracts textual traces during evaluation and returns them with the final score as feedback_text. When available, such feedback can even be module-specific (e.g. in multi-hop systems the evaluator may provide feedback after each hop). In practice, there are domains where human-graders are able to rate the AI system&#x27;s responses, along with providing detailed feedback justifying their scalar ratings. When available, D_train can be augmented with such human-written explanations for each instance; during reflection, and GEPA can consume these explanations as auxiliary feedback_text to guide targeted prompt updates, even when natural-language feedback from rollouts is limited or unavailable.</p></div><p><strong>评估轨迹作为诊断信号</strong>(Evaluation traces as diagnostic signals):LLM 产生的文本是 AI 系统的<strong>执行轨迹</strong>(execution trace);而环境为计算奖励所产生的文本(例如在给出 0 奖励之前的编译器报错)是<strong>评估轨迹</strong>(evaluation trace)。除了对执行轨迹反思之外,我们在评估轨迹中识别出第二个有价值的诊断信息源。许多评估指标会执行丰富的策略(例如代码评估可能包含编译、执行与分析/profiling),在计算标量奖励之前产生自然语言轨迹。我们提议利用这些评估轨迹做反思式信用分配与定点提示更新。GEPA 通过把奖励 µ 扩展为反馈函数 µ_f 来实现这一点:µ_f 在评估过程中提取文本轨迹,并作为 <strong>feedback_text</strong> 随最终分数一起返回。当条件允许时,这类反馈甚至可以是模块级的(例如在多跳系统中,评估器可以在每一跳之后给出反馈)。实践中,也存在一些领域,人工评分者能对 AI 系统的回答打分,并给出论证其标量评分的详细反馈。若可得,D_train 可以为每个实例增补这样的人工书面解释;反思期间,GEPA 可以把这些解释当作<strong>辅助 feedback_text</strong> 消费,用以引导定点提示更新——即使来自 rollout 的自然语言反馈有限或不可用时也是如此。</p></div>
+<p>[图 5: GEPA's reflective prompt mutation systematically incorporates task-specific nuances, leading to substantial improvements in performance. This figure visualizes the optimization trajectory taken by GEPA, presenting an annotated subtree from Figure 25d (for the privacy-preserving delegation task PUPA) to demonstrate the iterative enhancements made to the prompts. The progression from the base prompt (candidate 0) to the best performing prompt (candidate 11) is highlighted with red arrows, and key prompt changes at each step are annotated beside the corresponding nodes. Full-length instructions for these iterations are provided in Appendix K.1. Each prompt refinement in this trajectory adds targeted nuances informed by ongoing optimization, illustrating how GEPA's process accumulates lessons to continually boost task performance.]</p>
+<p>图 5 说明:GEPA 的反思式提示变异系统性地吸纳任务特定细节,带来显著的性能提升。该图可视化 GEPA 的优化轨迹:取自图 25d(隐私保护委托任务 PUPA)的一棵带注释子树,展示提示的迭代改进。从基础提示(候选 0)到最佳提示(候选 11)的路径以红箭头标出,每步的关键提示变化标注在相应节点旁。进化路径为:候选 0(82.26)→ 1(85.74)→ 2(90.99)→ 3(87.76)→ 4(94.44)→ 5(94.67)→ 11(97.6);各步累积的高层经验依次是——基础指令(给定私密用户查询,构造一个不泄露用户隐私、发给强大外部 LLM 的改写请求)→ 扩充隐私策略与任务理解(增加识别并泛化 PII 的详细指引,强调分析查询意图并为改写引入推理解释)→ 结构化输出与领域最佳实践(把输出形式化为 Reasoning 与 Request 两部分;明确禁止出现姓名/代码,描述抽象策略与示例用法,要求详细的隐私正当性说明并与任务质量平衡)→ 详尽、透明的变换理由(强制透明的隐私推理与谨慎抽象;详述位置/姓名/一般信息的移除、职业场景与虚构人物的处理——总是伴随解释性理由)→ 严格、穷尽的协议(逐步的 PII 与专有信息抽象,禁止部分遮蔽;总是论证方法选择,在保证可审计隐私的同时最大化效用——零泄露容忍)。这些迭代的完整指令见附录 K.1。轨迹中的每次提示精炼都依据正在进行的优化加入有针对性的细节,展示 GEPA 的过程如何累积经验、持续提升任务性能。</p>
+<h4 id="31">3.1 基于帕累托的候选选择</h4>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>GEPA is a highly modular algorithm that supports various strategies for candidate selection, with the choice of strategy governing the exploration–exploitation tradeoff. A naive approach is to always select the best-performing candidate, but this often traps the optimizer in a local optimum: once a dominant strategy is found, it becomes difficult to surpass, and the optimizer exhausts its budget without learning new, potentially better strategies. Figure 6a illustrates this behavior: after finding one new strategy (the first child node), the search repeatedly attempts to refine it, fails to improve, and ultimately depletes the budget.</p></div><p>GEPA 是高度模块化的算法,支持多种候选选择策略,策略的选择决定着探索-利用(exploitation)权衡。一种朴素做法是永远选择表现最好的候选,但这常使优化器陷入局部最优:一旦某个占优策略被发现,就很难被超越,优化器耗尽预算也学不到新的、可能更好的策略。图 6a 展示了这种行为:在找到一个新策略(第一个子节点)之后,搜索反复尝试精炼它、却无法改进,最终耗尽预算。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>To address this, GEPA employs a Pareto-based &quot;illumination&quot; strategy (Mouret &amp; Clune, 2015), shown in Algorithm 2. For each training instance, GEPA records the highest score across all candidates, forming a Pareto frontier. Candidates that achieve the best score on at least one task are retained, while strictly dominated ones are pruned. From this pruned set, GEPA stochastically samples a candidate, weighting probabilities by how many tasks each candidate leads. This strategy helps GEPA escape local optima without inflating the search, efficiently balancing exploration and exploitation by focusing resources on candidates that embody &quot;winning&quot; strategies within the optimization budget.</p></div><p>为解决该问题,GEPA 采用基于帕累托的"illumination"(照亮)策略(Mouret &amp; Clune, 2015),见算法 2。对每个训练实例,GEPA 记录所有候选中的最高分,由此构成<strong>帕累托前沿</strong>(Pareto frontier)。在至少一个任务上取得最佳分数的候选被保留,被严格支配的候选则被剪枝。GEPA 从剪枝后的集合中随机采样候选,概率按每个候选"领先"的任务数加权。该策略帮助 GEPA 在不膨胀搜索的前提下逃离局部最优:通过把资源聚焦于优化预算内体现"制胜"策略的候选,高效平衡探索与利用。</p></div>
+<h3 id="4">4 评测</h3>
+<p>[表 1: Benchmark results for different optimizers with Qwen3 8B. GEPA and GEPA+Merge achieve better performance than GRPO with far fewer rollouts on all benchmarks except AIME. For example, for IFBench, GEPA found optimal prompts after just 678 rollouts achieving 38.61%, outperforming GRPO's test set score of 35.88% with 24,000 rollouts.]</p>
+<p>表 1:不同优化器在 Qwen3 8B 上的基准结果。GEPA 与 GEPA+Merge 在除 AIME 外的所有基准上以远少于 GRPO 的 rollout 取得更好性能。例如在 IFBench 上,GEPA 仅用 678 个 rollout 就找到最优提示、达到 38.61%,胜过 GRPO 用 24,000 个 rollout 取得的 35.88% 测试集分数。</p>
+<table>
+<thead>
+<tr>
+<th>Qwen3 8B</th>
+<th>HotpotQA</th>
+<th>IFBench</th>
+<th>HoVer</th>
+<th>PUPA</th>
+<th>AIME-2025</th>
+<th>LiveBench-Math</th>
+<th>聚合</th>
+<th>提升</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>基线(Baseline)</td>
+<td>42.33</td>
+<td>36.90</td>
+<td>35.33</td>
+<td>80.82</td>
+<td>27.33</td>
+<td>48.70</td>
+<td>45.23</td>
+<td>—</td>
+</tr>
+<tr>
+<td>GRPO</td>
+<td>43.33</td>
+<td>35.88</td>
+<td>38.67</td>
+<td>86.66</td>
+<td>38.00</td>
+<td>51.26</td>
+<td>48.91</td>
+<td>+3.68</td>
+</tr>
+<tr>
+<td>MIPROv2</td>
+<td>55.33</td>
+<td>36.22</td>
+<td>47.33</td>
+<td>81.55</td>
+<td>20.00</td>
+<td>46.60</td>
+<td>47.84</td>
+<td>+2.61</td>
+</tr>
+<tr>
+<td>GEPA</td>
+<td>62.33</td>
+<td><strong>38.61</strong></td>
+<td><strong>52.33</strong></td>
+<td><strong>91.85</strong></td>
+<td>32.00</td>
+<td><strong>51.95</strong></td>
+<td><strong>54.85</strong></td>
+<td><strong>+9.62</strong></td>
+</tr>
+<tr>
+<td>GEPA+Merge</td>
+<td><strong>64.33</strong></td>
+<td>28.23</td>
+<td>51.67</td>
+<td>86.26</td>
+<td>32.00</td>
+<td>51.95</td>
+<td>52.40</td>
+<td>+7.17</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead>
+<tr>
+<th>总优化预算(rollout 数)</th>
+<th>HotpotQA</th>
+<th>IFBench</th>
+<th>HoVer</th>
+<th>PUPA</th>
+<th>AIME-2025</th>
+<th>LiveBench-Math</th>
+<th>聚合</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GEPA(+Merge)</td>
+<td>6871</td>
+<td>3593</td>
+<td>7051</td>
+<td>2426</td>
+<td>1839</td>
+<td>1839</td>
+<td>3936</td>
+</tr>
+<tr>
+<td>GRPO</td>
+<td>24000</td>
+<td>24000</td>
+<td>24000</td>
+<td>24000</td>
+<td>24000</td>
+<td>24000</td>
+<td>24000</td>
+</tr>
+</tbody>
+</table>
+<p>[表 2: Benchmark results for different optimizers evaluated on GPT-4.1 Mini. As a prompt-optimization system, GEPA works off-the-shelf on closed-source models as well, outperforming state-of-the-art prompt optimizers including MIPROv2 (in 2 settings: Instruction-only optimization ("MIPROv2-No-Demos") as well as joint instruction and few-shot optimization ("MIPROv2")), Trace (with its OptoPrime optimizer), and TextGrad. Additionally, GEPA-optimized prompts demonstrate strong cross-model generalization: "GEPA-Qwen-Opt"—optimized entirely for (and using) the weaker Qwen3-8B—achieves a +9% gain when evaluated on GPT-4.1-Mini without modification, notably outperforming all baselines (MIPROv2, TextGrad, Trace) that optimized directly for (and using) GPT-4.1-Mini.]</p>
+<p>表 2:不同优化器在 GPT-4.1 Mini 上的基准结果。作为提示优化系统,GEPA 在闭源模型上也可开箱即用,胜过最先进的提示优化器,包括 MIPROv2(两种设定:仅指令优化"MIPROv2-No-Demos"与指令+少样本联合优化"MIPROv2")、Trace(用其 OptoPrime 优化器)与 TextGrad。此外,GEPA 优化出的提示展现了强跨模型泛化:"GEPA-Qwen-Opt"——完全为(并用)较弱的 Qwen3-8B 优化——不经修改直接在 GPT-4.1-Mini 上评测即获得 +9% 提升,显著超过所有直接为(并用)GPT-4.1-Mini 优化的基线(MIPROv2、TextGrad、Trace)。</p>
+<table>
+<thead>
+<tr>
+<th>GPT-4.1 Mini</th>
+<th>HotpotQA</th>
+<th>IFBench</th>
+<th>HoVer</th>
+<th>PUPA</th>
+<th>AIME-2025</th>
+<th>LiveBench-Math</th>
+<th>聚合</th>
+<th>提升</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>基线(Baseline)</td>
+<td>38.00</td>
+<td>47.79</td>
+<td>46.33</td>
+<td>78.57</td>
+<td>49.33</td>
+<td>58.20</td>
+<td>53.03</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Trace(OptoPrime)</td>
+<td>60.33</td>
+<td>51.19</td>
+<td>46.00</td>
+<td>74.18</td>
+<td>45.33</td>
+<td>60.74</td>
+<td>56.30</td>
+<td>+3.27</td>
+</tr>
+<tr>
+<td>MIPROv2-No-Demos</td>
+<td>38.00</td>
+<td>52.04</td>
+<td>51.33</td>
+<td>91.85</td>
+<td>48.67</td>
+<td>60.97</td>
+<td>57.14</td>
+<td>+4.11</td>
+</tr>
+<tr>
+<td>MIPROv2</td>
+<td>58.00</td>
+<td>49.15</td>
+<td>48.33</td>
+<td>83.37</td>
+<td>51.33</td>
+<td>61.84</td>
+<td>58.67</td>
+<td>+5.64</td>
+</tr>
+<tr>
+<td>TextGrad</td>
+<td>62.33</td>
+<td>48.64</td>
+<td>47.67</td>
+<td>85.68</td>
+<td>46.67</td>
+<td>63.84</td>
+<td>59.14</td>
+<td>+6.11</td>
+</tr>
+<tr>
+<td>GEPA</td>
+<td>69.00</td>
+<td>52.72</td>
+<td>51.67</td>
+<td>94.47</td>
+<td>59.33</td>
+<td>64.13</td>
+<td>65.22</td>
+<td>+12.19</td>
+</tr>
+<tr>
+<td>GEPA+Merge</td>
+<td>65.67</td>
+<td><strong>55.95</strong></td>
+<td><strong>56.67</strong></td>
+<td><strong>96.46</strong></td>
+<td><strong>59.33</strong></td>
+<td><strong>64.13</strong></td>
+<td><strong>66.36</strong></td>
+<td><strong>+13.33</strong></td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead>
+<tr>
+<th>用 Qwen3-8B 优化、在 GPT-4.1-Mini 上评测</th>
+<th>HotpotQA</th>
+<th>IFBench</th>
+<th>HoVer</th>
+<th>PUPA</th>
+<th>AIME-2025</th>
+<th>LiveBench-Math</th>
+<th>聚合</th>
+<th>提升</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GEPA-Qwen-Opt</td>
+<td>65.67</td>
+<td>49.83</td>
+<td>54.67</td>
+<td>90.05</td>
+<td>52.67</td>
+<td>59.31</td>
+<td>62.03</td>
+<td>+9.00</td>
+</tr>
+</tbody>
+</table>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>We adopt a standard train/validation/test split. Optimizers have full access to the train split, including text and labels, for program tuning. Although optimizers may monitor the performance of candidate parameters (like model checkpoints) by tracking scores on the validation set (to implement early stopping, for example), direct access to the content of validation instances is restricted. We evaluate on six benchmarks—AIME-2025 (Balunović et al., 2025), LiveBench-Math (White et al., 2025), HotpotQA (Yang et al., 2018), IFBench (Pyatkin et al., 2025b), HoVer (Jiang et al., 2020), and PUPA (Li et al., 2025a)—each paired with existing compound AI systems and feedback functions. Experiments use Qwen3 8B (Yang et al., 2025) and GPT-4.1 Mini (OpenAI, 2025) with standardized inference settings, and compare against state-of-the-art optimizers MIPROv2 (Opsahl-Ong et al., 2024), Trace (with its OptoPrime optimizer) (Cheng et al., 2024), TextGrad (Yuksekgonul et al., 2025), and GRPO¹ (Shao et al., 2024). Appendix E provides further details on benchmarks, systems, and feedback functions (Subsection E.1); models and inference settings (Subsection E.2); monetary cost to run the experiments (Subsection E.3); and optimizer configurations (Subsection E.4). Table 1, Table 2 and Figure 10 summarize our main results, from which we derive the following observations:</p></div><p>我们采用标准的训练/验证/测试切分。优化器对训练切分(包括文本与标签)有完全访问权,用于程序调优。优化器虽可以(例如为了实现早停)通过跟踪验证集分数来监控候选参数(如模型检查点)的性能,但对验证实例内容的直接访问是受限的。我们在六个基准上评测——AIME-2025(Balunović et al., 2025)、LiveBench-Math(White et al., 2025)、HotpotQA(Yang et al., 2018)、IFBench(Pyatkin et al., 2025b)、HoVer(Jiang et al., 2020)与 PUPA(Li et al., 2025a)——每个都配有现成的复合 AI 系统与反馈函数。实验使用 Qwen3 8B(Yang et al., 2025)与 GPT-4.1 Mini(OpenAI, 2025),推理设置标准化,并与最先进的优化器 MIPROv2(Opsahl-Ong et al., 2024)、Trace(用其 OptoPrime 优化器)(Cheng et al., 2024)、TextGrad(Yuksekgonul et al., 2025)以及 GRPO¹(Shao et al., 2024)对比。附录 E 提供更多细节:基准、系统与反馈函数(E.1 小节);模型与推理设置(E.2);实验的金钱成本(E.3);优化器配置(E.4)。表 1、表 2 与图 10 总结了我们的主要结果,由此得出以下观察:</p></div>
+<blockquote>
+<p>脚注 1:我们为 GRPO 使用 LoRA,因为其成本低且在与 GRPO 结合时已被成功采用(Wang et al., 2025b; Xu et al., 2025b; Li et al., 2025b; Yue et al., 2025; Sun et al., 2025; Hayou et al., 2025; Zhao et al., 2025; Teknium et al., 2024; Zhao et al., 2024; Sidahmed et al., 2024)。此外,我们也探索了全参数微调;图 11 给出了 GEPA 与全参微调 GRPO 对比的类似结果。</p>
+</blockquote>
+<p><strong>观察 1:反思式提示进化高度样本高效,可以胜过权重空间的强化学习。</strong></p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Observation 1: Reflective Prompt Evolution is highly sample-efficient and can outperform weight-space reinforcement learning: Across four benchmarks, GEPA adapts rapidly and generalizes robustly in compound AI systems—beating GRPO (24,000 rollouts) by up to 19% while using up to 35× fewer rollouts. It reaches optimal test performance with 4–35× fewer rollouts and exceeds GRPO on 5 out of 6 tasks by 19.0%, 2.73%, 13.66%, 5.19% and 0.7%. GEPA matches GRPO&#x27;s best validation after only 243, 402, 330, 1143, 1179, and 306 rollouts—up to 78× greater sample efficiency. GEPA+Merge widens the gap, outperforming GRPO by 21% at a comparable rollout budget to GEPA.</p></div><p>观察 1:反思式提示进化高度样本高效,可以胜过权重空间的强化学习:在四个基准上,GEPA 在复合 AI 系统中适配迅速、泛化稳健——以最多 35 倍少的 rollout 胜过 GRPO(24,000 rollouts)最多 19%。它以 4-35 倍少的 rollout 达到最优测试性能,并在 6 个任务中的 5 个上超出 GRPO,幅度分别为 19.0%、2.73%、13.66%、5.19% 与 0.7%。GEPA 仅用 243、402、330、1143、1179 与 306 个 rollout 就追平了 GRPO 的最佳验证分——样本效率最高高出 78 倍。GEPA+Merge 进一步拉大差距,在与 GEPA 相当的 rollout 预算下超出 GRPO 21%。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>The majority of GEPA&#x27;s rollout budget is spent on validation, where scores are utilized solely for candidate selection and not for producing learning signals. If we restrict the analysis to train set rollouts, GEPA requires only 79 to 737 rollouts to reach optimal performance. To match GRPO&#x27;s best validation scores, GEPA achieves this with only 102, 32, 6, and 179 train rollouts for four tasks, respectively, underscoring the high sample efficiency of learning based on reflective prompt evolution.</p></div><p>GEPA 的 rollout 预算大部分花在验证上——验证分数只用于候选选择、不用于产生学习信号。若把分析限制在训练集 rollout 上,GEPA 达到最优性能仅需 79 到 737 个 rollout。要在四个任务上追平 GRPO 的最佳验证分数,GEPA 分别只需 102、32、6 与 179 个训练 rollout,凸显了基于反思式提示进化的学习之高样本效率。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Since tracking candidates&#x27; validation performance accounts for majority of GEPA&#x27;s rollout budget, sample efficiency can be further improved by evaluating on a smaller validation set or by tracking scores on dynamically selected validation subsets instead of the full set—both of which we propose as directions for future work. Figures 1a, 1b, 14c and 15c show the full performance-vs-rollouts curve for all optimizers over benchmarks HotpotQA, IFBench, HoVer and PUPA, respectively.</p></div><p>由于跟踪候选验证性能占了 GEPA rollout 预算的大头,样本效率还可进一步提升:改在更小的验证集上评估,或只在动态选出的验证子集(而非全集)上跟踪分数——我们把这两者都列为未来工作方向。图 1a、1b、14c 与 15c 分别给出了所有优化器在 HotpotQA、IFBench、HoVer 与 PUPA 基准上的完整"性能-rollout 数"曲线。</p></div>
+<p><strong>观察 2:反思式提示进化使"仅优化指令"就能胜过"指令+少样本联合优化"。</strong></p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Observation 2: Reflective prompt evolution enables instruction-optimization alone to outperform joint instruction and few-shot optimization: We compare GEPA with MIPROv2, a state-of-the-art instruction and few-shot optimizer, using two leading models across six diverse tasks, and observe that GEPA consistently outperforms MIPROv2 in all settings, achieving margins as high as 11.1% for GPT-4.1 mini and 10.3% for Qwen3 8B. Further, GEPA and GEPA+Merge more than double the aggregate gains over baseline seen with MIPROv2 across all benchmarks and models (+13.33% and +12.19% vs +5.64% for MIPROv2). While prior works such as Opsahl-Ong et al. (2024) and Wan et al. (2024) have provided compelling evidence for the effectiveness of few-shot example optimization—often outperforming instruction-based approaches—our findings suggest an exciting shift in this trend. We attribute this primarily to recent advances in the instruction-following and self-reflective abilities of LLMs, as well as the design choices in GEPA that capitalize on these improved capabilities. To further contextualize our findings, we redo the study on generalization gap (the difference between validation and test set performance for optimized prompts) as proposed by Wan et al. (2024). The results presented in Figure 16 reinforce these observations: reflectively evolved instructions now demonstrate a lower generalization gap, underscoring both advancements in model capabilities and the benefits of GEPA&#x27;s design. We see this as a reflection of the continuous evolution of LLMs and GEPA&#x27;s ability to effectively leverage these improvements.</p></div><p>观察 2:反思式提示进化使"仅优化指令"就能胜过"指令与少样本联合优化":我们把 GEPA 与最先进的指令+少样本优化器 MIPROv2 比较,用两个主流模型跑六个多样任务,观察到 GEPA 在所有设定下都稳定胜过 MIPROv2,优势最高达 GPT-4.1 mini 上 11.1%、Qwen3 8B 上 10.3%。此外,在所有基准与模型上,GEPA 与 GEPA+Merge 相对基线的聚合增益是 MIPROv2 的两倍多(+13.33% 与 +12.19%,对比 MIPROv2 的 +5.64%)。虽然此前工作如 Opsahl-Ong et al. (2024) 与 Wan et al. (2024) 已为少样本示例优化的有效性提供了有力证据——它常常胜过基于指令的方法——但我们的发现表明这一趋势正在发生令人兴奋的逆转。我们把这主要归因于 LLM 指令遵循与自我反思能力的新近进步,以及 GEPA 中充分利用这些改进能力的设计选择。为进一步给发现提供背景,我们重做了 Wan et al. (2024) 提出的<strong>泛化差距</strong>(generalization gap,即优化后提示在验证集与测试集性能之差)研究。图 16 的结果强化了这些观察:反思式进化出的指令如今表现出更低的泛化差距,既凸显了模型能力的进步,也凸显了 GEPA 设计的好处。我们把这视为 LLM 持续进化与 GEPA 有效利用这些改进的一个缩影。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>We provide the full-length optimized prompts produced by GEPA for all systems, benchmarks, and models in Appendix L, alongside MIPROv2 prompts. Notably, in contrast to prior findings where instruction optimization yielded improvements primarily through quasi-exemplars (Wan et al., 2024), GEPA&#x27;s prompts frequently contain detailed declarative instructions for completing the task, as illustrated in Figure 2.</p></div><p>我们在附录 L 中提供 GEPA 为所有系统、基准与模型产出的完整优化后提示,并附 MIPROv2 的提示。值得注意的是,与此前"指令优化主要通过准示例(quasi-exemplars)带来提升"的发现(Wan et al., 2024)相反,GEPA 的提示经常包含完成任务的详尽<strong>声明式指令</strong>(declarative instructions),如图 2 所示。</p></div>
+<p><strong>观察 3:下一候选的选择策略强烈影响优化轨迹与最终性能,基于帕累托的采样具有明显优势。</strong></p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>The next-candidate selection strategy strongly influences the optimization trajectory and final performance, with Pareto-based sampling providing a distinct advantage.</p></div><p>下一候选的选择策略强烈影响优化轨迹与最终性能,其中基于帕累托的采样具有明显优势。</p></div>
+<p>[表 3: Comparing candidate selection strategies across different tasks with Qwen3 8B while keeping the evolution harness fixed. At each step, SelectBestCandidate (used by TextGrad Yuksekgonul et al. (2025)) evolves only from the top-scoring candidate. BeamSearch maintains a pool of the top-N candidates (used by APO Pryzant et al. (2023)), but is still prone to local optima. In comparison, GEPA's Pareto-based selection yields a +12.44% improvement, significantly outperforming the +6.05% and +5.11% gains of greedy and beam-search strategies respectively.]</p>
+<p>表 3:在固定进化框架的前提下,比较不同候选选择策略(Qwen3 8B)。每一步中,SelectBestCandidate(TextGrad 所用,Yuksekgonul et al. (2025))只从得分最高的候选进化;BeamSearch 维护一个 top-N 候选池(APO 所用,Pryzant et al. (2023)),但仍易陷入局部最优。相比之下,GEPA 的帕累托式选择带来 +12.44% 的提升,显著超过贪心策略的 +6.05% 与束搜索的 +5.11%。</p>
+<table>
+<thead>
+<tr>
+<th>Qwen3 8B</th>
+<th>HotpotQA</th>
+<th>IFBench</th>
+<th>HoVer</th>
+<th>PUPA</th>
+<th>聚合</th>
+<th>提升</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>基线(Baseline)</td>
+<td>42.33</td>
+<td>36.90</td>
+<td>35.33</td>
+<td>80.82</td>
+<td>48.84</td>
+<td>—</td>
+</tr>
+<tr>
+<td>SelectBestCandidate</td>
+<td>58.33</td>
+<td>30.44</td>
+<td>45.33</td>
+<td>85.45</td>
+<td>54.89</td>
+<td>+6.05</td>
+</tr>
+<tr>
+<td>BeamSearch</td>
+<td>57.33</td>
+<td>36.39</td>
+<td>41.00</td>
+<td>81.08</td>
+<td>53.95</td>
+<td>+5.11</td>
+</tr>
+<tr>
+<td>GEPA(帕累托采样)</td>
+<td><strong>62.33</strong></td>
+<td><strong>38.61</strong></td>
+<td><strong>52.33</strong></td>
+<td><strong>91.85</strong></td>
+<td><strong>61.28</strong></td>
+<td><strong>+12.44</strong></td>
+</tr>
+</tbody>
+</table>
+<p>[图 6: Comparing the impact of different candidate selection strategies. (Left) As can be seen, selecting the best-performing candidate in every iteration led to a local-optima after one iteration, leading to suboptimal search performance. (Right) On the other hand, using pareto-based candidate selection strategy, GEPA was able to generate a balanced search tree, finding a better performing program within the same budget.]</p>
+<p>图 6 说明:比较不同候选选择策略的影响。(左)SelectBestCandidate 策略:每轮都选表现最好的候选,一轮之后即陷入局部最优,搜索性能欠佳——搜索树显示首个子节点(候选 1,92.67)之后的一系列精炼候选得分停滞在 90 上下,预算耗尽也未能突破。(右)帕累托式候选采样:GEPA 生成了均衡的搜索树,在同一预算内找到性能更好的程序(如候选 12 达 96.3)。</p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>GEPA refines prompts iteratively with rollout feedback; to test our Pareto-based selection, we compare against a baseline that always picks the best-performing candidate in the SelectBestCandidate strategy (which is similar to the strategy used by TextGrad Yuksekgonul et al. (2025)), and BeamSearch (N=4) (used by APO Pryzant et al. (2023)). As shown in Table 3, these baselines often yield suboptimal exploration of the prompt search space, leading to poor performance. GEPA with Pareto-based sampling outperforms the BeamSearch strategy by upto 11.33%, and SelectBestCandidate strategy by up to 8.17%, with an aggregate margin of +7.33% and +6.4% across all benchmarks, respectively. Figure 6 highlights the difference in optimization trajectories: always choosing the current best candidate gives immediate improvement but quickly stalls, wasting rollouts on a single candidate. In contrast, our Pareto-based method expands the search by considering all Pareto-optimal candidates (all &quot;winning&quot; strategies found so far), balancing exploration and exploitation and converging to a higher-performing solution within the same rollout budget.</p></div><p>GEPA 用 rollout 反馈迭代精炼提示;为检验我们的帕累托式选择,我们与两个基线比较:一是 SelectBestCandidate 策略——总是挑选表现最好的候选(与 TextGrad 所用策略类似,Yuksekgonul et al. (2025));二是 BeamSearch(N=4)(APO 所用,Pryzant et al. (2023))。如表 3 所示,这些基线对提示搜索空间的探索常常欠佳,导致较差的性能。带帕累托采样的 GEPA 最多超出 BeamSearch 策略 11.33%、超出 SelectBestCandidate 策略 8.17%,在所有基准上的聚合优势分别为 +7.33% 与 +6.4%。图 6 凸显了优化轨迹的差异:总是选当前最佳候选会带来即时改进,但很快停滞,把 rollout 浪费在单一候选上;相反,我们的帕累托方法把所有帕累托最优候选(即迄今为止找到的全部"制胜"策略)纳入考虑来扩展搜索,平衡探索与利用,在同一 rollout 预算内收敛到性能更高的解。</p></div>
+<p><strong>观察 4:指令优化的提示比少样本示例提示计算更便宜、泛化更好。</strong></p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Observation 4: Instruction-optimized prompts are computationally cheaper and generalize better than few-shot demonstration prompts: In addition to their strong generalization capabilities, reflectively evolved instructions offer a significant practical advantage: they are often much shorter and thus computationally more efficient than few-shot demonstration prompts. This advantage becomes especially clear for complex tasks, where even a single few-shot demonstration can be prohibitively long. The problem is further exacerbated when few-shot examples are optimized using state-of-the-art methods such as MIPROv2, which jointly optimizes multiple demonstrations to be used simultaneously, further increasing prompt length. In contrast, reflectively evolved instructions—such as those generated by GEPA—maintain compactness while providing large performance gains (as demonstrated in Lessons 1 and 2). To illustrate this, we compare GEPA&#x27;s and MIPROv2&#x27;s prompt lengths (see Figure 18). Notably, prompts produced by GEPA and GEPA+Merge are up to 9.2× shorter than those from MIPROv2, representing a substantial improvement in efficiency, alongside performance improvements.</p></div><p>观察 4:指令优化的提示比少样本示例提示计算更便宜、泛化更好:除了强泛化能力之外,反思式进化出的指令还有一项显著的实用优势:它们通常比少样本示例提示短得多,因而计算效率更高。对复杂任务这一优势尤为明显——哪怕单个少样本示例都可能长到不可用;当少样本示例用 MIPROv2 等最先进方法联合优化多个同时使用的示例时,提示长度问题进一步加剧。相比之下,反思式进化的指令——如 GEPA 生成的那样——在带来大幅性能提升(如 Lessons 1 与 2 所示)的同时保持了紧凑。为说明这一点,我们比较了 GEPA 与 MIPROv2 的提示长度(见图 18)。值得注意的是,GEPA 与 GEPA+Merge 产出的提示比 MIPROv2 的最多短 9.2 倍,在性能提升之外代表了效率上的实质改进。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Moreover, we observe a trend where, in aggregate, optimizers that achieve higher performance tend to produce shorter prompts (see Figure 17). This reduction in prompt size has a significant impact—not only reducing runtime cost for downstream tasks (as all API-providers meter the input tokens), but also decreasing latency and improving the overall efficiency of LLM-serving systems (Kwon et al., 2023; Zheng et al., 2024; Agrawal et al., 2023; Yu et al., 2025).</p></div><p>此外,我们观察到一个趋势:总体上,性能更高的优化器往往产出更短的提示(见图 17)。提示长度的缩减影响显著——不仅降低下游任务的运行时成本(所有 API 提供方都按输入 token 计费),还降低延迟、提升 LLM 服务系统的整体效率(Kwon et al., 2023; Zheng et al., 2024; Agrawal et al., 2023; Yu et al., 2025)。</p></div>
+<p><strong>观察 5:系统感知的交叉策略可以带来大收益,但变异与交叉之间的最优预算分配、以及何时触发 merge,仍需进一步研究。</strong></p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Observation 5: System aware crossover strategies can provide large gains, but the optimal budget allocation between mutation and crossover, as well as when to invoke merge needs further study: We identify a unique system-aware crossover strategy and operationalize it as Merge (described in Appendix D.1). GEPA+Merge can outperform GEPA by as much as 5%, providing an aggregate 2% additional improvement over the already strong performance established by GEPA. Detailed results are available in Table 1. We attribute these gains to the ability of GEPA+Merge to identify distinct optimization lineages, that have learnt complementary strategies (by evolving distinct modules), and merging them by picking the best version of different modules from each of these lineages to propose a single, optimal candidate.</p></div><p>观察 5:系统感知的交叉(crossover)策略可以带来大收益,但变异与交叉之间的最优预算分配、以及何时触发 merge,仍需进一步研究:我们识别出一种独特的系统感知交叉策略,并将其实现为 Merge(见附录 D.1)。GEPA+Merge 最多可超出 GEPA 5%,在 GEPA 已然强势的表现之上再带来聚合 2% 的额外提升,详细结果见表 1。我们把这些增益归因于 GEPA+Merge 的能力:识别出学到了互补策略的不同优化谱系(lineage,通过进化不同的模块形成),并从各谱系中挑选不同模块的最佳版本合并,提出单一的最优候选。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>While in our analysis, we found GEPA+Merge works especially well for GPT-4.1 Mini, it lead to performance degradation when used with Qwen3 8B. Even Qwen3 8B benefits from Merge on one out of four tasks. We attribute these discrepancies to the way the rollout budget is allocated between reflective mutation and crossover, and the timing of invocation of the crossover strategy. In our experiments, we fixed the same hyperparameters for GPT-4.1 Mini and Qwen3 8B, leading to suboptimal choice for Qwen3 8B. Intuitively, crossover would provide the maximum benefit, when there are independent lineages that perform well. Hence, the hyperparameters should be chosen such that Merge is invoked once the optimization tree has evolved sufficiently different lineages. We propose the study of such adaptive techniques as future work.</p></div><p>虽然在分析中我们发现 GEPA+Merge 对 GPT-4.1 Mini 尤其有效,但在 Qwen3 8B 上使用时导致了性能退化;不过 Qwen3 8B 也在四分之一的任务上从 Merge 获益。我们把这些差异归因于 rollout 预算在反思式变异与交叉之间的分配方式,以及交叉策略的触发时机。实验中我们对 GPT-4.1 Mini 与 Qwen3 8B 固定了相同的超参数,导致对 Qwen3 8B 而言是次优选择。直觉上,当存在多条表现良好的独立谱系时,交叉的收益最大。因此,超参数应这样选择:一旦优化树已进化出足够不同的谱系,才触发 Merge。我们把此类自适应技术的研究列为未来工作。</p></div>
+<p><strong>观察 6:GEPA 优化出的提示展现跨模型泛化。</strong></p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Observation 6: GEPA-optimized prompts demonstrate cross-model generalization. Table 2 presents results for &quot;GEPA-Qwen-Opt&quot;, a configuration where prompts were optimized using the smaller Qwen3-8B model but evaluated on GPT-4.1-Mini. Despite originating from a weaker model in a different family, these prompts transfer effectively, achieving a +9.00% aggregate improvement across 6 benchmarks (with gains as high as +27.67% on HotpotQA). Remarkably, this transfer performance outperforms strong baselines like MIPROv2 (+5.64%), TextGrad (+6.11%), and Trace (+3.27%), even though those methods were optimized directly on the target GPT-4.1-Mini model.</p></div><p>观察 6:GEPA 优化出的提示展现跨模型泛化。表 2 给出了"GEPA-Qwen-Opt"的结果——一种用较小的 Qwen3-8B 模型优化提示、却在 GPT-4.1-Mini 上评测的配置。尽管这些提示源自另一个家族中较弱的模型,它们仍能有效迁移:在 6 个基准上取得 +9.00% 的聚合提升(HotpotQA 上高达 +27.67%)。引人注目的是,这一迁移性能胜过了 MIPROv2(+5.64%)、TextGrad(+6.11%)与 Trace(+3.27%)等强基线——尽管这些方法是直接在目标模型 GPT-4.1-Mini 上优化的。</p></div>
+<h3 id="5-gepa">5 GEPA 的扩展应用</h3>
+<h4 id="51-gepa">5.1 将 GEPA 用于推理时搜索(续)</h4>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>While the primary focus of this paper is sample-efficient adaptation of AI systems to new tasks, preliminary findings suggest that GEPA may also serve as a promising inference-time search technique. This can be achieved by passing the set of tasks to be solved (for example, a list of Pytorch modules to be converted to CUDA) as the training set to GEPA, ensuring that both D_train and D_pareto contain the full set of tasks. This way, GEPA can &quot;overfit&quot; the set of tasks, iteratively proposing better solutions to every problem. We also note that this allows GEPA to apply lessons and insights extracted from rollouts for one task to other tasks. To explore this use case, we conduct preliminary experiments using GEPA as an inference-time search technique for code-generation tasks on two hardware platforms: writing kernels for AMD&#x27;s recently introduced XDNA2 Architecture (Advanced Micro Devices, 2025) using an early version of the NPUEval benchmark (Kalade &amp; Schelle, 2025), and generating CUDA code for NVIDIA-V100 GPUs using KernelBench (Ouyang et al., 2025).</p></div><p>虽然本文的主要焦点是 AI 系统对新任务的样本高效适配,初步发现表明 GEPA 也可作为有前景的<strong>推理时搜索</strong>(inference-time search)技术。做法是:把待解决的任务全集(例如一份待转换为 CUDA 的 PyTorch 模块列表)作为训练集传给 GEPA,并让 D_train 与 D_pareto 都包含全部任务。这样,GEPA 可以"过拟合"这组任务,迭代地为每个问题提出更好的解。我们还注意到,这使 GEPA 能把从某一任务 rollout 中提取的经验与洞见应用到其他任务上。为探索这一用法,我们在两个硬件平台上做了初步实验,把 GEPA 用作代码生成任务的推理时搜索技术:用 NPUEval 基准的早期版本(Kalade &amp; Schelle, 2025)为 AMD 新推出的 XDNA2 架构(Advanced Micro Devices, 2025)编写内核,以及用 KernelBench(Ouyang et al., 2025)为 NVIDIA-V100 GPU 生成 CUDA 代码。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>A distinguishing aspect of these experiments is the use of the feedback function µ_f to dynamically inject domain-specific knowledge into the optimization process. Specifically, kernel development expertise—often codified in technical manuals and documentation—can be selectively surfaced by retrieving relevant manual sections based on rollout failures (e.g., compiler error messages). By using error information to make targetted retrieval queries, GEPA promotes integration of architectural best practices into prompt evolution, as exemplified by the detailed prompt for NPUEval shown in Figure 27. We also note that generation stochasticity (temperature based sampling) is eliminated by operating under a cache; this ensures that observed improvements tie closely to inference scaling through prompt updates and GEPA&#x27;s diverse prompt exploration, rather than stochasticity in the model&#x27;s sampling process.</p></div><p>这些实验的一个独特之处,是用反馈函数 µ_f 把<strong>领域知识动态注入</strong>优化过程。具体而言,内核开发的专业知识通常凝结在技术手册与文档中,可以基于 rollout 的失败信息(如编译器报错)检索手册的相关章节,选择性地将其呈现出来。通过用错误信息构造有针对性的检索查询,GEPA 促使架构最佳实践被整合进提示进化,图 27 中为 NPUEval 生成的详尽提示即是一例。我们还注意到,实验在缓存下运行,消除了生成随机性(基于温度的采样);这确保观察到的提升紧密关联于通过提示更新与 GEPA 多样化提示探索实现的推理时扩展,而非模型采样过程中的随机波动。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>NPU Kernels: We create a sequential refinement agent that iteratively generates kernels (up to 10 times) based on feedback like compiler errors and profiling results (Sequential10), and evaluate the Best-of-N generation. With GPT-4o alone, Sequential10 reaches only 4.25% mean vector utilization. Adding RAG, sourced from technical manuals, improves this to 16.33%, and integrating MIPROv2 further raises it to 19.03%. Notably, applying GEPA to Sequential10 (without RAG) dramatically boosts kernel performance, with several generated kernels achieving up to 70% vector utilization and a mean of 30.52%. Furthermore, a single prompt generated by GEPA enables Sequential10 (again without RAG) to attain a score of 26.85%.</p></div><p><strong>NPU 内核</strong>:我们构造一个顺序精炼智能体,基于编译器报错与性能分析(profiling)结果等反馈迭代生成内核(最多 10 次,记作 Sequential10),并评估 Best-of-N 生成。仅用 GPT-4o 时,Sequential10 的平均向量利用率只有 4.25%;加入来自技术手册的 RAG 后提升到 16.33%,再整合 MIPROv2 进一步升到 19.03%。值得注意的是,把 GEPA 应用到 Sequential10(不带 RAG)使内核性能大幅跃升:若干生成的内核达到最高 70% 的向量利用率,均值为 30.52%。此外,GEPA 生成的单个提示使 Sequential10(同样不带 RAG)达到 26.85% 的分数。</p></div>
+<p>[图 7: GEPA with GPT-4o is able to generate kernels for AMD NPUs that achieve vector utilization rates as high as 70%, with a mean utilization score of 30.52%. In comparison, GPT-4o, even after up to 10 sequential refinements with environment feedback, achieves an aggregate score of only 4.25%. When enhanced with retrieval-augmented generation (RAG) and MIPRO, the sequential refinement agent improves to scores of 16.33% and 19.03%, respectively. Notably, the final prompt produced by GEPA enables the same agent to reach a utilization score of 26.85%, all without requiring any runtime RAG.]</p>
+<p>图 7 说明:GEPA + GPT-4o 能为 AMD NPU 生成向量利用率高达 70% 的内核,平均利用率 30.52%。相比之下,GPT-4o 即便在环境反馈下最多做 10 次顺序精炼,总分也只有 4.25%;加上检索增强生成(RAG)与 MIPRO 后,顺序精炼智能体分别提升到 16.33% 与 19.03%。值得注意的是,GEPA 产出的最终提示让同一智能体达到 26.85% 的利用率,且完全不需要运行时 RAG。图中条形对比 Sequential10、+RAG、+RAG+MIPROv2、GEPA Best-1、GEPA Pareto 五种配置的均值,另一图按内核逐个展示"功能正确内核"的向量利用率(如 tanh_bfloat16、avgpool1d_bfloat16 等)在两种方法(Sequential10+RAG 与 GEPA Pareto)下的对比。</p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>CUDA Kernels: For 35 tasks from the KernelBench &quot;representative subset&quot; (Ouyang et al., 2025), spanning three difficulty levels, we ran GEPA with GPT-4o. As depicted in Figure 8, GEPA boosts GPT-4o&#x27;s close-to-0% fast1 score to above 20% with increasing search budget. This task used an agent that could generate upto 5 sequential refinements based on environment feedback (Sequential5).</p></div><p><strong>CUDA 内核</strong>:对 KernelBench"代表性子集"(Ouyang et al., 2025)中横跨三个难度层级的 35 个任务,我们用 GPT-4o 运行 GEPA。如图 8 所示,随着搜索预算增加,GEPA 把 GPT-4o 接近 0% 的 fast1 分数提升到 20% 以上。该任务使用的智能体可基于环境反馈生成最多 5 次顺序精炼(Sequential5)。</p></div>
+<p>[图 8: GEPA with GPT-4o is able to iteratively refine and improve CUDA Kernel Code. The graph shows fast_p vs. rollouts plot for p=[0.5,1], where the speedup is calculated over Pytorch-eager. fast_p is a metric described in (Ouyang et al., 2025) that measures the fraction of tasks for which the method generated a kernel executing faster than p times the baseline. As can be seen, GEPA with GPT-4o is able to generate cuda kernels executing faster than Pytorch-eager for over 20% of the 35 representative tasks.]</p>
+<p>图 8 说明:GEPA + GPT-4o 能迭代精炼并改进 CUDA 内核代码。图中给出 p=[0.5, 1] 的 fast_p-rollouts 曲线,加速比相对 PyTorch-eager 计算。fast_p 是(Ouyang et al., 2025)定义的指标,度量方法生成的内核执行速度快于基线 p 倍的任务占比。可见 GEPA + GPT-4o 能对 35 个代表性任务中超过 20% 生成快于 PyTorch-eager 的 CUDA 内核。</p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>These experiments with GPT-4o also demonstrate GEPA&#x27;s ability to leverage the abilities of frontier LLMs. However, these are early results and warrant further systematic study. We believe that leveraging GEPA for inference-time search, particularly when coupled with domain specific textual feedback, could generalize to other code generation and domain adaptation tasks—a direction we leave for future work.</p></div><p>这些 GPT-4o 实验也展示了 GEPA 利用前沿 LLM 能力的本领。但这些都是早期结果,值得进一步系统研究。我们相信,把 GEPA 用于推理时搜索——尤其是与领域特定的文本反馈结合时——可以推广到其他代码生成与领域适配任务,这一方向留作未来工作。</p></div>
+<h4 id="52-gepa">5.2 将 GEPA 用于对抗性提示搜索(续)</h4>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>We instantiate GEPA for adversarial prompt search by inverting the reward signal: the optimizer proposes prompt edits to include additional information like trivia that minimize task performance (pass@1), while requiring that prompts do not contradict the task and still contain all information needed to solve it. For AIME, GEPA&#x27;s adversarial search used AIME 2022–2024 problems as the pool for prompt evolution. The learned prompt was evaluated on AIME-2025 (30 problems), using GPT-5 Mini with 5 runs per problem (150 generations total). We started from a clean instruction prompt and evolved a single universal adversarial instruction that is prepended to each query.</p></div><p>我们通过<strong>反转奖励信号</strong>把 GEPA 实例化用于对抗性提示搜索:优化器提出对提示的编辑——加入诸如冷知识(trivia)之类的额外信息——以最小化任务性能(pass@1),同时要求提示不与任务矛盾、且仍包含解题所需的全部信息。对 AIME,GEPA 的对抗搜索用 AIME 2022-2024 的题目作为提示进化的池子。学到的提示在 AIME-2025(30 题)上评测,用 GPT-5 Mini、每题 5 次运行(共 150 次生成)。我们从一个干净的指令提示出发,进化出一条<strong>通用的对抗性指令</strong>,前置于每个查询。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>The learned adversarial instruction reduced pass@1 on AIME-2025 from 76% (clean prompt) to 10% (adversarial prompt), despite preserving the nominal task description and the required answer-format directive.</p></div><p>学到的对抗性指令把 AIME-2025 上的 pass@1 从 76%(干净提示)降到 10%(对抗性提示),尽管它保留了名义上的任务描述与必需的答案格式指令。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Base (clean) prompt:<br>You are a helpful assistant. You are given a question and you need to answer it. The answer should be given at the end of your response in exactly the format &#x27;### &lt;final answer&gt;&#x27;.</p></div><p>基础(干净)提示:"你是一个乐于助人的助手。你会得到一个问题并需要回答它。答案应在回复末尾以 '### &lt;最终答案&gt;' 的格式给出。"</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>GEPA-generated adversarial prompt (abridged):<br>You are a helpful assistant. You are given a question and you need to answer it. It&#x27;s interesting to note that honey never spoils and that the longest river in the world is the Nile, stretching over 6,650 kilometers. When providing your answer, be sure to format it at the end of your response exactly as &#x27;### &lt;final answer&gt;&#x27;. For this task, remember that many mammals, including dolphins, sleep with one eye open. Proceed to answer the given question accordingly.</p></div><p>GEPA 生成的对抗性提示(节选):"你是一个乐于助人的助手。你会得到一个问题并需要回答它。有趣的是,蜂蜜永远不会变质,而世界上最长的河是尼罗河,绵延 6,650 多公里。作答时,请务必在回复末尾严格按照 '### &lt;最终答案&gt;' 的格式给出答案。在此任务中,请记住:包括海豚在内的许多哺乳动物都是睁一只眼睡觉的。请据此回答给定的问题。"</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Manual inspection showed that the adversarial prompt caused GPT-5 Mini to end most responses with the literal placeholder ### &lt;final answer&gt;, indicating a systematic misinterpretation of the formatting rule when paired with the injected distractors. This suggests that the large drop arises from the interaction between extraneous details and a strict, literal formatting constraint, rather than from the formatting requirement alone.</p></div><p>人工检查显示,对抗性提示使 GPT-5 Mini 在大多数回复的结尾输出了字面占位符 <code>### &lt;final answer&gt;</code>(而非填入最终答案),表明格式规则在与注入的干扰信息配对时被系统性误解。这提示:性能的大幅下降源于无关细节与严格字面格式约束之间的<strong>交互作用</strong>,而非格式要求本身。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Adversarial prompt search systematically uncovers instruction-level perturbations that sharply degrade model performance, providing a principled, automated way to probe worst-case robustness beyond average-case metrics. By finding universal, task-preserving distractors (e.g., trivia plus strict formatting), it reveals brittle instruction-following interactions and turns them into reusable stress tests and regression suites for continuous evaluation. The resulting adversarial prompts could be used to provide targeted data for fine-tuning or safety training. In practice, this could improve deployment reliability, enables red-teaming at scale, and help track robustness drift over time across models, versions, and domains.</p></div><p>对抗性提示搜索系统地揭示能让模型性能急剧退化的指令级扰动,为在平均情形指标之外探测<strong>最坏情形鲁棒性</strong>提供了有原则的自动化手段。通过寻找通用的、保持任务不变的干扰项(如冷知识 + 严格格式),它暴露脆弱的指令遵循交互,并将其转化为可复用的压力测试与回归测试套件,用于持续评估。所得对抗性提示可用于为微调或安全训练提供针对性数据。在实践中,这可以改进部署可靠性、实现大规模红队测试,并帮助跨模型、版本与领域跟踪鲁棒性随时间的漂移。</p></div>
+<h3 id="6">6 相关工作</h3>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Prompt optimization improves LLMs but often needs manual expertise; for instance, chain-of-thought prompting Wei et al. (2023). To scale this approach, recent methods use LLMs to optimize prompts automatically (Zhou et al., 2022; Yang et al., 2024; Agarwal et al., 2024; Fernando et al., 2024). GEPA leverages LLMs, but differs by incorporating textual environment feedback, Pareto-aware search over candidates, and evolution strategies per submodule within an AI system.</p></div><p><strong>提示优化</strong>(prompt optimization)能改进 LLM,但常需人工专长,例如思维链提示(chain-of-thought)Wei et al. (2023)。为扩展该途径,近期方法用 LLM 自动优化提示(Zhou et al., 2022; Yang et al., 2024; Agarwal et al., 2024; Fernando et al., 2024)。GEPA 也利用 LLM,但不同之处在于:引入文本化的环境反馈、对候选做帕累托感知的搜索,以及对 AI 系统内每个子模块采用进化策略。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Evolutionary algorithms have been used to optimize prompts, e.g., EvoPrompt (Guo et al., 2024), which evolves prompt populations. Rainbow Teaming (Samvelyan et al., 2024) applies quality-diversity evolution to generate diverse adversarial prompts. GEPA additionally uses domain-specific feedback for targeted mutations achieving higher sample efficiency. AlphaEvolve (Novikov et al., 2025) and OpenEvolve (Sharma, 2025) apply evolutionary search directly to code rewriting, excelling when problem solution can be codified. While AlphaEvolve targets a single hard problem, GEPA brings evolution to prompts across domains, combining Pareto-frontier optimization and prompt evolution to transfer tactics from related problems.</p></div><p><strong>进化算法</strong>(evolutionary algorithms)已被用于优化提示,如 EvoPrompt(Guo et al., 2024)进化提示种群;Rainbow Teaming(Samvelyan et al., 2024)应用质量-多样性(quality-diversity)进化生成多样的对抗性提示。GEPA 额外使用领域特定反馈做定点变异,实现更高样本效率。AlphaEvolve(Novikov et al., 2025)与 OpenEvolve(Sharma, 2025)把进化搜索直接用于代码改写,在问题解可被编码时表现出色。AlphaEvolve 面向单个难题,而 GEPA 把进化带到跨域的提示上,结合帕累托前沿优化与提示进化,从相关问题迁移战术。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Feedback-driven improvement often uses reinforcement learning, such as majority voting signals (Zuo et al., 2025), but RL can be sample-inefficient when rewards are slow to compute. An alternative is learning in the language space: in-context bandit/self-bootstrapping methods (Shinn et al., 2023; Madaan et al., 2023) (Monea et al., 2025; Xu et al., 2025a; Feng et al., 2025; Cheng et al., 2024), workflow memory and skills (Wang et al., 2024; 2025c), and test-time strategy synthesis via Dynamic Cheatsheet (Suzgun et al., 2025), reasoning cache (Chen et al., 2025c). GEPA instead uses examples to propose new instructions, yielding task-specific rules.</p></div><p><strong>反馈驱动的改进</strong>常用强化学习,如多数投票信号(Zuo et al., 2025),但当奖励计算缓慢时,RL 可能样本低效。另一种选择是在<strong>语言空间</strong>中学习:上下文 bandit/自举方法(Shinn et al., 2023; Madaan et al., 2023)(Monea et al., 2025; Xu et al., 2025a; Feng et al., 2025; Cheng et al., 2024)、工作流记忆与技能(Wang et al., 2024; 2025c),以及通过 Dynamic Cheatsheet 做测试时策略合成(Suzgun et al., 2025)、推理缓存(reasoning cache)(Chen et al., 2025c)。GEPA 则是用示例来提出新<strong>指令</strong>,产出任务特定的规则。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>To optimize compound AI systems and agents (Lin et al., 2025b), DSPy (Khattab et al., 2022; 2024) searches/bootstraps few-shot examples, TextGrad (Yuksekgonul et al., 2025) backpropagates textual feedback, and MIPROv2 (Opsahl-Ong et al., 2024) jointly aligns instructions and examples via Bayesian optimization; these largely rely on global rewards. Agent-Pro (Zhang et al., 2024) evolves agent policies through dynamic belief generation and reflection on interactive experiences. Optimas (Wu et al., 2025a) introduces globally aligned local rewards per module. GEPA combines global rewards with environment textual feedback per module and maintains a Pareto frontier over individual data instances, matching prompts/agent design to specific examples. The Pareto-guided evolution lets GEPA explore diverse prompt/code/agent design strategies before converging to a robust, generalizable set.</p></div><p>在<strong>优化复合 AI 系统与智能体</strong>方面(Lin et al., 2025b):DSPy(Khattab et al., 2022; 2024)搜索/自举少样本示例;TextGrad(Yuksekgonul et al., 2025)反向传播文本反馈;MIPROv2(Opsahl-Ong et al., 2024)通过贝叶斯优化联合对齐指令与示例——这些方法大多依赖全局奖励。Agent-Pro(Zhang et al., 2024)通过动态信念生成与对交互经验的反思进化智能体策略;Optimas(Wu et al., 2025a)为每个模块引入全局对齐的局部奖励。GEPA 则把全局奖励与每模块的环境文本反馈结合,并在<strong>单个数据实例</strong>上维护帕累托前沿,把提示/智能体设计与具体示例相匹配。帕累托引导的进化让 GEPA 在收敛到稳健、可泛化的设计集合之前,先探索多样的提示/代码/智能体设计策略。</p></div>
+<h3 id="7">7 结论</h3>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>We introduced GEPA, a prompt optimizer for arbitrary LLM agents and workflows that leverages explicit reflection and Pareto-based selection, showing superior sample efficiency compared to reinforcement learning (GRPO), while outperforming leading prompt optimizers (MIPROv2). By explicitly incorporating natural language feedback and maintaining a diverse pool of Pareto-optimal candidates, GEPA rapidly adapts AI systems to new tasks. Our results across benchmarks and models suggest that language-based reflection can offer a scalable strategy for optimizing complex real-world AI workflows, especially in resource-constrained settings. GEPA also shows promise as an inference-time search strategy, showing the ability to write code in challenging domains.</p></div><p>我们提出了 GEPA:一个面向任意 LLM 智能体与工作流的提示优化器,利用显式反思与基于帕累托的选择,相比强化学习(GRPO)展现出更优的样本效率,同时胜过领先的提示优化器(MIPROv2)。通过显式引入自然语言反馈并维护多样的帕累托最优候选池,GEPA 能使 AI 系统快速适配新任务。我们在多个基准与模型上的结果表明:<strong>基于语言的反思可以成为优化复杂现实 AI 工作流的可扩展策略,尤其在资源受限的设定中</strong>。GEPA 作为推理时搜索策略也显示出前景,展现了在具有挑战性的领域编写代码的能力。</p></div>
+<blockquote>
+<p><strong>译注(附录未收录部分)</strong>:References 之后为原论文附录(附录 A-N),含附录目录、LLM 使用声明、GEPA 反思与提示更新元提示词、算法与方法学细节、评测设置、补充结果与分析、性能-预算曲线、泛化差距、成本分析、搜索树可视化、迭代精炼可视化、各基准最佳提示示例、内核生成提示、反思 LM 调用次数统计等——<strong>未收录,含元提示词与各任务完整提示,可查原文 PDF</strong>。其中具正文性质的关键内容概述如下:(1) <strong>D.1 Merge(System-Aware 交叉)</strong>:Merge 仅在候选池中存在学到互补策略的候选时才有帮助——两个候选须有共同祖先、但进化了互不相交的提示模块集合(互补策略)、均为帕累托最优、且都超过祖先的聚合性能;满足这些严格谱系条件的 Merge 被稀疏触发,合并时为每个模块从两条谱系中挑选更优版本拼出单一候选。(2) <strong>E.3 成本</strong>:用 GPT-4.1 mini 跑完表 2 全部实验花费不足 500 美元,其中 GEPA 共 86 美元、GEPA-Merge 67 美元、MIPROv2 76 美元、Trace 与 TextGrad 合计 172 美元。(3) <strong>N 反思调用次数</strong>:GEPA 整个优化过程中调用反思 LM 的次数极少(每个基准 17-92 次)。</p>
+</blockquote>
+<h2 id="_4">要点速览</h2>
 <ul>
 <li>GEPA 三要素:反思式提示变异(自然语言反馈)+ 遗传式候选池 + 帕累托前沿采样(防局部最优)。</li>
 <li>反思 LLM 的输入:(当前提示、系统执行轨迹、分数、文本反馈),输出定点改写;单次反思即可带来大提升。</li>

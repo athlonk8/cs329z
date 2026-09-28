@@ -10,11 +10,12 @@
 <body>
 <header class="topbar">
   <div class="topbar-inner">
-    <a class="brand" href="../index.html"><span class="brand-mark">CS</span>329Z<span class="brand-sub">中文学习站</span></a>
+    <a class="brand" href="index.html"><span class="brand-mark">CS</span>329Z<span class="brand-sub">中文学习站</span></a>
     <nav class="topnav">
-      <a href="../index.html#syllabus">课程表</a>
-      <a href="../index.html#dates">重要日期</a>
-      <a href="../index.html#about">关于本站</a>
+      <a href="materials.html">材料总目录</a>
+      <a href="index.html#syllabus">课程表</a>
+      <a href="index.html#dates">重要日期</a>
+      <a href="index.html#about">关于本站</a>
     </nav>
     <div class="searchbox"><input id="search-input" type="search" placeholder="搜索材料 / 主题…" autocomplete="off"><div id="search-results" class="search-results" hidden></div></div>
   </div>
@@ -24,12 +25,33 @@
     <p class="hero-kicker">Stanford CS 329Z · Fall 2026 · https://cs329z.stanford.edu/</p>
     <h1>Engineering AI Agents<br><span class="hero-cn">AI 智能体工程 · 中文学习站</span></h1>
     <p class="hero-desc">本站收录该课程全部 <b>50</b> 篇阅读材料(35 篇论文 + 15 篇博客/规范)的中文版:论文提供逐章<b>精读笔记</b>(摘要全译 + 方法与实验详解),博客/规范提供<b>全文中译</b>,全部支持在线阅读,并可跳转原文。</p>
-    <div class="hero-stats"><div class="stat"><b>17</b><span>讲次主题</span></div><div class="stat"><b>50</b><span>篇材料</span></div><div class="stat"><b>21</b><span>篇必读</span></div><div class="stat"><b>100%</b><span>中文覆盖</span></div></div>
+    <div class="hero-stats"><div class="stat"><b>12</b><span>主题大类</span></div><div class="stat"><b>50</b><span>篇材料</span></div><div class="stat"><b>21</b><span>篇必读</span></div><div class="stat"><b>100%</b><span>中文覆盖</span></div></div>
   </div>
 </div>
+<nav class="cat-nav">
+  <div class="cat-nav-inner">
+      <a href="#cat-1">导论与背景</a>
+      <a href="#cat-2">LLM 与上下文工程</a>
+      <a href="#cat-3">检索增强生成</a>
+      <a href="#cat-4">工具与框架</a>
+      <a href="#cat-5">智能体模式与记忆</a>
+      <a href="#cat-6">多智能体系统</a>
+      <a href="#cat-7">优化</a>
+      <a href="#cat-8">数据工程</a>
+      <a href="#cat-9">评测</a>
+      <a href="#cat-10">安全与护栏</a>
+      <a href="#cat-11">编程智能体</a>
+      <a href="#cat-12">前沿与开放问题</a>
+  </div>
+</nav>
 <main class="index-main">
-  <h2 class="sec-title" id="syllabus">课程表与阅读材料</h2>
-  <div class="bi-progress">📖 论文逐段全译对照进度:<b>10 / 35</b> 篇已完成——完成篇带 <span class="badge badge-kind">全译对照</span> 徽章(正文每段英文原文+中文全译,页内可切换仅看中文);其余论文暂为 <span class="badge badge-kind">论文精读</span>(逐章精读笔记),博客类为 <span class="badge badge-kind">全文中译</span>。全译对照持续更新中。</div>
+  <h2 class="sec-title" id="syllabus">课程表与阅读材料 <a class="all-mats" href="materials.html">材料总目录 →</a></h2>
+  <div class="bi-progress">📖 论文逐段全译对照进度:<b>11 / 35</b> 篇已完成——完成篇带 <span class="badge badge-kind">全译对照</span> 徽章(正文每段英文原文+中文全译,页内可切换仅看中文);其余论文暂为 <span class="badge badge-kind">论文精读</span>(逐章精读笔记),博客类为 <span class="badge badge-kind">全文中译</span>。全译对照持续更新中。</div>
+  <section class="cat-section" id="cat-1">
+    <div class="cat-head">
+      <div class="cat-no">01</div>
+      <div><h2 class="cat-title">导论与背景</h2><p class="cat-desc">课程定位、复合 AI 系统与智能体设计模式总览 · 共 3 篇</p></div>
+    </div>
     <section class="topic" id="week-week01_introduction">
       <div class="topic-head">
         <div class="topic-date">9/23</div>
@@ -66,6 +88,12 @@
         </li>
       </ul>
     </section>
+  </section>
+  <section class="cat-section" id="cat-2">
+    <div class="cat-head">
+      <div class="cat-no">02</div>
+      <div><h2 class="cat-title">LLM 与上下文工程</h2><p class="cat-desc">给开发者的 LLM 使用之道与上下文工程 · 共 2 篇</p></div>
+    </div>
     <section class="topic" id="week-week02a_llms_for_builders">
       <div class="topic-head">
         <div class="topic-date">9/28</div>
@@ -93,6 +121,12 @@
         </li>
       </ul>
     </section>
+  </section>
+  <section class="cat-section" id="cat-3">
+    <div class="cat-head">
+      <div class="cat-no">03</div>
+      <div><h2 class="cat-title">检索增强生成</h2><p class="cat-desc">RAG 范式与稠密段落检索 · 共 2 篇</p></div>
+    </div>
     <section class="topic" id="week-week02b_rag">
       <div class="topic-head">
         <div class="topic-date">9/30</div>
@@ -120,6 +154,12 @@
         </li>
       </ul>
     </section>
+  </section>
+  <section class="cat-section" id="cat-4">
+    <div class="cat-head">
+      <div class="cat-no">04</div>
+      <div><h2 class="cat-title">工具与框架</h2><p class="cat-desc">MCP 协议规范与 DSPy 编程模型 · 共 2 篇</p></div>
+    </div>
     <section class="topic" id="week-week03a_tool_use_mcp">
       <div class="topic-head">
         <div class="topic-date">10/5</div>
@@ -156,6 +196,12 @@
         </li>
       </ul>
     </section>
+  </section>
+  <section class="cat-section" id="cat-5">
+    <div class="cat-head">
+      <div class="cat-no">05</div>
+      <div><h2 class="cat-title">智能体模式与记忆</h2><p class="cat-desc">ReAct 范式、MemGPT 与记忆架构 · 共 5 篇</p></div>
+    </div>
     <section class="topic" id="week-week04a_agent_patterns">
       <div class="topic-head">
         <div class="topic-date">10/12</div>
@@ -219,6 +265,12 @@
         </li>
       </ul>
     </section>
+  </section>
+  <section class="cat-section" id="cat-6">
+    <div class="cat-head">
+      <div class="cat-no">06</div>
+      <div><h2 class="cat-title">多智能体系统</h2><p class="cat-desc">协作框架、失败分析与动态团队 · 共 4 篇</p></div>
+    </div>
     <section class="topic" id="week-week05a_multi_agent">
       <div class="topic-head">
         <div class="topic-date">10/19</div>
@@ -264,6 +316,12 @@
         </li>
       </ul>
     </section>
+  </section>
+  <section class="cat-section" id="cat-7">
+    <div class="cat-head">
+      <div class="cat-no">07</div>
+      <div><h2 class="cat-title">优化</h2><p class="cat-desc">测试时计算扩展与提示优化 · 共 4 篇</p></div>
+    </div>
     <section class="topic" id="week-week05b_optimization">
       <div class="topic-head">
         <div class="topic-date">10/21</div>
@@ -274,7 +332,7 @@
         <li class="mat-row">
           <a class="mat-link" href="reading/Agrawal2026_GEPA.html">
             <span class="badge badge-must">必读</span>
-            <span class="badge badge-kind">论文精读</span>
+            <span class="badge badge-kind">全译对照</span>
             <span class="mat-title">&quot;GEPA:反思式提示进化可以胜过强化学习&quot;</span>
           </a>
           <div class="mat-sub">&quot;GEPA: Reflective Prompt Evolution Can Outperform Reinforcement Learning&quot;</div>
@@ -309,6 +367,12 @@
         </li>
       </ul>
     </section>
+  </section>
+  <section class="cat-section" id="cat-8">
+    <div class="cat-head">
+      <div class="cat-no">08</div>
+      <div><h2 class="cat-title">数据工程</h2><p class="cat-desc">数据飞轮、标注合成与数据选择 · 共 5 篇</p></div>
+    </div>
     <section class="topic" id="week-week06b_data">
       <div class="topic-head">
         <div class="topic-date">10/28</div>
@@ -372,6 +436,12 @@
         </li>
       </ul>
     </section>
+  </section>
+  <section class="cat-section" id="cat-9">
+    <div class="cat-head">
+      <div class="cat-no">09</div>
+      <div><h2 class="cat-title">评测</h2><p class="cat-desc">基准设计原则与 LLM-as-Judge · 共 7 篇</p></div>
+    </div>
     <section class="topic" id="week-week07b_evaluation">
       <div class="topic-head">
         <div class="topic-date">11/4</div>
@@ -453,6 +523,12 @@
         </li>
       </ul>
     </section>
+  </section>
+  <section class="cat-section" id="cat-10">
+    <div class="cat-head">
+      <div class="cat-no">10</div>
+      <div><h2 class="cat-title">安全与护栏</h2><p class="cat-desc">隐私、提示注入与攻防搜索 · 共 6 篇</p></div>
+    </div>
     <section class="topic" id="week-week08b_safety">
       <div class="topic-head">
         <div class="topic-date">11/11</div>
@@ -516,6 +592,12 @@
         </li>
       </ul>
     </section>
+  </section>
+  <section class="cat-section" id="cat-11">
+    <div class="cat-head">
+      <div class="cat-no">11</div>
+      <div><h2 class="cat-title">编程智能体</h2><p class="cat-desc">SWE 基准、ACI 接口与智能体平台 · 共 5 篇</p></div>
+    </div>
     <section class="topic" id="week-week09b_coding_agents">
       <div class="topic-head">
         <div class="topic-date">11/18</div>
@@ -570,6 +652,12 @@
         </li>
       </ul>
     </section>
+  </section>
+  <section class="cat-section" id="cat-12">
+    <div class="cat-head">
+      <div class="cat-no">12</div>
+      <div><h2 class="cat-title">前沿与开放问题</h2><p class="cat-desc">主动式智能体与真实世界环境基准 · 共 4 篇</p></div>
+    </div>
     <section class="topic" id="week-week11a_proactive_agents">
       <div class="topic-head">
         <div class="topic-date">11/30</div>
@@ -624,6 +712,7 @@
         </li>
       </ul>
     </section>
+  </section>
     <section class="topic" id="week-extras">
       <div class="topic-head">
         <div class="topic-date">✦</div>

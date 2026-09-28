@@ -64,3 +64,33 @@
   });
   apply();
 })();
+
+/* 材料总目录筛选 */
+(function () {
+  var bar = document.getElementById("filter-bar");
+  if (!bar) return;
+  var f = { kind: "all", imp: "all" };
+  function rowOk(r) {
+    return (f.kind === "all" || r.getAttribute("data-kind") === f.kind) &&
+           (f.imp === "all" || r.getAttribute("data-imp") === f.imp);
+  }
+  function apply() {
+    var rows = document.querySelectorAll("[data-row]");
+    rows.forEach(function (r) { r.style.display = rowOk(r) ? "" : "none"; });
+    document.querySelectorAll("[data-group]").forEach(function (g) {
+      var vis = 0;
+      g.querySelectorAll("[data-row]").forEach(function (r) { if (rowOk(r)) vis++; });
+      g.style.display = vis ? "" : "none";
+      var c = g.querySelector(".mat-cat-count");
+      if (c) c.textContent = vis + " 篇";
+    });
+  }
+  bar.addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-f]");
+    if (!b) return;
+    f[b.getAttribute("data-f")] = b.getAttribute("data-v");
+    bar.querySelectorAll('button[data-f="' + b.getAttribute("data-f") + '"]').forEach(function (x) { x.classList.remove("on"); });
+    b.classList.add("on");
+    apply();
+  });
+})();

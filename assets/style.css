@@ -273,3 +273,33 @@ body.zh-only .en-orig { display: none; }
   .read-article { padding: 44px 64px 34px; }
   .markdown-body { font-size: 16.5px; }
 }
+
+/* ---------- 主题大类导航与分组 ---------- */
+.cat-nav { position: sticky; top: 56px; z-index: 40; background: rgba(253,252,251,0.95); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+.cat-nav-inner { max-width: 1500px; margin: 0 auto; padding: 10px 24px; display: flex; flex-wrap: wrap; gap: 8px; }
+.cat-nav a { font-size: 13.5px; color: var(--ink-soft); background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 3px 14px; white-space: nowrap; }
+.cat-nav a:hover { color: var(--cardinal); border-color: var(--cardinal); text-decoration: none; }
+.cat-section { margin: 40px 0 10px; }
+.cat-head { display: flex; gap: 16px; align-items: center; padding: 14px 18px; background: linear-gradient(90deg, #faf1f0, #fbf8f5 70%); border: 1px solid #efdcdc; border-radius: 14px; margin-bottom: 16px; }
+.cat-no { font-size: 22px; font-weight: 800; color: var(--cardinal); opacity: .55; font-variant-numeric: tabular-nums; }
+.cat-title { margin: 0; font-size: 22px; }
+.cat-desc { margin: 2px 0 0; color: var(--ink-soft); font-size: 13.5px; }
+.all-mats { font-size: 14px; font-weight: 600; margin-left: 18px; vertical-align: middle; }
+
+/* ---------- 材料总目录页 ---------- */
+.hero-compact { padding: 40px 20px 36px; }
+.materials-main { max-width: 1500px; margin: 0 auto; padding: 26px 24px 60px; }
+.filter-bar { background: #fff; border-bottom: 1px solid var(--line); }
+.filter-bar > div { max-width: 1500px; margin: 0 auto; padding: 10px 24px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.fb-group b { font-size: 13px; color: var(--ink-soft); margin-right: 4px; }
+.filter-bar button { font-size: 13px; font-family: var(--sans); border: 1px solid var(--line); background: #fff; color: var(--ink-soft); border-radius: 999px; padding: 3px 14px; cursor: pointer; }
+.filter-bar button.on { background: var(--cardinal); border-color: var(--cardinal); color: #fff; }
+.mat-cat { margin: 28px 0; }
+.mat-cat-title { font-size: 19px; margin: 0 0 10px; display: flex; align-items: center; gap: 10px; }
+.mat-cat-count { font-size: 13px; color: var(--ink-soft); font-weight: 400; }
+.mat-table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; font-size: 14.5px; }
+.mat-table th { text-align: left; background: var(--line-soft); color: var(--ink-soft); font-size: 12.5px; letter-spacing: 1px; padding: 8px 14px; }
+.mat-table td { padding: 9px 14px; border-top: 1px solid var(--line-soft); vertical-align: top; }
+.mat-table a { font-weight: 600; }
+.mt-sub { color: var(--ink-soft); font-size: 12.5px; font-style: italic; margin-top: 2px; }
+.mt-week { color: var(--ink-soft); font-size: 13px; white-space: nowrap; }
