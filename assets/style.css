@@ -34,7 +34,7 @@ a:hover { text-decoration: underline; }
   backdrop-filter: blur(10px); border-bottom: 1px solid var(--line);
 }
 .topbar-inner {
-  max-width: 1200px; margin: 0 auto; padding: 0 20px; height: 56px;
+  max-width: 1640px; margin: 0 auto; padding: 0 24px; height: 56px;
   display: flex; align-items: center; gap: 24px;
 }
 .brand {
@@ -76,7 +76,7 @@ a:hover { text-decoration: underline; }
     linear-gradient(135deg, var(--cardinal) 0%, var(--cardinal-dark) 55%, #4a0c0c 100%);
   color: #fff; padding: 64px 20px 56px;
 }
-.hero-inner { max-width: 1080px; margin: 0 auto; }
+.hero-inner { max-width: 1500px; margin: 0 auto; }
 .hero-kicker {
   font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase;
   color: rgba(255,255,255,0.75); margin: 0 0 14px; font-weight: 600;
@@ -98,7 +98,7 @@ a:hover { text-decoration: underline; }
 .stat span { font-size: 13px; color: rgba(255,255,255,0.8); }
 
 /* ---------- index main ---------- */
-.index-main { max-width: 1080px; margin: 0 auto; padding: 44px 20px 60px; }
+.index-main { max-width: 1500px; margin: 0 auto; padding: 44px 24px 60px; }
 .sec-title {
   font-size: 26px; margin: 10px 0 22px; padding-bottom: 10px;
   border-bottom: 3px solid var(--cardinal); display: inline-block;
@@ -150,8 +150,8 @@ a:hover { text-decoration: underline; }
 
 /* ---------- reading page ---------- */
 .read-layout {
-  max-width: 1200px; margin: 0 auto; padding: 30px 20px 60px;
-  display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 40px;
+  max-width: 1720px; margin: 0 auto; padding: 30px 28px 60px;
+  display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 48px;
 }
 .read-toc { position: sticky; top: 76px; align-self: start; max-height: calc(100vh - 100px); overflow: auto; font-size: 13.5px; }
 .read-toc-title { font-weight: 700; color: var(--ink-soft); font-size: 12px; letter-spacing: 1.5px; margin-bottom: 8px; }
@@ -162,14 +162,14 @@ a:hover { text-decoration: underline; }
 .read-toc a:hover { color: var(--cardinal); text-decoration: none; }
 .crumb { font-size: 13px; color: var(--ink-soft); margin-bottom: 18px; }
 .crumb a { color: var(--ink-soft); }
-.read-article { max-width: 800px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 40px 48px 34px; }
+.read-article { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 44px 56px 34px; }
 .read-title { font-size: 30px; line-height: 1.35; margin: 0 0 6px; }
 .read-title-en { color: var(--ink-soft); font-size: 15.5px; font-style: italic; margin: 0 0 10px; }
 .read-meta { color: var(--ink-soft); font-size: 14px; margin: 0 0 12px; }
 .read-badges { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; padding-bottom: 18px; border-bottom: 1px solid var(--line-soft); flex-wrap: wrap; }
 .orig-link { font-size: 13.5px; margin-left: auto; font-weight: 600; }
 
-.pager { display: flex; gap: 12px; margin-top: 20px; max-width: 800px; }
+.pager { display: flex; gap: 12px; margin-top: 20px; }
 .pager a {
   flex: 1; background: var(--card); border: 1px solid var(--line); border-radius: 12px;
   padding: 12px 16px; color: var(--ink); font-size: 14.5px;
@@ -258,3 +258,18 @@ body.zh-only .en-orig { display: none; }
 /* 数学公式 */
 .math-display { text-align: center; margin: 14px 0; overflow-x: auto; }
 .math-inline code, .math-inline { white-space: normal; }
+
+/* ---------- 中英对照:宽屏左右分栏 ---------- */
+@media (min-width: 1240px) {
+  .pair {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 26px; align-items: start; margin: 14px 0;
+  }
+  .pair .en-orig { margin: 0; }
+  .pair > p {
+    margin: 0; padding: 10px 2px 10px 18px; font-weight: 500;
+    border-left: 3px solid #e3d5c6; border-radius: 0 2px 2px 0;
+  }
+  .read-article { padding: 44px 64px 34px; }
+  .markdown-body { font-size: 16.5px; }
+}
