@@ -21,7 +21,7 @@
   </div>
 </header>
 <div class="read-layout">
-  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">论文精读</a><ul><li><a href="#_3">摘要(全译)</a></li><li><a href="#1">1. 引言</a></li><li><a href="#2-">2. 智能体-计算机接口</a></li><li><a href="#3-swe-agent-aci">3. SWE-agent:为软件工程设计 ACI</a></li><li><a href="#4">4. 实验设置</a></li><li><a href="#5-aci">5. 结果与 ACI 设计分析</a></li><li><a href="#6">6. 结论(及影响)</a></li></ul></li><li><a href="#_4">要点速览</a></li></ul></aside>
+  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">全文对照翻译</a><ul><li><a href="#1">1 引言</a></li><li><a href="#2-the-agent-computer-interface">2 智能体-计算机接口(The Agent-Computer Interface)</a></li><li><a href="#3-swe-agent-aci">3 SWE-agent:为软件工程设计 ACI</a></li><li><a href="#4">4 实验设置</a></li><li><a href="#5">5 结果</a></li><li><a href="#51-aci">5.1 ACI 设计分析</a></li><li><a href="#52">5.2 智能体行为分析</a></li><li><a href="#6">6 相关工作</a></li><li><a href="#7">7 讨论</a></li><li><a href="#_3">致谢</a></li></ul></li><li><a href="#_4">要点速览</a></li></ul></aside>
   <main class="read-main">
       <link rel="stylesheet" href="../assets/katex/katex.min.css">
       <script defer src="../assets/katex/katex.min.js"></script>
@@ -31,57 +31,309 @@
       <h1 class="read-title">&quot;SWE-agent:智能体-计算机接口(ACI)实现自动化软件工程&quot;</h1>
       <p class="read-title-en">&quot;SWE-agent: Agent-Computer Interfaces Enable Automated Software Engineering&quot;</p>
       <p class="read-meta">John Yang, Carlos E. Jimenez, Alexander Wettig, et al. · &quot;NeurIPS 2024 · Princeton University&quot;</p>
-      <p class="read-badges"><span class="badge badge-must">必读</span><span class="badge badge-kind">论文精读</span><button class="lang-toggle" id="lang-toggle" type="button">仅看中文</button><a class="orig-link" href="../originals/week09b_coding_agents/Yang2024_SWE-agent_NeurIPS2024.pdf" target="_blank" rel="noopener">查看原文(PDF) ↗</a></p>
+      <p class="read-badges"><span class="badge badge-must">必读</span><span class="badge badge-kind">全译对照</span><button class="lang-toggle" id="lang-toggle" type="button">仅看中文</button><a class="orig-link" href="../originals/week09b_coding_agents/Yang2024_SWE-agent_NeurIPS2024.pdf" target="_blank" rel="noopener">查看原文(PDF) ↗</a></p>
       <div class="markdown-body">
 <h2 id="_1">导读</h2>
-<p>这是第 9 周「编程智能体」的核心思想论文(NeurIPS 2024,Princeton,与 SWE-bench 同一团队)。它的洞察简单而深刻:<strong>LM 智能体是一类新的"最终用户",有自己的能力与局限,值得像人类拥有 IDE 那样,拥有专门为它设计的界面</strong>。直接把 Linux shell 交给智能体,它会挣扎:难以可靠地编辑小段文件、无效编辑不给反馈。作者把"智能体与计算机之间的抽象层"命名为<strong>智能体-计算机接口(Agent-Computer Interface, ACI)</strong>——包括命令集与环境反馈格式的总设计,并借鉴 HCI 方法(观察行为 + 网格搜索)迭代设计。SWE-agent 的 ACI 提供:紧凑的搜索命令(超 50 条结果就要求重写更精确的查询)、100 行窗口的文件查看器、单命令多行编辑 + <strong>linter 护栏</strong>(语法错误的编辑被拒绝并展示前后对照)、上下文压缩(仅保留最近 5 条完整观察)。结果:GPT-4 Turbo 在 SWE-bench 全量 <strong>12.47%</strong>(此前非交互式最佳 3.79%),比 Shell-only 基线相对提升 64%;HumanEvalFix 87.7%。消融部分是本文精华:去掉 lint 掉 3 个点、换成迭代式搜索掉 6 个点(智能体会把每条结果翻完耗尽预算)、显示全文件掉 5.3 个点——<strong>每个接口设计选择都被量化</strong>。这篇论文直接启发了 OpenHands 的 AgentSkills 与后来所有智能体环境设计。</p>
-<h2 id="_2">论文精读</h2>
-<h3 id="_3">摘要(全译)</h3>
-<p>语言模型(LM)智能体正被越来越多地用于自动化数字环境中的复杂任务。正如人类在软件工程等复杂任务中受益于 IDE 等强大应用,我们认为 LM 智能体代表一类新的最终用户,有自己的需求与能力,会受益于为其使用的软件专门构建的界面。我们研究界面设计如何影响语言模型智能体的性能。作为这一探索的成果,我们提出 SWE-agent:一个让 LM 智能体自主使用计算机解决软件工程任务的系统。SWE-agent 定制的智能体-计算机接口(ACI)显著增强了智能体创建与编辑代码文件、浏览整个仓库、执行测试及其他程序的能力。我们在 SWE-bench 与 HumanEvalFix 上评测 SWE-agent,分别以 12.5% 与 87.7% 的 pass@1 取得双 SOTA,远超此前非交互式 LM 的最佳结果。最后,我们提供了 ACI 设计如何影响智能体行为与性能的洞见。</p>
-<h3 id="1">1. 引言</h3>
-<ul>
-<li>已有工作证明带执行反馈的 LM 智能体在代码生成上有效,但软件工程级的复杂任务未被探索。智能体通常被丢给 Linux shell 或 Python 解释器等<strong>为人类设计的现有应用</strong>——但人类工程师解决复杂任务靠的是 VSCode 这类精良工具。</li>
-<li>受 HCI 研究(界面设计显著影响人类效率)启发,提问:<strong>LM 智能体是否同样受益于更好的界面设计?</strong></li>
-<li>直接用 shell 的问题:智能体难以可靠执行简单文件编辑、无效编辑无任何反馈,严重拖累性能。因此需要 <strong>ACI</strong>:LM 智能体与计算机之间的抽象层。</li>
-<li>与 Linux shell 庞大且高度可配置的动作空间相反,SWE-agent 的 ACI 只提供<strong>一小组简单动作</strong>(查看、搜索、编辑文件),配护栏防常见错误,每轮给出<strong>具体而简洁</strong>的命令效果反馈。GPT-4 Turbo 下解 SWE-bench 全量 12.47%(此前最佳 3.8%);Lite 消融显示比纯 shell 基线高 10.7 个百分点;ACI 可移植(Claude 3 Opus 10.5%)。</li>
-<li>两大贡献:① ACI 概念 + 证明精心设计可在<strong>不动模型权重</strong>的前提下大幅提升性能;② 开源 SWE-agent 系统,统一了此前分别研究的工具使用、提示技术、交互式代码执行。</li>
-</ul>
-<h3 id="2-">2. 智能体-计算机接口</h3>
-<ul>
-<li>智能体 = 迭代行动并接收反馈;物理环境有硬约束,而数字环境<strong>可以被抽象塑造</strong>(给软件的 API、给人的 UI)——现有接口都是为这两类用户设计的,LM 是第三类用户。</li>
-<li>人机差异驱动不同设计准则:LM 缺乏视觉能力,无法直接操作 GUI,但 GUI 应用的功能(语法检查、导航)以合适形式呈现就对 LM 有用;人类能灵活忽略无关信息,而 <strong>LM 对所有内容都付出固定的记忆与计算成本</strong>,干扰性上下文有害。</li>
-<li>好的 ACI 应:帮助智能体理解当前状态、管理历史以避免冗余上下文、提供可靠高效的行动。ACI 同时规定<strong>可用命令</strong>与<strong>环境状态的回传格式</strong>,并管理历史命令/观察如何与高层指令组合成每步的输入。</li>
-<li>设计方法(借鉴 HCI 用户研究):固定 LM,在开发集上 (1) 人工检查智能体行为找困难点并改进;(2) 网格搜索选最优配置。由此提炼 <strong>ACI 设计四原则</strong>:
-  1. <strong>行动要简单易懂</strong>——bash 命令动辄几十个选项;少选项 + 简洁文档让智能体免于示例或微调;
-  2. <strong>行动要紧凑高效</strong>——重要操作(导航、编辑)应合并为尽可能少的动作;坏设计让智能体用多轮组合才能完成一个高阶操作;
-  3. <strong>环境反馈要信息丰富但简洁</strong>——给实质信息(如编辑后的文件内容)而非无关细节;
-  4. <strong>护栏减少错误传播、加速恢复</strong>——如内置语法检查器自动发现编辑错误,帮助快速纠正。</li>
-</ul>
-<h3 id="3-swe-agent-aci">3. SWE-agent:为软件工程设计 ACI</h3>
-<p>组件:搜索/导航、文件查看器、文件编辑器、上下文管理;每步生成 thought + command(ReAct 式),再吸收环境反馈;底层仍是 Linux shell,可随时用原生命令。</p>
-<ul>
-<li><strong>搜索与导航</strong>:<code>find_file</code>(按文件名)、<code>search_file</code> / <code>search_dir</code>(文件/目录内字符串),输出<strong>汇总式</strong>搜索结果;压制冗长输出——每次查询至多返回 50 条,超过则不显示结果、提示智能体写更精确的查询。</li>
-<li><strong>文件查看器</strong>:<code>open</code> 打开文件,窗口至多 100 行,<code>scroll_down/up</code> 移动、<code>goto</code> 跳行;显示<strong>完整路径、总行数、窗口前后省略的行数、每行行号</strong>——专为代码定位设计。</li>
-<li><strong>文件编辑器</strong>:<code>edit</code> 与查看器联动,三参数(起行、止行、替换文本)<strong>单步完成多行替换</strong>;编辑后查看器自动显示更新内容,无需额外命令即可观察效果。内置 <strong>linter</strong>:编辑引入语法错误时,向智能体展示错误 + 出错前后的文件片段对照;<strong>无效编辑被丢弃</strong>、要求重试——这就是"护栏"原则的落地。</li>
-<li><strong>上下文管理</strong>:指令、文档、演示贯穿始终;格式错误的生成触发错误响应直到收到有效输出(历史中只保留第一条错误信息);无输出的命令明确返回"命令成功执行且无输出";<strong>最近 5 条之前的观察各折叠为一行</strong>——保留计划与行动史的关键信息,又省出上下文空间、避免展示过期的文件状态。</li>
-</ul>
-<h3 id="4">4. 实验设置</h3>
-<ul>
-<li>数据:SWE-bench 全量 2,294(主结果)+ Lite 300(消融/分析)+ HumanEvalFix(短程修 bug)。</li>
-<li>模型:GPT-4 Turbo(128k)与 Claude 3 Opus(200k);Llama 3(8k 窗口)等开源模型在智能体设定下表现不佳。</li>
-<li>基线:① RAG 非交互式(SWE-bench 原文设定);② <strong>Shell-only</strong>(InterCode 式,让 LM 直接与 Linux shell 交互)。指标:% Resolved / pass@1 + 每成功实例平均成本(预算 $4/例,超时自动提交现有编辑)。</li>
-</ul>
-<h3 id="5-aci">5. 结果与 ACI 设计分析</h3>
-<p><strong>主结果(表 1/2)</strong>:SWE-agent + GPT-4 Turbo:SWE-bench 全量 <strong>12.47%</strong>(286/2294)、Lite 18.00%、成本 $1.59/例;Claude 3 Opus 10.46%。对比 RAG(GPT-4 Turbo 1.31%、Claude 3 Opus 3.79%)与 Shell-only(Lite 11.00%)——<strong>ACI 带来相对 64% 的提升</strong>;比 RAG 贵 8-13 倍但解决率高 6.7 倍。HumanEvalFix:Python <strong>87.7%</strong> / JS 89.7% / Java 87.9%(GPT-4 基线 47-50%)。pass@k 随 k 增长仍有空间;成功率与 issue 年龄无关(排除测试污染)。</p>
-<p><strong>消融(表 3,Lite,全配置 18.0 为基准)</strong>:
-- <strong>人类界面不一定适合智能体</strong>:shell 中 <code>cd/ls/cat</code> 链条极低效;<code>grep/find</code> 偶尔喷出大量无关行。
-- <strong>搜索接口(图 5)</strong>:<strong>迭代式搜索</strong>(模仿 Vim/VSCode,用 next/prev 逐条翻结果)反而掉到 12.0(−6.0)——面对大量结果,智能体会<strong>强迫症式逐条翻完</strong>直到耗尽预算或上下文,比没有搜索工具(15.7)还差;<strong>汇总式搜索</strong>(当前设计:单次输出全部+引导细化查询)最优。
-- <strong>紧凑高效的编辑至关重要</strong>:<strong>无 edit 命令</strong>(只能重定向重写整文件或 sed)掉到 10.3(−7.7)——重定向连小改动都要重写全文件、低效易错;sed 做多行编辑笨拙且后果难察。<strong>去掉 lint</strong> 掉 3.0(15.0)——护栏让语法错误当场暴露而非在测试中爆炸。
-- <strong>文件查看器窗口</strong>:30 行 → 14.3(−3.7);<strong>全文件</strong> → 12.7(−5.3,大文件淹没关键信息);100 行最优。
-- <strong>上下文</strong>:完整历史 → 15.0(−3.0);去掉演示 → 16.3(−1.7);最近 5 条完整观察 + 之前折叠一行最优。
-- 定性观察:智能体常写出"贪心"补丁、不做结构性整理;ACI 的每个选择(搜索汇总、编辑联动查看、lint、上下文压缩)都在为"LM 作为新用户"的特定失败模式兜底。</p>
-<h3 id="6">6. 结论(及影响)</h3>
-<p>ACI 概念 + SWE-agent 系统:不改权重、只改界面,SWE-bench 成绩翻三倍以上。其设计思想被后续工作广泛吸收——OpenHands 的 AgentSkills 直接改编了 <code>edit_file</code> 等命令;Claude Code 等产品的工具设计也可视为 ACI 工程化。ACI 与 MCP(第 3 周)共同回答"智能体时代接口怎么设计":MCP 管"接什么",ACI 管"怎么接得好用"。</p>
+<p>这是第 9 周「编程智能体」的核心思想论文(NeurIPS 2024,Princeton,与 SWE-bench 同一团队)。它的洞察简单而深刻:<strong>LM 智能体是一类新的"最终用户",有自己的能力与局限,值得像人类拥有 IDE 那样,拥有专门为它设计的界面</strong>。直接把 Linux shell 交给智能体,它会挣扎:难以可靠地编辑小段文件、无效编辑不给反馈。作者把"智能体与计算机之间的抽象层"命名为<strong>智能体-计算机接口(Agent-Computer Interface, ACI)</strong>——包括命令集与环境反馈格式的总设计,并借鉴 HCI 方法(观察行为 + 网格搜索)迭代设计。SWE-agent 的 ACI 提供:紧凑的搜索命令(超 50 条结果就要求重写更精确的查询)、100 行窗口的文件查看器、单命令多行编辑 + <strong>linter 护栏</strong>(语法错误的编辑被拒绝并展示前后对照)、上下文压缩(仅保留最近 5 条完整观察)。结果:GPT-4 Turbo 在 SWE-bench 全量 <strong>12.47%</strong>(此前非交互式最佳 3.79%),比 Shell-only 基线相对提升 64%;HumanEvalFix 87.7%。消融部分是本文精华:去掉 lint 掉 3 个点、换成迭代式搜索掉 6 个点(智能体会把每条结果翻完耗尽预算)、显示全文件掉 5.3 个点——<strong>每个接口设计选择都被量化</strong>。这篇论文直接启发了 OpenHands 的 AgentSkills 与后来所有智能体环境设计。本页为<strong>全文中英对照</strong>版本(正文全部,参考文献与附录略)。</p>
+<h2 id="_2">全文对照翻译</h2>
+<blockquote>
+<p><strong>译注</strong>:覆盖论文正文(摘要、第 1-7 节与致谢,原文第 1-10 页)。References 与附录 A 以后(实现细节、提示词与观察模板、配置搜索、轨迹与失败分析、伦理与更广泛影响等大量附录)未收录,请查阅原文 PDF;要点已浓缩在文末"要点速览"。术语首现处给中英对照:<strong>智能体-计算机接口(Agent-Computer Interface, ACI)</strong>、<strong>护栏(guardrails)</strong> 等;LLM/LM、Agent、RAG 等通用缩写保留英文。</p>
+</blockquote>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>**Abstract** — Language model (LM) agents are increasingly being used to automate complicated tasks in digital environments. Just as humans benefit from powerful software applications, such as integrated development environments, for complex tasks like software engineering, we posit that LM agents represent a new category of end users with their own needs and abilities, and would benefit from specially-built interfaces to the software they use. We investigate how interface design affects the performance of language model agents. As a result of this exploration, we introduce SWE-agent: a system that facilitates LM agents to autonomously use computers to solve software engineering tasks. SWE-agent&#x27;s custom agent-computer interface (ACI) significantly enhances an agent&#x27;s ability to create and edit code files, navigate entire repositories, and execute tests and other programs. We evaluate SWE-agent on SWE-bench and HumanEvalFix, achieving state-of-the-art performance on both with a pass@1 rate of 12.5% and 87.7%, respectively, far exceeding the previous state-of-the-art achieved with non-interactive LMs. Finally, we provide insight on how the design of the ACI can impact agents&#x27; behavior and performance.</p></div><p><strong>摘要</strong> —— 语言模型(LM)智能体正被越来越多地用于自动化数字环境中的复杂任务。正如人类在软件工程等复杂任务中受益于集成开发环境等强大应用,我们认为 LM 智能体代表一类新的最终用户,有自己的需求与能力,会受益于为其使用的软件专门构建的界面。我们研究界面设计如何影响语言模型智能体的性能。作为这一探索的成果,我们提出 <strong>SWE-agent</strong>:一个让 LM 智能体自主使用计算机解决软件工程任务的系统。SWE-agent 定制的<strong>智能体-计算机接口(Agent-Computer Interface, ACI)</strong>显著增强了智能体创建与编辑代码文件、浏览整个仓库、执行测试及其他程序的能力。我们在 SWE-bench 与 HumanEvalFix 上评测 SWE-agent,分别以 12.5% 与 87.7% 的 pass@1 取得双 SOTA,远超此前非交互式 LM 的最佳结果。最后,我们提供了 ACI 设计如何影响智能体行为与性能的洞见。</p></div>
+<p><em>标题页脚注:共同贡献;通讯作者 johnby@stanford.edu、carlosej@princeton.edu;数据、代码与榜单见 swe-agent.com。本文发表于 NeurIPS 2024(第 38 届神经信息处理系统大会)。</em></p>
+<h3 id="1">1 引言</h3>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Recent work has demonstrated the efficacy of LM agents for code generation with execution feedback [39]. However, applying agents to more complex code tasks like software engineering remains unexplored. To solve programming tasks, LM agents are typically designed to use existing applications, such as the Linux shell or Python interpreter [53, 57, 59]. However, to perform more complex programming tasks such as software engineering [20], human engineers benefit from sophisticated applications like VSCode with powerful tools and extensions. Inspired by human-computer interaction (HCI) studies on the efficacy of user interfaces for humans [7], we investigate whether LM agents could similarly benefit from better-designed interfaces for performing software engineering tasks.</p></div><p>近期工作已证明带执行反馈的 LM 智能体在代码生成上的有效性 [39]。然而,把智能体应用于软件工程这类更复杂的代码任务仍未被探索。为解决编程任务,LM 智能体通常被设计为使用既有应用,如 Linux shell 或 Python 解释器 [53, 57, 59]。但人类工程师在执行软件工程这类更复杂的编程任务时 [20],受益于 VSCode 这类配有强大工具与扩展的精良应用。受人机交互(HCI)关于用户界面之于人类有效性研究 [7] 的启发,我们研究 LM 智能体是否同样能受益于为软件工程任务设计得更好的界面。</p></div>
+<p>[图 1: SWE-agent is an LM interacting with a computer through an agent-computer interface (ACI), which includes the commands the agent uses and the format of the feedback from the computer.]</p>
+<p>图 1 中文说明:SWE-agent 是一个通过<strong>智能体-计算机接口(ACI)</strong>与计算机交互的 LM。图中 LM 智能体经由 ACI 提供的"对 LM 友好的命令"(navigate repo 浏览仓库、view files 查看文件、search files 搜索文件、edit lines 编辑行)操作计算机(终端 + 文件系统,示例为 sklearn 仓库),计算机再以"对 LM 友好的环境反馈"回传结果——ACI 既包括智能体使用的命令,也包括计算机反馈的格式。</p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Consider the simple setting of an agent interacting directly with a Linux shell [59]. In practice, we find that LM agents can struggle to reliably take actions in this environment. For example, it fails to provide simple commands to edit a small file segment, and does not provide any feedback if the user makes an invalid edit. These deficits substantially hamper performance, motivating the need for an agent-computer interface (ACI), i.e., an abstraction layer between the LM agent and computer, to enhance the LM agent&#x27;s abilities in computer environments (Figure 1).</p></div><p>考虑智能体直接与 Linux shell 交互这一简单设定 [59]。实践中我们发现 LM 智能体在此环境中可能难以可靠地行动。例如,它无法给出编辑小段文件的简单命令,而且在(使用者)做出无效编辑时也不提供任何反馈。这些缺陷严重拖累性能,促使我们需要一种<strong>智能体-计算机接口(ACI)</strong>——即 LM 智能体与计算机之间的抽象层——来增强 LM 智能体在计算机环境中的能力(图 1)。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>From this effort, we introduce SWE-agent, an agent composed of an LM and ACI, that can interact with a computer to solve challenging real-world software engineering problems, such as those proposed in SWE-bench [20]. In contrast to the Linux Shell&#x27;s granular, highly configurable action space, SWE-agent&#x27;s ACI instead offers a small set of simple actions for viewing, searching through and editing files. The ACI uses guardrails to prevent common mistakes, and an agent receives specific, concise feedback about a command&#x27;s effects at every turn. We show that ACIs tailored specifically for LMs outperform existing user interfaces (UIs) designed for human users, such as the Linux shell. Using GPT-4 Turbo as a base LM, SWE-agent solves 12.47% of the 2,294 SWE-bench test tasks, substantially outperforming the previous best resolve rate of 3.8% by a non-interactive, retrieval-augmented system [20]. We perform an ablation study on a subset of 300 SWE-bench test instances (SWE-bench Lite) to analyze our ACI design choices. The results show that SWE-agent solves 10.7 percentage points more instances than the baseline agent, which uses only the default Linux shell. Although our ACI was developed for GPT-4 Turbo, we show that it is portable to a different LM; SWE-agent with Claude 3 Opus can solve 10.5% of the benchmark tasks.</p></div><p>从这项努力出发,我们提出 <strong>SWE-agent</strong>:一个由 LM 与 ACI 组成的智能体,能与计算机交互来解决有挑战性的真实世界软件工程问题,例如 SWE-bench 提出的任务 [20]。与 Linux Shell 粒度细、高度可配置的动作空间相反,SWE-agent 的 ACI 只提供一小 组用于查看、搜索与编辑文件的简单动作。ACI 使用<strong>护栏(guardrails)</strong>来防止常见错误,且智能体每轮都会收到关于命令效果的<strong>具体而简洁</strong>的反馈。我们证明:专为 LM 定制的 ACI 优于为人类用户设计的既有用户界面(UI),如 Linux shell。以 GPT-4 Turbo 为基础 LM,SWE-agent 解决了 2,294 个 SWE-bench 测试任务中的 <strong>12.47%</strong>,大幅超越此前非交互式、检索增强系统 3.8% 的最佳解决率 [20]。我们在 300 个 SWE-bench 测试实例的子集(SWE-bench Lite)上做消融研究,分析我们的 ACI 设计选择。结果显示 SWE-agent 比仅使用默认 Linux shell 的基线智能体多解决 <strong>10.7 个百分点</strong>的实例。虽然我们的 ACI 是为 GPT-4 Turbo 开发的,但我们证明它可移植到不同的 LM:SWE-agent 搭配 Claude 3 Opus 能解决基准任务的 <strong>10.5%</strong>。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Our contributions are twofold. First, we introduce the concept of the agent-computer interface (ACI) and demonstrate how careful ACI design can substantially improve LM agent performance without modifying the underlying LM&#x27;s weights. Second, we build, evaluate, and open-source SWE-agent, a system that provides LMs an ACI for solving real-world software engineering tasks. Unlike prior works that independently explore the merits of tool use, prompting techniques, and code execution in interactive settings, our approach unifies these factors within the ACI framework. We show that crafting LM-centric interactive components has meaningful effects on downstream task performance.</p></div><p>我们的贡献有两点。第一,我们提出智能体-计算机接口(ACI)的概念,并证明精心的 ACI 设计可以在<strong>不修改底层 LM 权重</strong>的前提下大幅提升 LM 智能体性能。第二,我们构建、评测并开源了 SWE-agent——一个为 LM 提供 ACI 以解决真实世界软件工程任务的系统。与此前分别独立探索工具使用、提示技术、交互式设定下代码执行之优劣的工作不同,我们的方法在 ACI 框架内统一了这些因素。我们证明:精心打造以 LM 为中心的交互组件,对下游任务性能有实质影响。</p></div>
+<h3 id="2-the-agent-computer-interface">2 智能体-计算机接口(The Agent-Computer Interface)</h3>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>An LM acts as an agent when it interacts with an environment by iteratively taking actions and receiving feedback [42, 62]. Typically, the environment has hard constraints, as in robotics, where agents control actuators in the physical world. On the other hand, digital environments can be molded by abstractions in the form of application programming interfaces and user interfaces for software and humans respectively. Naturally, existing interfaces have been designed with one of these users in mind. We argue that LM agents represent a new category of end user, with their own needs and abilities. We refer to the interface LM agents use to interact with computers as the agent-computer interface (ACI). Figure 2 illustrates how ACIs provide LM agents with important functionality to interface with computers, similar to how code editors also help humans use computers more effectively.</p></div><p>当一个 LM 通过迭代地采取行动并接收反馈来与环境交互时,它就扮演了智能体 [42, 62]。通常环境有硬性约束,如机器人学中智能体控制物理世界的执行器;另一方面,数字环境可以被抽象所塑造——分别为软件提供应用程序编程接口(API)、为人提供用户界面(UI)。自然而然,既有接口都是为这两类用户之一设计的。我们主张:LM 智能体代表一类<strong>新的最终用户</strong>,有自己的需求与能力。我们把 LM 智能体用来与计算机交互的接口称为<strong>智能体-计算机接口(ACI)</strong>。图 2 展示了 ACI 如何为 LM 智能体提供与计算机打交道的重要功能,正如代码编辑器也帮助人类更有效地使用计算机。</p></div>
+<p>[图 2: Specialized applications like IDEs (e.g., VSCode, PyCharm) make scientists and software engineers more efficient and effective at computer tasks. Similarly, ACI design aims to create a suitable interface that makes LM agents more effective at digital work such as software engineering.]</p>
+<p>图 2 中文说明:IDE 等专用应用(VSCode、PyCharm)让科学家与软件工程师在计算机任务上更高效、更有效;类似地,ACI 设计的目标是创造合适的接口,让 LM 智能体在软件工程等数字化工作中更有效。图中对比了两条链:人类(Human)通过 UI 使用计算机;LM 智能体(LM Agent)通过 ACI——含代码搜索(Code Search)、文件查看器(File Viewer)、文件编辑器(File Editor)——使用计算机。</p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Disparities in humans&#x27; and LMs&#x27; abilities and limitations motivates different interface design guidelines. For instance, the current generation of LMs lack the visual understanding abilities to directly operate GUI-based applications with rich visual components and signals. However, many of the features provided by these applications, such as syntax checking and navigation tools, could be useful to LM agents if they were presented in a suitable manner. Additionally, humans can flexibly ignore unnecessary information, whereas all content has a fixed cost in memory and computation for LMs and distracting context can harm performance [27]. Therefore, LM agents may be more effective at interacting with computers when provided an interface that was built informed by these differences.</p></div><p>人类与 LMs 能力和局限上的差异,催生了不同的界面设计准则。例如,当前一代 LMs 缺乏视觉理解能力,无法直接操作带丰富视觉组件与信号的 GUI 应用;但这些应用提供的许多功能(如语法检查与导航工具)若以合适的方式呈现,对 LM 智能体是有用的。此外,人类能灵活地忽略无关信息,而<strong>对所有内容,LM 都要付出固定的记忆与计算成本</strong>,干扰性上下文会损害性能 [27]。因此,若为 LM 智能体提供一个基于这些差异而构建的接口,它们与计算机的交互可能更有效。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Ultimately, a well-designed ACI should help the LM agent understand the state of the application given previous changes, manage history to avoid unnecessary context from prior observations, and provide actions that models can use efficiently and reliably. The ACI specifies both the commands available to the LM and how the environment state is communicated back to the LM. It also tracks the history of all previous commands and observations and, at each step, manages how these should be formatted and combined with high-level instructions into a single input for the LM.</p></div><p>归根结底,一个设计良好的 ACI 应当:帮助 LM 智能体在既有改动之上理解应用当前状态;管理历史以避免先前观察带来的多余上下文;提供模型能高效、可靠使用的动作。ACI 既规定 LM 可用的命令,也规定环境状态如何回传给 LM。它还追踪此前所有命令与观察的历史,并在每一步管理这些内容应如何被格式化、并与高层指令组合成给 LM 的单一输入。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>In this paper, we assume a fixed LM and focus on designing the ACI to improve its performance. This means that we shape the actions, their documentation, and environment feedback to complement an LM&#x27;s limitations and abilities. We draw inspiration from the field of HCI, where user studies elicit insights about how compatible different interfaces are with respect to human intuition and performance [7]. We use two approaches to enhance performance on a development set: (1) manually inspect agent behavior to identify difficulties and propose improvements, and (2) run a grid search to select the best ACI configuration.</p></div><p>本文中我们固定 LM,专注于设计 ACI 来提升其性能。这意味着我们塑造动作、动作的文档以及环境反馈,以补足 LM 的局限、发挥其能力。我们从 HCI 领域汲取灵感——用户研究能揭示不同界面与人类直觉和性能的兼容程度 [7]。我们用两种方法在开发集上提升性能:(1)人工检查智能体行为,识别困难点并提出改进;(2)运行网格搜索(grid search)选择最优 ACI 配置。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Taking these two actions resulted in several insights about design principles that seem especially important for building effective ACIs:</p></div><p>采取这两项行动后,我们得到若干关于设计原则的洞见,它们对构建有效的 ACI 似乎尤为重要:</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>1. Actions should be simple and easy to understand for agents. Many bash commands have documentation that includes dozens of options. Simple commands with a few options and concise documentation are easier for agents to use, reducing the need for demonstrations or fine-tuning. This is a defining principle for all SWE-agent commands that we describe in Section 3.</p></div><p><strong>1)</strong> <strong>行动对智能体应简单易懂</strong>。许多 bash 命令的文档动辄包含几十个选项。只带少数选项、文档简洁的命令更易于智能体使用,减少了对演示(demonstration)或微调的需求。这是我们第 3 节描述的所有 SWE-agent 命令的定义性原则。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>2. Actions should be compact and efficient. Important operations (e.g., file navigation, editing) should be consolidated into as few actions as possible. Efficient actions help agents make meaningful progress towards a goal in a single step. A poor design would therefore have many simple actions that must be composed across multiple turns for a higher order operation to take effect. We show this idea in action in the Editing and Search interface analyses in Section 5.1.</p></div><p><strong>2)</strong> <strong>行动应紧凑高效</strong>。重要操作(如文件导航、编辑)应合并为尽可能少的动作。高效的动作帮助智能体在单步内朝目标取得实质性进展;糟糕的设计则会有许多简单动作,必须跨多轮组合才能让一个高阶操作生效。我们在第 5.1 节的编辑与搜索接口分析中展示这一思想的实际效果。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>3. Environment feedback should be informative but concise. High quality feedback should provide the agent with substantive information about the current environment state (and the effect of the agent&#x27;s recent actions) without unnecessary details. For instance, when editing a file, updating the agent about revised content is helpful. Figures 3a, 3b and Table 3 show this.</p></div><p><strong>3)</strong> <strong>环境反馈应信息丰富但简洁</strong>。高质量反馈应给智能体提供关于当前环境状态(及其近期行动之效果)的实质信息,而非无关细节。例如,编辑文件时,把修改后的内容更新给智能体是有帮助的。图 3a、3b 与表 3 展示了这一点。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>4. Guardrails mitigate error propagation and hasten recovery. Like humans, LMs make mistakes when editing or searching and can struggle to recover from these errors. Building in guardrails, such as a code syntax checker that automatically detects mistakes, can help agents recognize and quickly correct errors. We show the effect of editing guardrails in Table 3.</p></div><p><strong>4)</strong> <strong>护栏(guardrails)缓解错误传播、加速恢复</strong>。与人一样,LM 在编辑或搜索时会犯错,且可能难以从错误中恢复。内置护栏——如自动发现错误的代码语法检查器——能帮助智能体识别并快速纠正错误。我们在表 3 中展示编辑护栏的效果。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Analysis and ablation studies in Section 5 demonstrate how alternative ACIs affect LM performance. Our studies shows how these principles appear recurrently across actions, feedback, and workflows.</p></div><p>第 5 节的分析与消融研究展示了不同替代 ACI 如何影响 LM 性能。我们的研究表明,这些原则在动作、反馈与工作流中反复出现。</p></div>
+<h3 id="3-swe-agent-aci">3 SWE-agent:为软件工程设计 ACI</h3>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Here we describe how SWE-agent provides an ACI for LMs to act as software engineering agents, enabling them to effectively search, navigate, edit, and execute code commands. The ACI comprises several principal components, including search/navigation, file viewer, file editor, and context management. At each step, SWE-agent generates a thought and a command, then incorporates the feedback from the command&#x27;s execution in the environment (ReAct; Yao et al. [62]). Built atop the Linux shell, SWE-agent also allows access to common Linux commands and utilities when needed.</p></div><p>这里我们描述 SWE-agent 如何为 LMs 提供 ACI,使其扮演软件工程智能体,能有效地搜索、导航、编辑与执行代码命令。该 ACI 包含几个主要组件:搜索/导航、文件查看器、文件编辑器与上下文管理。每一步,SWE-agent 生成一个思考(thought)与一个命令,再吸收该命令在环境中执行的反馈(ReAct;Yao 等 [62])。SWE-agent 构建在 Linux shell 之上,需要时也允许访问常见的 Linux 命令与工具。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Search and navigation. Navigating codebases requires finding the relevant file and content. A common strategy to do this involves looking up terms that might be useful, e.g., files, functions, or class definitions mentioned in an issue. We introduce the special commands find_file, search_file, and search_dir, which output a summary of search results when searching for filenames and strings within files or directories. Figure 10 shows examples of these search result formats. The find_file command searches for filenames in the repository, while the search_file and search_dir locates strings in a file(s) of a subdirectory. Our interface encourages efficient searches by suppressing verbose results. The search commands return at most 50 results for each search query; if a search exceeds this number, we do not report the results and instead suggest that the agent write a more specific query.</p></div><p><strong>搜索与导航</strong>。在代码库中导航需要找到相关文件与内容。常见策略是查找可能有用的词条,例如 issue 中提到的文件、函数或类定义。我们引入专用命令 <code>find_file</code>、<code>search_file</code> 与 <code>search_dir</code>,在文件或目录内搜索文件名与字符串时输出<strong>汇总式</strong>搜索结果。图 10(附录)展示了这些搜索结果格式的示例。<code>find_file</code> 在仓库中搜索文件名,<code>search_file</code> 与 <code>search_dir</code> 在(子目录的)文件中定位字符串。我们的接口通过压制冗长输出来鼓励高效搜索:每条查询至多返回 50 条结果;若超过这一数量,则不显示结果,而是建议智能体写一条更精确的查询。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>File viewer. After finding a file they want to view, agents use the interactive file viewer by calling the command open on the relevant file path. The file viewer presents a window of at most 100 lines of the file at a time. The agent can move this window with the commands scroll_down and scroll_up or access a specific line with the goto command. To facilitate in-file navigation and code localization, we display: the full path of the open file, the total number of lines in the file, the number of lines omitted before and after the current window, and the line number (prepended to each visible line). Figure 3a shows an example of this interface.</p></div><p><strong>文件查看器</strong>。找到想查看的文件后,智能体通过对相应文件路径调用 <code>open</code> 命令使用交互式文件查看器。查看器一次呈现至多 <strong>100 行</strong>的窗口;智能体可用 <code>scroll_down</code> 与 <code>scroll_up</code> 移动窗口,或用 <code>goto</code> 访问特定行。为便于文件内导航与代码定位,我们显示:打开文件的完整路径、文件总行数、当前窗口前后被省略的行数,以及行号(前置于每个可见行)。图 3a 展示了该接口示例。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>File editor. We provide a few commands that let LMs create and edit files. The edit command works in conjunction with the file viewer, allowing agents to replace a specific range of lines in the open file. This command takes 3 required arguments: the start line, end line, and replacement text. In a single step, agents can replace all lines between the start and end lines with the replacement text, as shown in Figure 3b. After edits are applied, the file viewer automatically displays the updated content, helping the agent observe the effects of its edit immediately without invoking additional commands. Figure 3b shows an example agent response, including a file edit.</p></div><p><strong>文件编辑器</strong>。我们提供若干命令让 LMs 创建与编辑文件。<code>edit</code> 命令与文件查看器联动,允许智能体替换打开文件中特定范围的行。该命令有 3 个必需参数:起始行、结束行与替换文本。单步之内,智能体就能把起始行与结束行之间的所有行替换为替换文本,如图 3b 所示。编辑应用后,文件查看器自动显示更新后的内容,帮助智能体无需调用额外命令即可立即观察编辑效果。图 3b 展示了一个含文件编辑的智能体响应示例。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Similar to how humans can use tools like syntax highlighting to help them notice format errors when editing files in an IDE, we integrate a code linter into the edit function to alert the agent of mistakes it may have introduced when editing a file. Select errors from the linter are shown to the agent along with a snippet of the file contents before/after the error was introduced. Invalid edits are discarded, and the agent is asked to try editing the file again.</p></div><p>类似人类在 IDE 中编辑文件时可借助语法高亮等工具发现格式错误,我们把代码 linter 集成进 <code>edit</code> 功能,以提醒智能体其在编辑文件时可能引入的错误。linter 检出的错误会连同<strong>出错前后的文件内容片段</strong>一起展示给智能体。<strong>无效编辑被丢弃</strong>,并要求智能体再次尝试编辑该文件。</p></div>
+<p>[图 3: The file viewer and edit command are integrated. (a) The file viewer shows the agent the open file's content with line numbers. (b) The agent invokes the edit function to replace lines 404-407 in the open file. After the edit, the file viewer shows the agent the now updated version of the file.]</p>
+<p>图 3 中文说明:文件查看器与 <code>edit</code> 命令是联动的。(a) 查看器带行号地向智能体展示打开文件的内容;(b) 智能体调用 <code>edit</code> 替换打开文件的第 404-407 行,编辑后查看器向智能体展示文件更新后的版本。任务实例为 sympy 的 diophantine(丢番图方程)求解器。轨迹片段(代码块保留,<code>#</code> 后为中文注释):</p>
+<pre><code class="language-bash"># (a) 观察Observation(文件查看器):窗口带行号,并标注上下文省略情况
+[File: solvers/diophantine.py (3093 lines total)]   # 打开文件的完整路径与总行数
+(400 lines above)                                   # 当前窗口上方省略 400 行
+401: ...                                            # 每个可见行前置行号
+409:
+(2684 lines below)                                  # 当前窗口下方省略 2684 行
+
+# (b) 响应Response(思考 + 编辑动作)
+# 思考:We need to add a check to ensure that all powers are the same.
+#       Let's edit the code to include this check.(需加检查确保所有幂次相同)
+$ edit 404:407 [Code Snippet]                       # 单条命令替换 404-407 行
+  end_of_edit
+# 编辑完成后,文件查看器自动显示更新后的文件内容,无需额外命令
+</code></pre>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Context management. The SWE-agent system uses informative prompts, error messages, and history processors to keep agent context concise and informative. Agents receive instructions, documentation, and demonstrations on the correct use of bash and ACI commands. At each step, the system instructs them to generate both a thought and an action [62]. Malformed generations trigger an error response, shown in Figure 32, asking the agent to try again, which is repeated until a valid generation is received. Once received, all past error messages except the first are omitted.</p></div><p><strong>上下文管理</strong>。SWE-agent 系统使用信息丰富的提示词、错误消息与历史处理器,让智能体上下文保持简洁而有信息量。智能体收到关于正确使用 bash 与 ACI 命令的指令、文档与演示。每一步,系统指示它们同时生成思考与行动 [62]。格式错误的生成会触发错误响应(见图 32,附录),要求智能体重试,并不断重复直到收到有效生成。收到后,历史中除第一条外的全部过往错误消息都会被省略。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>The agent&#x27;s environment responses display computer output using the template shown in Figure 30; however, if no output is generated, a specific message (&quot;Your command ran successfully and did not produce any output&quot;) is included to enhance clarity. To further improve context relevance, observations preceding the last 5 are each collapsed into a single line, shown in Figure 31. By removing most content from prior observations, we maintain essential information about the plan and action history while reducing unnecessary context, which allows for more interaction cycles and avoids showing outdated file information. §A provides further implementation details.</p></div><p>智能体的环境响应用图 30(附录)所示模板显示计算机输出;若命令未产生输出,则包含一条明确消息("Your command ran successfully and did not produce any output",即你的命令成功执行且未产生任何输出)以增强清晰度。为进一步提升上下文相关性,<strong>最近 5 条之前的观察各被折叠为一行</strong>(见图 31,附录)。通过移除先前观察的大部分内容,我们保留了关于计划与行动史的关键信息,同时减少不必要的上下文——这允许更多交互轮次,也避免展示过期的文件信息。附录 A 提供更多实现细节。</p></div>
+<h3 id="4">4 实验设置</h3>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Datasets. We primarily evaluate on the SWE-bench dataset, which includes 2,294 task instances from 12 different repositories of popular Python packages [20]. We report our main agent results on the full SWE-bench test set and ablations and analysis on the SWE-bench Lite test set, unless otherwise specified. SWE-bench Lite is a canonical subset of 300 instances from SWE-bench that focus on evaluating self-contained functional bug fixes. We also test SWE-agent&#x27;s basic code editing abilities with HumanEvalFix, a short-form code debugging benchmark [32].</p></div><p><strong>数据集</strong>。我们主要在 SWE-bench 数据集上评测,它包含来自 12 个流行 Python 包仓库的 2,294 个任务实例 [20]。除非特别说明,我们在 SWE-bench 全量测试集上报告主要智能体结果,在 SWE-bench Lite 测试集上做消融与分析。SWE-bench Lite 是 SWE-bench 中 300 个实例的规范子集,聚焦评测自包含的功能性 bug 修复。我们还用 <strong>HumanEvalFix</strong>(一个短式代码调试基准 [32])测试 SWE-agent 的基础代码编辑能力。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Models. All results, ablations, and analyses are based on two leading LMs, GPT-4 Turbo (gpt-4-1106-preview) [34] and Claude 3 Opus (claude-3-opus-20240229) [6]. We experimented with a number of additional closed and open source models, including Llama 3 and DeepSeek Coder [14], but found their performance in the agent setting to be subpar. Many LMs&#x27; context window is too small, such as Llama 3&#x27;s context window of 8k. GPT-4 Turbo and Claude 3 Opus have 128k and 200k token context windows, respectively, which provides sufficient room for the LM to interact for several turns after being fed the system prompt, issue description, and optionally, a demonstration.</p></div><p><strong>模型</strong>。所有结果、消融与分析基于两个领先的 LMs:GPT-4 Turbo(gpt-4-1106-preview)[34] 与 Claude 3 Opus(claude-3-opus-20240229)[6]。我们试验了更多闭源与开源模型,包括 Llama 3 与 DeepSeek Coder [14],但发现它们在智能体设定下表现欠佳。许多 LMs 的上下文窗口太小,如 Llama 3 仅 8k。GPT-4 Turbo 与 Claude 3 Opus 分别有 128k 与 200k token 的上下文窗口,在喂入系统提示、issue 描述及(可选的)一条演示之后,仍为 LM 提供了足够的多轮交互空间。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Baselines. We compare SWE-agent to two baselines. The first setting is the non-interactive, retrieval-augmented generation (RAG) baselines established in Jimenez et al. [20]. Here, a BM25 retrieval system retrieves the most relevant codebase files using the issue as the query; given these files, the model is asked to directly generate a patch file that resolves the issue.</p></div><p><strong>基线</strong>。我们把 SWE-agent 与两个基线比较。第一种设定是 Jimenez 等 [20] 确立的非交互式检索增强生成(RAG)基线:BM25 检索系统以 issue 为查询检索最相关的代码库文件;给定这些文件,模型被要求直接生成解决该 issue 的补丁文件。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>The second setting, called Shell-only, is adapted from the interactive coding framework introduced in Yang et al. [59]. Following the InterCode environment, this baseline system asks the LM to resolve the issue by interacting with a shell process on Linux. Like SWE-agent, model prediction is generated automatically based on the final state of the codebase after interaction.</p></div><p>第二种设定称为 <strong>Shell-only</strong>,改编自 Yang 等 [59] 提出的交互式编码框架。沿用 InterCode 环境,该基线系统让 LM 通过与 Linux 上的 shell 进程交互来解决 issue。与 SWE-agent 一样,模型预测基于交互结束后代码库的最终状态自动生成。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Metrics. We report % Resolved or pass@1 as the main metric, which is the proportion of instances for which all tests pass successfully after the model generated patch is applied to the repository [20]. We also report the $ Avg. Cost metric, the API inference cost incurred by SWE-agent averaged over all successfully resolved instances. Due to budget constraints, we set the per-instance budget to $4; if a run exceeded this budget, existing edits were submitted automatically.</p></div><p><strong>指标</strong>。我们以 % Resolved(解决率)或 pass@1 为主指标:模型生成的补丁应用到仓库后全部测试通过的实例比例 [20]。我们还报告 <strong>$ Avg. Cost</strong> 指标:SWE-agent 在所有成功解决实例上的平均 API 推理成本。受预算限制,我们把单实例预算设为 4 美元;若一次运行超出预算,则自动提交已有的编辑。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Configuration search. During the design process of SWE-agent, we arrived at the final ACI design through qualitative analysis of system behavior on a small set of hand-picked examples from the development split of SWE-bench. For the remaining hyperparameter choices, we performed a sweep over the window size, history processing, and decoding temperature, shown in §B.1.</p></div><p><strong>配置搜索</strong>。在 SWE-agent 的设计过程中,我们通过对 SWE-bench 开发集中一小批手挑实例的系统行为做定性分析,得到最终的 ACI 设计。其余超参选择则对窗口大小、历史处理与解码温度做了扫描(sweep),见附录 B.1。</p></div>
+<h3 id="5">5 结果</h3>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Across all systems, SWE-agent w/ GPT-4 Turbo achieves the best performance all-around, successfully solving 12.47% (286/2,294) of the full SWE-bench test set and 18.00% (54/300) of the Lite split. As shown in Table 1, compared to RAG on Lite, SWE-agent is 8-13x more costly but yields a 6.7-fold improved % Resolved rate. An LM-friendly ACI&#x27;s value is confirmed by SWE-agent&#x27;s 64% relative increase compared to Shell-only, both with GPT-4 Turbo.</p></div><p>在所有系统中,SWE-agent + GPT-4 Turbo 取得全方位最佳性能:在 SWE-bench 全量测试集上成功解决 <strong>12.47%(286/2,294)</strong>,在 Lite 子集上 <strong>18.00%(54/300)</strong>。如表 1 所示,在 Lite 上与 RAG 相比,SWE-agent 成本是它的 8-13 倍,但 % Resolved 提升 6.7 倍。SWE-agent 相比同样使用 GPT-4 Turbo 的 Shell-only 基线有 <strong>64% 的相对提升</strong>,证实了对 LM 友好的 ACI 的价值。</p></div>
+<p><strong>表 1:SWE-agent 在 SWE-bench 测试集全量与 Lite 子集上的主结果</strong>(在 SWE-bench [20] 确立的 SWE-agent、Basic CLI 与检索增强生成 RAG 设定下评测;脚注:不同模型的 token 数因分词器不同而不可直接比较):</p>
+<p>| 模型 | SWE-bench % Resolved | SWE-bench <span class="math-inline">$ Avg. Cost | Lite % Resolved | Lite $</span> Avg. Cost |
+|---|---|---|---|---|
+| <strong>RAG</strong> w/ GPT-4 Turbo | 1.31 | 0.13 | 2.67 | 0.13 |
+| <strong>RAG</strong> w/ Claude 3 Opus | 3.79 | 0.25 | 4.33 | 0.25 |
+| <strong>Shell-only 智能体</strong> w/ GPT-4 Turbo | - | - | 11.00 | 1.46 |
+| <strong>Shell-only 智能体</strong> w/o 演示(Demonstration) | - | - | 7.33 | 0.79 |
+| <strong>SWE-agent</strong> w/ GPT-4 Turbo | <strong>12.47</strong> | 1.59 | <strong>18.00</strong> | 1.67 |
+| <strong>SWE-agent</strong> w/ Claude 3 Opus | 10.46 | 2.59 | 13.00 | 2.18 |</p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>In Table 2, SWE-agent yields strong performance on HumanEvalFix with 88.3% pass@1 rate. Figure 4 reveals that average performance variance is relatively low, but per-instance resolution can change considerably. More results are given in the appendix: §B.2 shows that the success rate is uncorrelated to the issue age (controlling for possible test pollution), B.5 presents more details on performance variance and pass@k, and B.7 discusses extra evaluation details.</p></div><p>表 2 中,SWE-agent 在 HumanEvalFix 上表现强劲,pass@1 达 88.3%。图 4 显示平均性能方差相对较低,但逐实例的解决与否可能变化相当大。附录给出更多结果:附录 B.2 表明成功率与 issue 年龄不相关(控制了可能的测试污染);B.5 给出性能方差与 pass@k 的更多细节;B.7 讨论额外的评测细节。</p></div>
+<p><strong>表 2:HumanEvalFix 上的 Pass@1 结果</strong> <a href="除 SWE-agent 外,分数取自 Yu 等 [65] 的报告">32</a>:</p>
+<table>
+<thead>
+<tr>
+<th>模型</th>
+<th>Python</th>
+<th>JS</th>
+<th>Java</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CodeLLaMa-instruct-13B</td>
+<td>29.2</td>
+<td>19.5</td>
+<td>32.3</td>
+</tr>
+<tr>
+<td>GPT-4</td>
+<td>47.0</td>
+<td>48.2</td>
+<td>50.0</td>
+</tr>
+<tr>
+<td>DeepseekCoder-CodeAlpaca-6.7B</td>
+<td>49.4</td>
+<td>51.8</td>
+<td>45.1</td>
+</tr>
+<tr>
+<td>WaveCoder-DS-6.7B</td>
+<td>57.9</td>
+<td>52.4</td>
+<td>57.3</td>
+</tr>
+<tr>
+<td><strong>SWE-agent w/ GPT-4 Turbo</strong></td>
+<td><strong>87.7</strong></td>
+<td><strong>89.7</strong></td>
+<td><strong>87.9</strong></td>
+</tr>
+</tbody>
+</table>
+<p>[图 4: SWE-agent w/ GPT-4 Turbo Pass@k performance across 6 runs on SWE-bench Lite.]</p>
+<p>图 4 中文说明:SWE-agent + GPT-4 Turbo 在 SWE-bench Lite 上 6 次运行的 pass@k 性能。横轴为 k(1 到 6),纵轴为 % Resolved(约 15%-35%):pass@1 约 18%,随 k 增长至 k=6 时约 25%-30%,曲线表明多次尝试仍有提升空间,且平均方差相对较低。</p>
+<h3 id="51-aci">5.1 ACI 设计分析</h3>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>We perform several ablations of the SWE-agent interface, specifically with respect to the SWE-agent w/ GPT-4 configuration, summarized in Table 3. Our case studies shed light on interesting agent behavior along with the impact of different ACI designs.</p></div><p>我们对 SWE-agent 接口做了若干消融,具体针对 SWE-agent + GPT-4 配置,汇总于表 3。我们的案例研究揭示了有趣的智能体行为,以及不同 ACI 设计的影响。</p></div>
+<p><strong>表 3:SWE-agent 接口消融下的 SWE-bench Lite 性能</strong>(基准为完整 SWE-agent 接口,记 18.0;考察不同的搜索与编辑方式(分别见图 5、图 6),并检验文件查看器窗口大小与不同上下文管理方式的影响):</p>
+<table>
+<thead>
+<tr>
+<th>组件</th>
+<th>变体</th>
+<th>% Resolved</th>
+<th>变化</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>编辑器 Editor</strong></td>
+<td>edit + linting(完整配置)</td>
+<td><strong>18.0</strong></td>
+<td>—</td>
+</tr>
+<tr>
+<td></td>
+<td>edit(无 linting)</td>
+<td>15.0</td>
+<td>↓ 3.0</td>
+</tr>
+<tr>
+<td></td>
+<td>无 edit 命令(No edit)</td>
+<td>10.3</td>
+<td>↓ 7.7</td>
+</tr>
+<tr>
+<td><strong>搜索 Search</strong></td>
+<td>汇总式(Summarized,完整配置)</td>
+<td><strong>18.0</strong></td>
+<td>—</td>
+</tr>
+<tr>
+<td></td>
+<td>迭代式(Iterative)</td>
+<td>12.0</td>
+<td>↓ 6.0</td>
+</tr>
+<tr>
+<td></td>
+<td>无搜索(No search)</td>
+<td>15.7</td>
+<td>↓ 2.3</td>
+</tr>
+<tr>
+<td><strong>文件查看器 File Viewer</strong></td>
+<td>30 行窗口</td>
+<td>14.3</td>
+<td>↓ 3.7</td>
+</tr>
+<tr>
+<td></td>
+<td>100 行窗口(完整配置)</td>
+<td><strong>18.0</strong></td>
+<td>—</td>
+</tr>
+<tr>
+<td></td>
+<td>全文件(Full file)</td>
+<td>12.7</td>
+<td>↓ 5.3</td>
+</tr>
+<tr>
+<td><strong>上下文 Context</strong></td>
+<td>最近 5 条观察(完整配置)</td>
+<td><strong>18.0</strong></td>
+<td>—</td>
+</tr>
+<tr>
+<td></td>
+<td>完整历史(Full history)</td>
+<td>15.0</td>
+<td>↓ 3.0</td>
+</tr>
+<tr>
+<td></td>
+<td>无演示(w/o demo.)</td>
+<td>16.3</td>
+<td>↓ 1.7</td>
+</tr>
+</tbody>
+</table>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Human user interfaces are not always suitable as agent-computer interfaces. Current LMs are vulnerable to a number of pitfalls when searching for relevant content in a Linux shell environment. Some exploration patterns (e.g., chains of cd, ls, cat) are extremely inefficient. grep or find lookups can perform better but occasionally produce many lines of irrelevant results. We hypothesize that better localization is possible with faster navigation and a more informative search interface.</p></div><p><strong>人类用户界面并不总适合作智能体-计算机接口</strong>。当前 LMs 在 Linux shell 环境中搜索相关内容时容易踩多种坑:一些探索模式(如 <code>cd</code>、<code>ls</code>、<code>cat</code> 的链条)极其低效;<code>grep</code> 或 <code>find</code> 查找可能表现更好,但偶尔产出大量无关结果行。我们假设:更快的导航与信息更丰富的搜索接口可以实现更好的定位。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Figure 5 compares the Shell-only setting to two different search interfaces. Iterative search, directly inspired by traditional user interfaces for search, e.g., Vim or VSCode, shows results one by one via the file viewer. Agents can look through results using next and prev actions. Each result displays the matching line along with n surrounding lines of context. An advantage is that an agent can begin editing directly after seeing the relevant code in its search. However, when given a large number of search results, agents tend to look through every match exhaustively, calling next until each result has been inspected. This inefficient behavior can exhaust an agent&#x27;s cost budget or context window, leading to even worse performance than the not having additional search tools at all (15.7%↓ 2.3 for No search vs. 12.0%↓ 6.0 with Iterative search).</p></div><p>图 5 比较 Shell-only 设定与两种不同的搜索接口。<strong>迭代式搜索(Iterative search)</strong>直接受传统搜索用户界面(如 Vim 或 VSCode)启发,通过文件查看器逐条展示结果,智能体用 <code>next</code> 与 <code>prev</code> 动作翻看;每条结果显示匹配行及周围 n 行上下文。优点是智能体在搜索中看到相关代码后可直接开始编辑。然而,面对大量搜索结果,智能体倾向于<strong>穷尽式地翻看每一条匹配</strong>,不断调用 <code>next</code> 直到检查完每条结果。这种低效行为会耗尽智能体的成本预算或上下文窗口,导致性能甚至比完全没有额外搜索工具还差(无搜索 15.7%,↓2.3;迭代式搜索 12.0%,↓6.0)。</p></div>
+<p>[图 5: Three different Search interfaces for task instance pvlib__pvlib-python-1224. In Shell-only, an agent performs localization using only standard bash commands and utilities. Compared to Iterative search, Summarized search shows an exhaustive list of search results and provides guidance on refining under-specified queries.]</p>
+<p>图 5 中文说明:任务实例 pvlib__pvlib-python-1224 的三种搜索接口。Shell-only 中智能体只用标准 bash 命令与工具做定位;与迭代式搜索相比,<strong>汇总式搜索(Summarized search)一次性展示完整的搜索结果清单,并对不够精确的查询给出细化指引</strong>。轨迹片段(代码块保留,<code>#</code> 后为中文注释):</p>
+<pre><code class="language-bash"># ── 无搜索(No Search):仅用原生命令行手动定位 ──
+# 标注:Agent performs manual search with ls + cd, or uses grep
+#        but struggles to interpret the result(智能体用 ls+cd 手动搜,或用 grep 但难以解读结果)
+First, I should list out all the files in the codebase that
+may contain the definition of PVSystem.        # 思考:先列出可能定义 PVSystem 的文件
+$ ls
+It's most likely the source file is in pvlib/ folder.
+Let's change directory.                        # 思考:源文件多半在 pvlib/ 目录,先进去
+$ cd pvlib/
+benchmarks/  docs/  pvlib/  setup.py  setup.cfg  versioneer.py  README.md ...
+
+# ── 迭代式搜索(Iterative Search):模仿 Vim/VSCode 的 UI,逐条翻结果 ──
+# 标注:Actions to show next/prev search result are repeated many times
+#        until results are exhausted(next/prev 被反复调用直到结果耗尽)
+I will use the `search_all` command to find occurrences of &quot;PVSystem&quot;...
+$ search &quot;PVSystem&quot;
+This is not the PVSystem class def...          # 思考:这条不是类定义……
+$ next
+[Result 1/15 (Line 70)] [File: pvlib/pvsystem.py]   # 第 1/15 条结果
+22:# a dict of required pa...
+23:_DC_MODEL_PARAMS = {
+24:     'sapm': {
+(97 more lines omitted)                        # 还有 97 行被省略,继续 next……
+
+# ── 汇总式搜索(Summarized Search,SWE-agent 的 LM 友好设计)──
+# 标注:(1) Show all results in single output(单次输出全部结果)
+#      (2) Tell agent to retry if too many results(结果太多则让智能体重试更精确的查询)
+The next step is to locate the `PVSystem` class in the codebase
+and modify the constructor...                   # 思考:定位类并修改构造函数
+$ search &quot;class PVSystem&quot;
+It's located in `pvlib/pvsystem.py`...
+$ open pvlib/pvsystem.py
+Found 1 matches for &quot;class PVSystem&quot; in /pvlib-python:
+  /pvlib__pvlib-python/pvlib/pvsystem.py (1 matches)   # 一次性报告全部 1 条匹配
+End of matches
+</code></pre>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Compact, efficient file editing is critical to performance. SWE-agent&#x27;s file editor and viewer are designed to consolidate the editing process into a single command that enables easy multi-line edits with consistent feedback and automatically updates the agent&#x27;s view of the file after editing. In the No edit setting, editing options are restrictive and prone to errors; the primary methods available are either replacing entire files through redirection and overwriting or using utilities like sed for single-line or search-and-replace edits. Both methods have significant drawbacks. Redirection involves copying and rewriting entire files for even minor changes, which is both inefficient and error-prone. Although sed can facilitate specific edits, executing multi-line edits is cumbersome and can lead to unintended consequences that are challenging to detect. Moreover, both strategies lack immediate feedback about file updates, making these silent operations potentially confusing for models to interpret and increasing the risk of errors. Without SWE-agent&#x27;s file editor interface, performance drops to (10.3%↓ 7.7). We also find that agents are sensitive to the number of lines the file viewer displays. Either too little content (30 lines, 14.3%↓ 3.7) or too much (entire file, 12.7%↓ 5.3) lowers performance.</p></div><p><strong>紧凑高效的文件编辑对性能至关重要</strong>。SWE-agent 的文件编辑器与查看器把编辑过程整合为单条命令,支持便捷的多行编辑与一致的反馈,并在编辑后自动更新智能体对文件的视图。在"无 edit"(No edit)设定中,编辑手段受限且易错:主要方法要么是通过<strong>重定向覆写</strong>整个文件,要么用 <code>sed</code> 之类工具做单行或查找替换编辑。两种方法都有明显缺陷——重定向即便改一点也要复制重写整个文件,既低效又易错;<code>sed</code> 虽能完成特定编辑,但执行多行编辑很笨拙,且可能造成难以察觉的意外后果。此外,两种策略都<strong>缺乏关于文件更新的即时反馈</strong>,这些"静默"操作可能让模型难以解读,并增加出错风险。没有 SWE-agent 的文件编辑器接口,性能跌至(10.3%,↓7.7)。我们还发现智能体对文件查看器显示的行数敏感:内容太少(30 行,14.3%,↓3.7)或太多(整个文件,12.7%,↓5.3)都会降低性能。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Guardrails can improve error recovery. A prominent failure mode occurs when models repeatedly edit the same code snippet. The usual suspect for this behavior is an agent introducing a syntax error (e.g., incorrect indentation, extra parenthesis) via an errant edit. As discussed in Section 3, we add an intervention to the edit logic that lets a modification apply only if it does not produce major errors. We compare this interface with the No edit and edit w/o linting alternatives in Figure 6. This intervention improves performance considerably (without linting, 15.0%↓ 3.0).</p></div><p><strong>护栏能改进错误恢复</strong>。一种突出的失败模式是模型反复编辑同一段代码。这一行为的常见肇因是智能体经由一次失误的 <code>edit</code> 引入了语法错误(如缩进错误、多余括号)。如第 3 节所述,我们在 <code>edit</code> 逻辑中加入一项干预:<strong>只有当修改不产生重大错误时才允许应用</strong>。图 6 比较了该接口与"无 edit"、"edit 无 linting"两种替代方案。这一干预显著提升性能(去掉 linting 则为 15.0%,↓3.0)。</p></div>
+<p>[图 6: Three different Edit interfaces for task instances sympy__sympy-24102. Editing with bash commands requires several actions to successfully modify a file. The Editing component defines an edit command that leverages the File Viewer component to replace the bash style of editing workflow with a single command. Linting is beneficial for stymieing cascading errors that often start with an error-introducing edit by the agent.]</p>
+<p>图 6 中文说明:任务实例 sympy__sympy-24102 的三种编辑接口。用 bash 命令编辑需要多个动作才能成功修改一个文件;编辑组件定义了 <code>edit</code> 命令,借助文件查看器组件,把 bash 式编辑工作流替换为单条命令。Linting 有助于遏制级联错误——这类错误常始于智能体一次引入错误的编辑。图中旁注:三种 bash 式编辑的失败模式为 (1) 无标准输出造成不确定性;(2) <code>cat</code> 灌满上下文窗口;(3) LM 必须追踪多种状态(行号、编辑前后内容);"以 LM 为中心的 edit" = (1) 编辑前后都展示文件;(2) 拦截带语法或编译错误的编辑;edit 把必要步骤合并为 1 个动作,但从自己造成的错误中恢复仍然困难。轨迹片段(代码块保留,<code>#</code> 后为中文注释):</p>
+<pre><code class="language-bash"># ── 无 edit(No edit):仅靠 bash(重定向 / sed / cat)──
+To fix the issue, we need to modify the `MathematicaParser` class...
+$ sed -i &quot;/# trig/i 'λ':'Symbol(\&quot;λ\&quot;)'...&quot;      # 用 sed 插入一行,多行改动很难做
+I'll use cat to display `sympy/parsing/mathematica.py`...
+$ cat parsing/mathematica.py
+File Content (~1079 Lines)                      # cat 一次倾泻约 1079 行,灌满上下文
+It seems there's a misunderstanding...
+I'll write a Python script to add the rules...  # 思考:改用写脚本的方式改文件
+$ echo ... (30 more lines omitted)
+(No Output)                                     # 无输出,不确定是否成功
+
+# ── edit 无 linting(edit w/o Linting):单命令编辑但不检查语法 ──
+Let's edit the `_atom_conversions` dictionary to include the mapping....
+$ edit 1055:1059 [Code Snippet]
+  end_of_edit
+1055: _atom_conversions = { &quot;I&quot;: I, &quot;Pi&quot;: pi, &quot;E&quot;: E,
+1057:   &quot;λ&quot;: symbols('lamda'), ...
+# 编辑被应用,但引入的语法错误(多余的 '{')没有任何报错提示
+
+# ── edit + linting(完整 SWE-agent 设计):护栏拦截错误编辑 ──
+Let's edit the `_atom_conversions` ...          # (与第一个动作相同的编辑)
+Your proposed edit has introduced new syntax error(s).
+- E999 IndentationError                         # linter 报出语法错误
+How your edit would have looked...              # 展示&quot;若应用后文件会是什么样&quot;
+The original code before your edit              # 与出错前的原始代码对照
+Your changes have NOT been applied.
+Fix your edit command &amp; try again.              # 编辑未应用,要求重试
+The edit introduces an extra `{`. I will update my edit command to fix this...
+$ edit 1055:1060 [Code Snippet] end_of_edit     # 修正后重新编辑
+</code></pre>
+<h3 id="52">5.2 智能体行为分析</h3>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Recurring problem-solving patterns emerge when LMs are equipped with a useful, intuitive ACI. We describe several model behaviors and problem-solving patterns that can be discerned from model performance and each model&#x27;s corresponding trajectories.</p></div><p>当 LMs 配备了有用、直观的 ACI 时,会涌现出反复出现的问题解决模式。我们描述若干可从模型性能及各模型对应轨迹中辨识出的行为与解题模式。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Reproduction and/or localization is the first step. SWE-agent usually begins with either writing reproduction code and/or localizing the issue&#x27;s cause to specific lines of code. As shown in Figure 7, all trajectories begin with either create (reproduction) or find_file/search_dir (localization). To reproduce, models will create a new file, add reproduction code to it with an edit, then run with python; this is the most popular triple of actions in Table 8. Using this feedback along with file names and symbols in the issue description, an agent will start with a broad, directory-level keyword search, before then zooming into specific files and lines. This is reflected in Figure 22, where the most likely actions following localization sequences like (python, find_file) and (search_dir, open) are search_file and goto, indicative of how an agent &quot;zooms in&quot; on a bug. Extensive analysis on correlations between different groups of actions are discussed in §B.3.3.</p></div><p><strong>复现和/或定位是第一步</strong>。SWE-agent 通常从写复现代码和/或把 issue 成因定位到具体代码行开始。如图 7 所示,所有轨迹都以 <code>create</code>(复现)或 <code>find_file</code>/<code>search_dir</code>(定位)开头。复现时,模型会 <code>create</code> 一个新文件、用 <code>edit</code> 向其中加入复现代码、再用 <code>python</code> 运行——这是表 8(附录)中最流行的动作三元组。利用这一反馈以及 issue 描述中的文件名与符号,智能体会先做宽泛的目录级关键词搜索,再逐步聚焦到具体文件与行。图 22(附录)反映了这一点:定位序列如 (python, find_file) 与 (search_dir, open) 之后最可能的动作是 <code>search_file</code> 与 <code>goto</code>,表明智能体如何在 bug 上"拉近镜头"。不同动作组之间关联的深入分析见附录 B.3.3。</p></div>
+<p>[图 7: The frequency with which actions are invoked at each turn by SWE-agent w/ GPT-4 for task instances that it solved on the SWE-bench full test set (286 trajectories).]</p>
+<p>图 7 中文说明:SWE-agent + GPT-4 在 SWE-bench 全量测试集上已解决任务实例(286 条轨迹)中,各动作随轮次(turn 0-36)的调用频率。前几轮以 <code>create</code>、<code>search_dir</code>、<code>find_file</code> 等定位/复现动作为主;从第 5 轮左右起,<code>edit</code> 与 <code>python</code> 成为每轮最频繁的两个动作;<code>submit</code> 从第 10 轮起近似正态分布。</p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Remaining turns are mostly &quot;edit, then execute&quot; loops. As exhibited in Figure 7, from turn 5 onwards, the most frequent two actions for all turns are edit and python. Captured as high probability next actions following (edit, python) in Figure 22, additional localization operations are often interspersed across these later turns, where agents might look at more in-file code with search_file, scroll_up/down, or other files altogether with search_dir, find_file. This behavior usually arises in response to new information from re-running the reproduction script. Submissions are distributed normally from turn 10 onwards, although resolved task instances correlate more with earlier submits (see §B.3.1). A walk-through of common trajectory phases is in §B.3.2.</p></div><p><strong>其余轮次大多是"先编辑、后执行"循环</strong>。如图 7 所示,从第 5 轮起,所有轮次中最频繁的两个动作是 <code>edit</code> 与 <code>python</code>。图 22(附录)中 (edit, python) 之后的高概率后续动作也捕捉到:后续轮次常穿插额外的定位操作——智能体可能用 <code>search_file</code>、<code>scroll_up</code>/<code>scroll_down</code> 查看更多文件内代码,或用 <code>search_dir</code>、<code>find_file</code> 查看其他文件。这一行为通常是对重跑复现脚本带来的新信息的响应。从第 10 轮起,提交(submit)近似正态分布,不过已解决的任务实例更多与更早的提交相关(见附录 B.3.1)。常见轨迹阶段的走查见附录 B.3.2。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Editing remains challenging for agents. A non-trivial minority of edit actions raise a linting error; out of 2,294 task instances, 1,185 (51.7%) of SWE-agent w/ GPT-4 Turbo trajectories have 1+ failed edits. While agents generally recover more often than not from failed edits, the odds of recovery decrease as the agent accumulates more failed edits. Recovery refers to a sequence of consecutive failed edits followed immediately by a successful edit. Any attempt at editing has a 90.5% chance of eventually being successful. This probability drops off to 57.2% after a single failed edit. More editing phenomena are discussed in §B.3.3, and data about agents&#x27; generated fixes are in §B.6.</p></div><p><strong>编辑对智能体仍然困难</strong>。相当一部分(不可忽视的少数)edit 动作触发 linting 错误:在 2,294 个任务实例中,SWE-agent + GPT-4 Turbo 有 1,185 条轨迹(51.7%)含 1 次以上失败编辑。虽然智能体从失败编辑中恢复的次数多于失败,但<strong>随着失败编辑累积,恢复概率下降</strong>。"恢复"指连续若干次失败编辑之后紧接一次成功编辑的序列。任意一次编辑尝试最终成功的概率为 90.5%;而在一次失败编辑之后,这一概率骤降至 57.2%。更多编辑现象见附录 B.3.3,智能体生成修复的数据见附录 B.6。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Agents succeed quickly and fail slowly. We find that runs submitted relatively early are much more likely to be successful compared to those submitted after a larger number of steps or cost. We show in Table 15 the distribution of resolved and unresolved instances, including only instances that did not exhaust their budget. We observe that successful runs complete earlier and at a cheaper cost than unsuccessful ones. In general, successful instances solved by SWE-agent w/ GPT 4 finish with a median cost of $1.21 and 12 steps compared to a mean of $2.52 and 21 steps for unsuccessful ones. Furthermore, we find that 93.0% of resolved instances are submitted before exhausting their cost budget, compared to 69.0% of instances overall. For these reasons, we suspect that increasing the maximum budget or token limit are unlikely to substantially increase performance. More statistics about how trajectories typically conclude are in §B.9.</p></div><p><strong>智能体成功得快、失败得慢</strong>。我们发现相对较早提交的运行,远比较大步数或高成本后才提交的运行更可能成功。表 15(附录)展示已解决与未解决实例的分布(仅含未耗尽预算的实例)。我们观察到:成功的运行完成得更早、成本更低。总体上,SWE-agent + GPT-4 解决的成功实例以中位数 <strong>1.21 美元、12 步</strong>完成,而失败实例平均 <strong>2.52 美元、21 步</strong>。此外,<strong>93.0%</strong> 的已解决实例在耗尽成本预算前提交,而全部实例中这一比例为 69.0%。基于这些原因,我们怀疑提高最大预算或 token 上限不太可能大幅提升性能。轨迹通常如何收尾的更多统计见附录 B.9。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Most failures are incorrect implementations. We use GPT-4o to automatically categorize unresolved trajectories (SWE-agent w/ GPT-4 Turbo on SWE-bench Lite, n = 248) into one of 9 manually defined categories described in Table 9. On a hand-labeled validation set, the LM&#x27;s judgment agrees with the authors&#x27; on 87% of instances. From Figure 8, about half (52.0%) of unresolved instances fall into the Incorrect Implementation or Overly Specific Implementation categories, suggesting that agents&#x27; proposed solutions often simply fail to functionally address the issue or are insufficiently general solutions. Cascading failed edits make up another 23.4% of failures. More details in §B.4.</p></div><p><strong>大多数失败是错误实现</strong>。我们用 GPT-4o 把未解决的轨迹(SWE-agent + GPT-4 Turbo 在 SWE-bench Lite 上,n=248)自动归类到表 9(附录)所述 9 个人工定义类别之一;在人工标注的验证集上,LM 判断与作者在 87% 的实例上一致。由图 8,约一半(52.0%)的未解决实例落入"错误实现(Incorrect Implementation)"或"过于特化的实现(Overly Specific Implementation)"类别,说明智能体提出的解往往根本没能从功能上解决 issue,或是解得不够通用。级联的失败编辑另占失败的 23.4%。更多细节见附录 B.4。</p></div>
+<p>[图 8: Failure mode distribution for SWE-agent w/ GPT-4 Turbo trajectories of unresolved instances. Each instance is labeled automatically using an LM with the categories from Table 9.]</p>
+<p>图 8 中文说明:SWE-agent + GPT-4 Turbo 未解决实例轨迹的失败模式分布(每实例由 LM 按表 9 的类别自动标注)。各占比:错误实现 39.9%、过于特化的实现 12.1%、未能从编辑错误中恢复 23.4%、未能找到编辑位置 12.9%、未能找到相关文件 2.4%、过早放弃 4.8%、无法复现 2.4、超时 2.0——约半数(52.0%)失败是"实现本身不对/不够通用"。</p>
+<h3 id="6">6 相关工作</h3>
+<h4 id="61">6.1 软件工程基准</h4>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Code generation benchmarks, which evaluate models on the task of synthesizing code from natural language descriptions, have served as a long-standing bellwether for measuring LM performance [5, 1, 15, 30]. Subsequent works have built upon the code generation task formulation to contribute new benchmarks that translate problems to different (programming) languages [3, 49], incorporate third-party libraries [25, 29], introduce derivative code completion tasks [18, 32], increase test coverage [26], change the edit scope [8, 9, 64], and add robustness to dataset contamination [19]. Code generation problems are largely self-contained, with short problem descriptions (∼100 lines) and corresponding solutions that are similarly brief, requiring nothing more complex than basic language primitives. Tests are either handwritten or generated synthetically via fuzz testing. In recent months, the rapid development of LMs has begun to saturate many of these benchmarks. For instance, the top method solves 94.4% of HumanEval [70].</p></div><p>代码生成基准——评测模型从自然语言描述合成代码的任务——一直是衡量 LM 性能的老牌风向标 [5, 1, 15, 30]。后续工作在代码生成任务形式化之上构建了新基准:把问题翻译到不同(编程)语言 [3, 49]、纳入第三方库 [25, 29]、引入衍生的代码补全任务 [18, 32]、提高测试覆盖率 [26]、改变编辑范围 [8, 9, 64]、增强对数据集污染的稳健性 [19]。代码生成问题大体是自包含的:问题描述短(约 100 行),对应解同样简短,所需的不过是基本语言原语;测试要么手写、要么经模糊测试合成生成。近几个月,LM 的快速发展已开始使许多此类基准饱和——例如最优方法已解决 HumanEval 的 94.4% [70]。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Gauging future trends with the code generation task paradigm can be limited by the simplicity of this setting and cost of human-in-the-loop problem creation. In response, recent efforts have demonstrated that software engineering (SE) can serve as a diverse, challenging testbed for LM evaluation [68, 20, 28]. Repository-level code editing introduces many reasoning challenges grounded in real SE subtasks, such as spotting errant code and identifying cross-file relationships and understanding codebase-specific symbols and conventions. As a field, SE has generally studied tasks in a more isolated manner; prior benchmarks tended to frame problems in isolation from the rest of a codebase [21, 23]. We use SWE-bench because it unites many separate SE tasks, such as automated program repair [10, 40, 55], bug localization [4, 58], and testing [22, 46, 56] under a single task formulation that faithfully mirrors practical SE. Furthermore, SWE-bench task instances are diverse, having been automatically collected from real GitHub issues across 12 different repositories. In addition, SWE-bench performance is based on rigorous, execution-based evaluation with human-written unit tests.</p></div><p>用代码生成任务范式来衡量未来趋势,可能受限于该设定的简单性以及人在回路的出题成本。作为回应,近期工作已证明<strong>软件工程(SE)可作为多样且富有挑战的 LM 评测试验场</strong> [68, 20, 28]。仓库级代码编辑引入了许多植根于真实 SE 子任务的推理挑战,如发现出错代码、识别跨文件关系、理解代码库特有的符号与约定。作为一个领域,SE 通常以更孤立的方式研究任务;以往基准往往把问题与其余代码库隔离开来表述 [21, 23]。我们选用 SWE-bench,是因为它把许多彼此独立的 SE 任务——如自动程序修复 [10, 40, 55]、bug 定位 [4, 58] 与测试 [22, 46, 56]——统一在忠实映照实践 SE 的单一任务形式化之下。此外,SWE-bench 任务实例多样,是从 12 个不同仓库的真实 GitHub issue 自动收集的;其性能评定基于人工编写单元测试的严格执行式评测。</p></div>
+<h4 id="62">6.2 作为智能体的语言模型</h4>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>The co-emergence of stronger LMs, increasingly challenging benchmarks, and practical use cases have together motivated a paradigm shift in LMs&#x27; inference setting. Instead of traditional zero/few-shot generation, LM agents [17, 42, 47, 54] that interact with a real/virtual world have proliferated as the default setting for web navigation [24, 33, 36, 41, 45, 61, 62, 71], computer control [35, 53, 57], and code generation tasks [16, 50, 63]. Interaction and code generation are increasingly used together, with code as the modality of choice for actions [48, 59], tool construction [13, 51, 69], and reasoning [39, 66, 67]. Coding agents have also been applied to offensive security [11, 37, 60], theorem proving [44], and clinical tasks [38, 43, 52]. To the best of our knowledge, SWE-agent is the first work to explore language agents for end-to-end software engineering (SE).</p></div><p>更强的 LMs、日益困难的基准与实际用例共同涌现,推动了 LM 推理设定的范式转变:不再是传统的零样本/少样本生成,而是与真实/虚拟世界交互的 <strong>LM 智能体</strong> [17, 42, 47, 54],它们已扩散为网页导航 [24, 33, 36, 41, 45, 61, 62, 71]、计算机控制 [35, 53, 57] 与代码生成任务 [16, 50, 63] 的默认设定。交互与代码生成正日益结合,代码成为行动 [48, 59]、工具构造 [13, 51, 69] 与推理 [39, 66, 67] 的首选模态。编码智能体还被应用于攻击性安全 [11, 37, 60]、定理证明 [44] 与临床任务 [38, 43, 52]。据我们所知,<strong>SWE-agent 是首个探索用语言智能体做端到端软件工程(SE)的工作</strong>。</p></div>
+<h3 id="7">7 讨论</h3>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>We introduce SWE-agent, an agent composed of an LM and ACI capable of autonomously solving software engineering tasks. Through our design methodology, results, and analysis, we demonstrate the value of ACIs tailored to leverage LMs&#x27; strengths and mitigate their weaknesses. Beyond empirical applications, we hope the further study of ACIs can also make principled use of and contribute to our understanding of language models and agents, analogous to the synergy between human-computer interaction (HCI) and psychology [2]. Humans and LMs have different characteristics, training objectives, specialities, and limitations [12, 31], and the interaction design processes can be seen as systematic behavioral experimentation that could reveal more insights into these differences towards establishing a comparative understanding of human and artificial intelligence.</p></div><p>我们提出了 SWE-agent:一个由 LM 与 ACI 组成、能自主解决软件工程任务的智能体。通过我们的设计方法、结果与分析,我们证明了为发挥 LMs 长处、弥补其短板而定制的 ACI 的价值。在实证应用之外,我们希望对 ACI 的进一步研究也能有原则地利用并加深我们对语言模型与智能体的理解——正如人机交互(HCI)与心理学之间的协同 [2]。人类与 LMs 在特性、训练目标、专长与局限上各不相同 [12, 31];交互设计过程可被视为系统的行为实验,能揭示这些差异的更多洞见,迈向对人类智能与人工智能的比较性理解。</p></div>
+<h3 id="_3">致谢</h3>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>We thank Austin W. Hanjie, Sam Ainsworth, Xindi Wu, Yuhan Liu, Mengzhou Xia, Dan Friedman, Tianyu Gao, Adithya Bhaskar, Aatmik Gupta, Louisa Nyhus, Alisa Liu, Ori Yoran and Richard Zhu for their valuable feedback and advice. We would also like to thank the broader Princeton Language and Intelligence community for supporting our work. We acknowledge support from an Oracle Collaborative Research award and the National Science Foundation under Grant No. 2239363. Any opinions, findings, conclusions, or recommendations expressed in this material are those of the author(s) and do not necessarily reflect the views of the National Science Foundation.</p></div><p>我们感谢 Austin W. Hanjie、Sam Ainsworth、Xindi Wu、Yuhan Liu、Mengzhou Xia、Dan Friedman、Tianyu Gao、Adithya Bhaskar、Aatmik Gupta、Louisa Nyhus、Alisa Liu、Ori Yoran 与 Richard Zhu 提供的宝贵反馈与建议。我们也感谢更广泛的 Princeton Language and Intelligence 社区对本工作的支持。我们感谢 Oracle Collaborative Research 奖以及美国国家科学基金会(Grant No. 2239363)的资助。本材料中表达的所有观点、发现、结论或建议均属作者本人,不一定反映国家科学基金会的观点。</p></div>
+<blockquote>
+<p><strong>译注(完)</strong>:正文至此结束。arXiv 版(2405.15793v3)在 References 之后含大量附录——附录 A(实现细节)、B(配置搜索、轨迹与动作相关性分析、失败分类、生成修复的统计、额外评测细节、伦理与更广泛影响等)以及图 10-39、表 4-22 所在的各节——均<strong>未收录未翻译</strong>,可查阅原文 PDF(swe-agent.com)。</p>
+</blockquote>
 <h2 id="_4">要点速览</h2>
 <ul>
 <li><strong>ACI = 智能体版的 HCI</strong>:LM 是第三类最终用户(既非软件也非人),界面设计原则因能力差异而不同(无视觉、上下文有固定成本、易被干扰)。</li>
