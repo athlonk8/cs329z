@@ -20,58 +20,130 @@
   </div>
 </header>
 <div class="read-layout">
-  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">论文精读</a><ul><li><a href="#abstract">摘要（Abstract，全译）</a></li><li><a href="#1-introduction">1. 引言（Introduction）</a></li><li><a href="#2-methods">2. 方法（Methods）</a></li><li><a href="#3-experiments">3. 实验（Experiments）</a></li><li><a href="#4-results">4. 结果（Results）</a></li><li><a href="#5-related-work">5. 相关工作（Related Work）</a></li><li><a href="#6">6. 讨论、更广泛影响与附录要点</a></li></ul></li><li><a href="#_3">要点速览</a></li></ul></aside>
+  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">全文对照翻译</a><ul><li><a href="#abstract">摘要（Abstract）</a></li><li><a href="#1-introduction">1 引言（Introduction）</a></li><li><a href="#2-methods">2 方法（Methods）</a></li><li><a href="#3-experiments">3 实验（Experiments）</a></li><li><a href="#4-results">4 结果（Results）</a></li><li><a href="#5-related-work">5 相关工作（Related Work）</a></li><li><a href="#6-discussion">6 讨论（Discussion）</a></li><li><a href="#broader-impact">更广泛的影响（Broader Impact）</a></li><li><a href="#acknowledgments">致谢（Acknowledgments）</a></li><li><a href="#a-appendix-a-implementation-details">附录 A 实现细节（Appendix A: Implementation Details）</a></li><li><a href="#b-appendix-b-human-evaluation">附录 B 人工评估（Appendix B: Human Evaluation）</a></li><li><a href="#c-appendix-c-training-setup-details">附录 C 训练设置细节（Appendix C: Training setup Details）</a></li><li><a href="#d-appendix-d-further-details-on-open-domain-qa">附录 D 开放域问答的更多细节（Appendix D: Further Details on Open-Domain QA）</a></li><li><a href="#e-fever-appendix-e-further-details-on-fever">附录 E FEVER 的更多细节（Appendix E: Further Details on FEVER）</a></li><li><a href="#f-appendix-f-null-document-probabilities">附录 F 空文档概率（Appendix F: Null Document Probabilities）</a></li><li><a href="#g-appendix-g-parameters">附录 G 参数量（Appendix G: Parameters）</a></li><li><a href="#h-appendix-h-retrieval-collapse">附录 H 检索坍缩（Appendix H: Retrieval Collapse）</a></li><li><a href="#i-appendix-i-number-of-instances-per-dataset">附录 I 每个数据集的实例数量（Appendix I: Number of instances per dataset）</a></li></ul></li><li><a href="#_3">要点速览</a></li></ul></aside>
   <main class="read-main">
     <div class="crumb"><a href="../index.html">首页</a> / <a href="../index.html#week-week02b_rag">第2周 · 检索增强生成 RAG</a></div>
     <article class="read-article">
       <h1 class="read-title">面向知识密集型 NLP 任务的检索增强生成</h1>
       <p class="read-title-en">Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks</p>
       <p class="read-meta">Patrick Lewis et al. · &quot;NeurIPS 2020 · Facebook AI Research / UCL / NYU&quot;</p>
-      <p class="read-badges"><span class="badge badge-must">必读</span><span class="badge badge-kind">论文精读</span><button class="lang-toggle" id="lang-toggle" type="button">仅看中文</button><a class="orig-link" href="../originals/week02b_rag/Lewis2020_RAG_NeurIPS2020.pdf" target="_blank" rel="noopener">查看原文(PDF) ↗</a></p>
+      <p class="read-badges"><span class="badge badge-must">必读</span><span class="badge badge-kind">全译对照</span><button class="lang-toggle" id="lang-toggle" type="button">仅看中文</button><a class="orig-link" href="../originals/week02b_rag/Lewis2020_RAG_NeurIPS2020.pdf" target="_blank" rel="noopener">查看原文(PDF) ↗</a></p>
       <div class="markdown-body">
 <h2 id="_1">导读</h2>
 <p>本文是 CS 329Z 第 2 周"检索增强生成（RAG）"专题的核心论文，"RAG"这一术语即出自此文。在它之前，REALM、ORQA 等混合模型只能把可微检索器与掩码语言模型结合，且仅用于抽取式问答；本文则第一次把"参数记忆 + 非参数记忆"的混合范式带入 NLP 的主力机型——序列到序列（seq2seq）生成模型，并给出一个可对任意 seq2seq 任务直接套用的通用微调配方。</p>
 <p>论文的核心贡献有三点：（1）把检索文档当作隐变量（latent variable），提出 RAG-Sequence 与 RAG-Token 两种边缘化方式，让检索器与生成器无需任何检索监督即可端到端联合训练；（2）在 Natural Questions、WebQuestions、CuratedTrec 三个开放域问答基准上取得当时最优结果，并证明自由生成可以超过抽取式方法；（3）展示了非参数记忆可"热插拔"——仅替换维基百科索引即可更新模型的世界知识而无需重训。理解本文是理解今天一切 LLM 检索模块与 Agent 知识底座的前提。</p>
-<h2 id="_2">论文精读</h2>
-<h3 id="abstract">摘要（Abstract，全译）</h3>
-<p>大型预训练语言模型已被证明能在参数中存储事实知识，并在下游 NLP 任务上微调后取得最优（state-of-the-art）结果。然而，它们访问与精确操纵知识的能力仍然有限，因此在知识密集型任务上，其性能落后于任务专用架构。此外，为模型决策提供出处（provenance）、以及更新其世界知识，仍是有待解决的开放问题。迄今为止，具备对显式非参数记忆（non-parametric memory）的可微访问机制的预训练模型，只被研究用于抽取式下游任务。我们探索了一种面向检索增强生成（retrieval-augmented generation, RAG）的通用微调配方——这是一类将预训练参数记忆与非参数记忆结合起来进行语言生成的模型。我们提出的 RAG 模型中，参数记忆（parametric memory）是一个预训练 seq2seq 模型，非参数记忆是维基百科的稠密向量索引，通过一个预训练神经检索器访问。我们比较了两种 RAG 形式：一种在整个生成序列上条件于同一组检索段落，另一种可以为每个 token 使用不同段落。我们在一系列知识密集型 NLP 任务上微调并评估模型，在三个开放域问答任务上刷新纪录，超越了参数化 seq2seq 模型以及任务专用的"检索—抽取"架构。在语言生成任务上，我们发现 RAG 模型比最先进的纯参数 seq2seq 基线生成出更具体、更多样、也更符合事实的语言。</p>
-<h3 id="1-introduction">1. 引言（Introduction）</h3>
-<p>预训练神经语言模型已被证明能从数据中学到大量深度知识 [47]，它们无需外部记忆，本身就是一座参数化的隐式知识库 [51, 52]。但这种范式有明确短板：记忆难以扩展和修订、预测过程难以解释、并会产生"幻觉"（hallucination）[38]。把参数记忆与非参数（即基于检索的）记忆结合的混合模型 [20, 26, 48] 可以缓解这些问题：知识可以直接修订与扩充，被访问的知识也可被检查和解释。REALM [20] 与 ORQA [31] 是这类工作的代表，它们把掩码语言模型与可微检索器结合并取得了可喜结果，但只探索了开放域抽取式问答。</p>
-<p>本文把混合记忆带到"NLP 的主力机型"seq2seq 模型上。RAG 的参数记忆是预训练 seq2seq Transformer，非参数记忆是维基百科的稠密向量索引，由预训练神经检索器访问；两者组成一个端到端训练的概率模型（图 1）。具体地，检索器采用稠密段落检索器（Dense Passage Retriever, DPR）[26]，负责根据输入提供隐含文档；生成器采用 BART [32]，条件于输入与隐含文档生成输出。对隐含文档用 top-K 近似做边缘化（marginalize），既可以按"整条输出对应同一篇文档"，也可以按"不同 token 对应不同文档"。像 T5、BART 一样，RAG 可以在任何 seq2seq 任务上微调，且检索器与生成器联合学习。</p>
-<p>与以往从头训练的记忆网络（memory networks）、栈增强网络等任务专用架构不同，本文的设定是两个记忆组件都经过预训练、预装了大量知识；关键在于，借助预训练的访问机制，无需额外训练就具备了知识访问能力。本文定义的"知识密集型任务"指人类在没有外部知识源时也难以完成的任务。</p>
-<h3 id="2-methods">2. 方法（Methods）</h3>
-<p>RAG 模型用输入序列 $x$ 检索文本文档 $z$，并把它们作为额外上下文来生成目标序列 $y$。模型包含两个组件：（i）检索器 $p_\eta(z|x)$，参数为 $\eta$，返回给定查询 $x$ 下（top-K 截断的）文本段落分布；（ii）生成器 $p_\theta(y_i|x, z, y_{1:i-1})$，参数为 $\theta$，基于前 $i-1$ 个 token、原始输入 $x$ 与检索段落 $z$ 生成当前 token。</p>
-<h4 id="21-rag-sequence-rag-token">2.1 两种模型：RAG-Sequence 与 RAG-Token</h4>
-<p><strong>RAG-Sequence 模型</strong>用同一篇检索文档生成完整序列：把文档视为单一隐变量，通过 top-K 近似边缘化得到 seq2seq 概率——先用检索器取 top-K 文档，再让生成器对每篇文档分别产生输出序列概率，然后加权求和：</p>
-<p>$$p_{\text{RAG-Sequence}}(y|x) \approx \sum_{z \in \text{top-}k(p(\cdot|x))} p_\eta(z|x) \prod_i^N p_\theta(y_i|x, z, y_{1:i-1})$$</p>
-<p><strong>RAG-Token 模型</strong>则可以为每个目标 token 抽取不同的隐含文档：对每个 token，生成器先对每篇文档分别产生下一 token 的分布，再边缘化，然后继续下一个 token。这允许生成器在产出一条答案时从多份文档中取材：</p>
-<p>$$p_{\text{RAG-Token}}(y|x) \approx \prod_i^N \sum_{z \in \text{top-}k(p(\cdot|x))} p_\eta(z|x)\, p_\theta(y_i|x, z, y_{1:i-1})$$</p>
-<p>作者还指出，若把目标类别看作长度为 1 的目标序列，RAG 也可用于序列分类任务，此时两种形式等价。</p>
-<h4 id="22-dpr">2.2 检索器：DPR</h4>
-<p>检索成分基于 DPR [26] 的双编码器（bi-encoder）架构：$p_\eta(z|x) \propto \exp(d(z)^\top q(x))$，其中文档表示 $d(z)$ 与查询表示 $q(x)$ 分别由基于 BERT-base 的文档编码器和查询编码器产生。求解 top-$k(p_\eta(\cdot|x))$（先验概率最高的 $k$ 篇文档）是最大内积搜索（Maximum Inner Product Search, MIPS）问题，可在亚线性时间内近似解决 [23]。作者用 DPR 预训练好的双编码器初始化检索器并构建文档索引；该检索器曾在 TriviaQA [24] 与 Natural Questions [29] 上训练以检索包含答案的文档。论文把这个文档索引称为<strong>非参数记忆</strong>。</p>
-<h4 id="23-bart">2.3 生成器：BART</h4>
-<p>生成器可以使用任意编码器—解码器模型，本文选 BART-large [32]：一个 400M 参数、预训练过的 seq2seq Transformer [58]。生成时把输入 $x$ 与检索内容 $z$ 直接拼接。BART 以去噪目标和多种噪声函数预训练，在多种生成任务上取得最优结果，优于同规模的 T5。此后论文把 BART 生成器参数 $\theta$ 称为<strong>参数记忆</strong>。</p>
-<h4 id="24">2.4 训练</h4>
-<p>检索器与生成器联合训练，不需要任何"应当检索哪篇文档"的直接监督。给定微调训练语料 $(x_j, y_j)$，用 Adam [28] 随机梯度下降最小化负边缘对数似然 $\sum_j -\log p(y_j|x_j)$。训练中更新文档编码器代价高昂（需像 REALM 那样周期性重建索引），作者发现这一步对强性能并非必要，因此固定文档编码器与索引，只微调查询编码器 BERT$_q$ 和 BART 生成器。</p>
-<h4 id="25">2.5 解码</h4>
-<p>测试时两种模型需要不同的方式近似 $\arg\max_y p(y|x)$。</p>
-<ul>
-<li><strong>RAG-Token</strong> 可视为标准自回归 seq2seq 生成器，其转移概率为各类文档下概率的加权和，可直接代入标准 beam 解码器。</li>
-<li><strong>RAG-Sequence</strong> 的似然无法分解为逐 token 似然，无法用单次 beam 搜索求解。做法是对每篇文档 $z$ 分别跑 beam 搜索，得到假设集合 $Y$；对未出现在某文档 beam 中的假设 $y$，额外做一次前向传播估计概率，乘以 $p_\eta(z|x)$ 后跨 beam 求和。这称为 <strong>Thorough Decoding（彻底解码）</strong>。当输出较长、$|Y|$ 很大时前向传播过多，可进一步近似认为"beam 搜索中未生成的 $y$ 概率约为 0"，省去额外前向传播，称为 <strong>Fast Decoding（快速解码）</strong>。</li>
-</ul>
-<h3 id="3-experiments">3. 实验（Experiments）</h3>
-<p>所有实验的非参数知识源统一为一份维基百科转储（2018 年 12 月，沿袭 Lee et al. 与 Karpukhin et al. 的做法）。每篇文章切成互不重叠的 100 词块，共约 2100 万篇文档；用文档编码器为每篇文档算出嵌入，用 FAISS [23] 建立基于分层可导航小世界（HNSW）近似的单一 MIPS 索引。训练时每条查询检索 top-$k$ 文档，$k \in {5, 10}$，测试时的 $k$ 由开发集选定。</p>
-<h4 id="31-open-domain-qa">3.1 开放域问答（Open-domain QA）</h4>
-<p>把问题与答案当作输入—输出文本对，直接最小化答案的负对数似然。对比三类范式：（1）抽取式 QA（答案是从检索文档中抽出的片段）；（2）"闭卷 QA"（Closed-Book，如 T5 [52]，纯靠参数知识生成答案）；（3）RAG。数据集为 Natural Questions（NQ）、TriviaQA（TQA）、WebQuestions（WQ）、CuratedTrec（CT）；CT 与 WQ 较小，按 DPR 的做法用 NQ 上的 RAG 模型初始化。沿用先前工作的划分并报告精确匹配（Exact Match, EM）分数；TQA 为与 T5 比较，另在 TQA-Wiki 测试集上评估。</p>
-<h4 id="32-abstractive-qams-marco">3.2 生成式问答（Abstractive QA）：MS-MARCO</h4>
-<p>使用 MSMARCO NLG v2.1 [43]：每题有从搜索引擎取回的 10 个黄金段落和从段落标注的完整句答案。本文不使用给定段落，只把问题—答案当作训练对，将其作为开放域生成式 QA 任务（Open MS-MARCO）。注意该数据集中有些问题（如"Volcano, CA 的天气如何？"）离开黄金段落就无法答出参考答案，也有些问题仅靠维基百科答不了——此时 RAG 可依靠参数知识给出合理回答，因此不用黄金段落后性能必然偏低。</p>
-<h4 id="33-jeopardy">3.3 Jeopardy 问题生成</h4>
-<p>为在非 QA 场景下检验生成能力，作者提出更有难度的开放域问题生成任务：生成 Jeopardy（美国智力竞猜节目）题目。Jeopardy 形式特殊——根据某实体的事实描述猜实体，题目本身是精确的事实陈述，因此"给定答案实体生成题目"是典型的知识密集型生成。采用 SearchQA [10] 的划分：10 万训练、1.4 万开发、2.7 万测试。由于是新任务，同时训练一个 BART 基线。评估使用 SQuAD 调校过的 Q-BLEU-1 指标（对实体匹配权重更高的 BLEU 变体，比标准指标更贴近人类判断），并做两组人工评估：<strong>事实性</strong>（陈述能否被可信外部来源证实）与<strong>具体性</strong>（输入输出间的高互相依赖），采用成对比较——评估者看到答案和两条生成题目（分别来自 BART 与 RAG），四选一：A 更好、B 更好、都好、都不好。</p>
-<h4 id="34-fact-verificationfever">3.4 事实验证（Fact Verification）：FEVER</h4>
-<p>FEVER [56] 要求判断一条自然语言断言被维基百科支持、反驳，还是证据不足。这本质上是"检索 + 蕴含推理"的耦合任务，也恰好检验 RAG 处理分类（而非生成）的能力。做法是把类别标签（supports / refutes / not enough info）映射为单个输出 token，直接用"断言—类别"对训练。关键在于：与多数 FEVER 方法不同，RAG <strong>不使用任何检索证据监督</strong>——现实应用中往往没有这种监督信号，不需要它的模型适用面更广。评估两种变体：标准三分类，以及 Thorne and Vlachos [57] 研究过的二分类（supports/refutes），均报告标签准确率。</p>
-<h3 id="4-results">4. 结果（Results）</h3>
-<h4 id="41">4.1 开放域问答</h4>
-<p>在四个开放域 QA 任务上 RAG 均刷新纪录（TQA 仅在与 T5 可比的划分上）。EM 分数如下：</p>
+<h2 id="_2">全文对照翻译</h2>
+<p>以下为论文正文（Abstract 至附录）的逐段中英对照翻译。英文段一律原样收录，每段英文之后紧跟完整中文译文；References 部分不收录。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks<br><br>Patrick Lewis†‡, Ethan Perez⋆, Aleksandra Piktus†, Fabio Petroni†, Vladimir Karpukhin†, Naman Goyal†, Heinrich Küttler†, Mike Lewis†, Wen-tau Yih†, Tim Rocktäschel†‡, Sebastian Riedel†‡, Douwe Kiela†<br><br>†Facebook AI Research; ‡University College London; ⋆New York University; plewis@fb.com<br><br>arXiv:2005.11401v4 [cs.CL] 12 Apr 2021</p></div>
+
+<p><strong>标题与作者</strong>：《面向知识密集型 NLP 任务的检索增强生成》。作者 Patrick Lewis†‡、Ethan Perez⋆、Aleksandra Piktus†、Fabio Petroni†、Vladimir Karpukhin†、Naman Goyal†、Heinrich Küttler†、Mike Lewis†、Wen-tau Yih†、Tim Rocktäschel†‡、Sebastian Riedel†‡、Douwe Kiela†；†Facebook AI Research，‡伦敦大学学院（UCL），⋆纽约大学（NYU）；联系方式 plewis@fb.com。</p>
+<h3 id="abstract">摘要（Abstract）</h3>
+<div class="en-orig"><span class="en-tag">EN</span><p>Large pre-trained language models have been shown to store factual knowledge in their parameters, and achieve state-of-the-art results when fine-tuned on downstream NLP tasks. However, their ability to access and precisely manipulate knowledge is still limited, and hence on knowledge-intensive tasks, their performance lags behind task-specific architectures. Additionally, providing provenance for their decisions and updating their world knowledge remain open research problems. Pre-trained models with a differentiable access mechanism to explicit non-parametric memory have so far been only investigated for extractive downstream tasks. We explore a general-purpose fine-tuning recipe for retrieval-augmented generation (RAG) — models which combine pre-trained parametric and non-parametric memory for language generation. We introduce RAG models where the parametric memory is a pre-trained seq2seq model and the non-parametric memory is a dense vector index of Wikipedia, accessed with a pre-trained neural retriever. We compare two RAG formulations, one which conditions on the same retrieved passages across the whole generated sequence, and another which can use different passages per token. We fine-tune and evaluate our models on a wide range of knowledge-intensive NLP tasks and set the state of the art on three open domain QA tasks, outperforming parametric seq2seq models and task-specific retrieve-and-extract architectures. For language generation tasks, we find that RAG models generate more specific, diverse and factual language than a state-of-the-art parametric-only seq2seq baseline.</p></div>
+
+<p>大型预训练语言模型已被证明能在参数中存储事实知识，并在下游 NLP 任务上微调后取得最优（state-of-the-art）结果。然而，它们访问与精确操纵知识的能力仍然有限，因此在知识密集型任务上，其性能落后于任务专用架构。此外，为模型的决策提供出处（provenance）、以及更新其世界知识，仍是悬而未决的研究问题。迄今为止，具备对显式非参数记忆（non-parametric memory）的可微访问机制的预训练模型，只被研究用于抽取式（extractive）下游任务。我们探索了一种面向检索增强生成（retrieval-augmented generation, RAG）的通用微调配方——这是一类将预训练参数记忆（parametric memory）与非参数记忆结合起来进行语言生成的模型。我们提出的 RAG 模型中，参数记忆是一个预训练 seq2seq 模型，非参数记忆是维基百科的稠密向量索引，通过一个预训练神经检索器访问。我们比较了两种 RAG 形式：一种在整个生成序列上条件于同一组检索段落，另一种可以为每个 token 使用不同段落。我们在一系列知识密集型 NLP 任务上对模型进行微调与评估，在三个开放域问答任务上刷新纪录，超越了参数化 seq2seq 模型以及任务专用的"检索—抽取"（retrieve-and-extract）架构。在语言生成任务上，我们发现 RAG 模型比最先进的纯参数 seq2seq 基线生成出更具体、更多样、也更符合事实的语言。</p>
+<h3 id="1-introduction">1 引言（Introduction）</h3>
+<div class="en-orig"><span class="en-tag">EN</span><p>Pre-trained neural language models have been shown to learn a substantial amount of in-depth knowledge from data [47]. They can do so without any access to an external memory, as a parameterized implicit knowledge base [51, 52]. While this development is exciting, such models do have downsides: They cannot easily expand or revise their memory, can&#x27;t straightforwardly provide insight into their predictions, and may produce &quot;hallucinations&quot; [38]. Hybrid models that combine parametric memory with non-parametric (i.e., retrieval-based) memories [20, 26, 48] can address some of these issues because knowledge can be directly revised and expanded, and accessed knowledge can be inspected and interpreted. REALM [20] and ORQA [31], two recently introduced models that combine masked language models [8] with a differentiable retriever, have shown promising results, but have only explored open-domain extractive question answering.</p></div>
+
+<p>预训练神经语言模型已被证明能从数据中学到大量深度知识 [47]。它们无需访问任何外部记忆即可做到这一点，本身就是一个参数化的隐式知识库 [51, 52]。虽然这一进展令人振奋，但此类模型确有短板：它们难以扩展或修订自己的记忆，无法直接解释其预测，还可能产生"幻觉"（hallucination）[38]。将参数记忆与非参数（即基于检索的）记忆 [20, 26, 48] 相结合的混合模型可以缓解其中一些问题，因为知识可以直接修订和扩充，被访问的知识也可以被检查和解释。REALM [20] 与 ORQA [31] 是最近提出的两个此类模型，它们将掩码语言模型 [8] 与可微检索器结合，取得了可喜的结果，但只探索了开放域抽取式问答。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>Here, we bring hybrid parametric and non-parametric memory to the &quot;workhorse of NLP,&quot; i.e. sequence-to-sequence (seq2seq) models. We endow pre-trained, parametric-memory generation models with a non-parametric memory through a general-purpose fine-tuning approach which we refer to as retrieval-augmented generation (RAG). We build RAG models where the parametric memory is a pre-trained seq2seq transformer, and the non-parametric memory is a dense vector index of Wikipedia, accessed with a pre-trained neural retriever. We combine these components in a probabilistic model trained end-to-end (Fig. 1). The retriever (Dense Passage Retriever [26], henceforth DPR) provides latent documents conditioned on the input, and the seq2seq model (BART [32]) then conditions on these latent documents together with the input to generate the output. We marginalize the latent documents with a top-K approximation, either on a per-output basis (assuming the same document is responsible for all tokens) or a per-token basis (where different documents are responsible for different tokens). Like T5 [51] or BART, RAG can be fine-tuned on any seq2seq task, whereby both the generator and retriever are jointly learned.</p></div>
+
+<p>在本文中，我们把混合的参数与非参数记忆带入"NLP 的主力机型"，即序列到序列（seq2seq）模型。我们通过一种通用微调方法为预训练的、以参数记忆为基础的生成模型配备非参数记忆，称之为检索增强生成（RAG）。我们构建的 RAG 模型中，参数记忆是预训练 seq2seq Transformer，非参数记忆是维基百科的稠密向量索引，通过预训练神经检索器访问。我们将这些组件组合成一个端到端训练的概率模型（图 1）。检索器（稠密段落检索器 Dense Passage Retriever [26]，下文简称 DPR）根据输入提供隐含文档，seq2seq 模型（BART [32]）再以这些隐含文档连同输入为条件生成输出。我们用 top-K 近似对隐含文档做边缘化（marginalize），既可以按"每条输出"进行（假设同一篇文档对所有 token 负责），也可以按"每个 token"进行（不同文档为不同 token 负责）。与 T5 [51] 或 BART 一样，RAG 可以在任何 seq2seq 任务上微调，并且生成器与检索器联合学习。</p>
+<p>[图 1：Figure 1: Overview of our approach. We combine a pre-trained retriever (Query Encoder + Document Index) with a pre-trained seq2seq model (Generator) and fine-tune end-to-end. For query x, we use Maximum Inner Product Search (MIPS) to find the top-K documents zi. For final prediction y, we treat z as a latent variable and marginalize over seq2seq predictions given different documents.]</p>
+<p>中文说明：图 1 为方法总览。预训练检索器（查询编码器 Query Encoder + 文档索引 Document Index，即非参数检索器 <code>pη</code>）与预训练 seq2seq 生成器（Generator，即参数化 <code>pθ</code>）组合并端到端微调。对查询 <code>x</code>，用最大内积搜索（MIPS）从文档索引（<code>d(z)</code>，含 z1…z4 等）中找出 top-K 文档 <code>zi</code>；对最终预测 <code>y</code>，把 <code>z</code> 当作隐变量，对不同文档条件下的 seq2seq 预测做边缘化。图中给出三个示例任务：事实查询（输入"Barack Obama was born in Hawaii."）与标签生成（输出 supports）、问答查询（"Define middle ear"）与答案生成（"The middle ear includes the tympanic cavity and the three ossicles."）、Jeopardy 答案查询（"The Divine Comedy"）与题目生成（"This 14th century work is divided into 3 sections…"）。梯度经 <code>q</code> 与 <code>pθ</code> 端到端反向传播。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>There has been extensive previous work proposing architectures to enrich systems with non-parametric memory which are trained from scratch for specific tasks, e.g. memory networks [64, 55], stack-augmented networks [25] and memory layers [30]. In contrast, we explore a setting where both parametric and non-parametric memory components are pre-trained and pre-loaded with extensive knowledge. Crucially, by using pre-trained access mechanisms, the ability to access knowledge is present without additional training.</p></div>
+
+<p>此前已有大量工作提出用非参数记忆增强系统的架构，但它们都是针对特定任务从头训练的，例如记忆网络（memory networks）[64, 55]、栈增强网络（stack-augmented networks）[25] 与记忆层（memory layers）[30]。相比之下，我们探索的设定是：参数与非参数记忆组件都经过预训练、预装了大量知识。至关重要的是，借助预训练的访问机制，无需额外训练就已具备知识访问能力。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>Our results highlight the benefits of combining parametric and non-parametric memory with generation for knowledge-intensive tasks—tasks that humans could not reasonably be expected to perform without access to an external knowledge source. Our RAG models achieve state-of-the-art results on open Natural Questions [29], WebQuestions [3] and CuratedTrec [2] and strongly outperform recent approaches that use specialised pre-training objectives on TriviaQA [24]. Despite these being extractive tasks, we find that unconstrained generation outperforms previous extractive approaches. For knowledge-intensive generation, we experiment with MS-MARCO [1] and Jeopardy question generation, and we find that our models generate responses that are more factual, specific, and diverse than a BART baseline. For FEVER [56] fact verification, we achieve results within 4.3% of state-of-the-art pipeline models which use strong retrieval supervision. Finally, we demonstrate that the non-parametric memory can be replaced to update the models&#x27; knowledge as the world changes.1</p></div>
+
+<p>我们的结果凸显了在知识密集型任务上把参数记忆、非参数记忆与生成相结合的好处——所谓知识密集型任务（knowledge-intensive tasks），是指人类在没有外部知识源的情况下难以合理完成的任务。我们的 RAG 模型在开放域 Natural Questions [29]、WebQuestions [3] 与 CuratedTrec [2] 上取得最优结果，并在 TriviaQA [24] 上大幅超过使用专用预训练目标的最新方法。尽管这些是抽取式任务，我们发现不受约束的生成反而优于以往的抽取式方法。在知识密集型生成方面，我们实验了 MS-MARCO [1] 与 Jeopardy 问题生成，发现我们的模型生成的回答比 BART 基线更符合事实、更具体、更多样。在 FEVER [56] 事实验证（fact verification）上，我们取得了与使用强检索监督的最优流水线模型相差不到 4.3% 的结果。最后，我们证明可以通过替换非参数记忆来随世界变化更新模型的知识。</p>
+<blockquote>
+<p>译注（脚注 1）：运行 RAG 实验的代码已作为 HuggingFace Transformers 库 [66] 的一部分开源，地址为 https://github.com/huggingface/transformers/blob/master/examples/rag/ ；RAG 模型的交互式 demo 见 https://huggingface.co/rag/ 。</p>
+</blockquote>
+<h3 id="2-methods">2 方法（Methods）</h3>
+<div class="en-orig"><span class="en-tag">EN</span><p>We explore RAG models, which use the input sequence x to retrieve text documents z and use them as additional context when generating the target sequence y. As shown in Figure 1, our models leverage two components: (i) a retriever pη(z|x) with parameters η that returns (top-K truncated) distributions over text passages given a query x and (ii) a generator pθ(yi|x,z,y1:i−1) parametrized by θ that generates a current token based on a context of the previous i−1 tokens y1:i−1, the original input x and a retrieved passage z.</p></div>
+
+<p>我们探索的 RAG 模型使用输入序列 <code>x</code> 检索文本文档 <code>z</code>，并在生成目标序列 <code>y</code> 时将其作为额外上下文。如图 1 所示，我们的模型利用两个组件：（i）检索器 <code>p_η(z|x)</code>，参数为 <code>η</code>，给定查询 <code>x</code> 时返回（top-K 截断的）文本段落分布；（ii）生成器 <code>p_θ(y_i|x,z,y_1:i−1)</code>，参数为 <code>θ</code>，基于前 <code>i−1</code> 个 token <code>y_1:i−1</code>、原始输入 <code>x</code> 与检索段落 <code>z</code> 构成的上下文生成当前 token。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>To train the retriever and generator end-to-end, we treat the retrieved document as a latent variable. We propose two models that marginalize over the latent documents in different ways to produce a distribution over generated text. In one approach, RAG-Sequence, the model uses the same document to predict each target token. The second approach, RAG-Token, can predict each target token based on a different document. In the following, we formally introduce both models and then describe the pη and pθ components, as well as the training and decoding procedure.</p></div>
+
+<p>为了端到端地训练检索器与生成器，我们把检索到的文档视为隐变量（latent variable）。我们提出两种模型，以不同的方式对隐含文档做边缘化，从而得到生成文本的分布。第一种方法 RAG-Sequence 中，模型用同一篇文档预测每个目标 token；第二种方法 RAG-Token 可以为每个目标 token 基于不同文档进行预测。下文我们先形式化地介绍这两种模型，再描述 <code>p_η</code> 与 <code>p_θ</code> 组件以及训练与解码流程。</p>
+<h4 id="21-models">2.1 模型（Models）</h4>
+<div class="en-orig"><span class="en-tag">EN</span><p>RAG-Sequence Model The RAG-Sequence model uses the same retrieved document to generate the complete sequence. Technically, it treats the retrieved document as a single latent variable that is marginalized to get the seq2seq probability p(y|x) via a top-K approximation. Concretely, the top K documents are retrieved using the retriever, and the generator produces the output sequence probability for each document, which are then marginalized,<br><br>pRAG-Sequence(y|x) ≈ ∑z∈top-k(p(·|x)) pη(z|x)pθ(y|x,z) = ∑z∈top-k(p(·|x)) pη(z|x) ∏Ni pθ(yi|x,z,y1:i−1)</p></div>
+
+<p><strong>RAG-Sequence 模型</strong>：RAG-Sequence 模型使用同一篇检索文档生成完整序列。形式上，它把检索文档当作单一隐变量，通过 top-K 近似做边缘化得到 seq2seq 概率 <code>p(y|x)</code>。具体而言，先用检索器取出 top-K 文档，生成器对每篇文档分别产生输出序列概率，然后做边缘化：</p>
+<pre><code>p_RAG-Sequence(y|x) ≈ Σ_{z∈top-k(p(·|x))} p_η(z|x) p_θ(y|x,z)
+                    = Σ_{z∈top-k(p(·|x))} p_η(z|x) ∏_{i=1}^{N} p_θ(y_i|x,z,y_{1:i−1})
+</code></pre>
+<p>中文解释：整个序列 <code>y</code> 只依赖同一篇文档 <code>z</code>——对每篇 top-K 文档，把检索先验 <code>p_η(z|x)</code> 与"该文档条件下整条序列的生成概率"（逐 token 概率的连乘 <code>∏_i p_θ(y_i|x,z,y_{1:i−1})</code>）相乘，再对所有候选文档求和。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>RAG-Token Model In the RAG-Token model we can draw a different latent document for each target token and marginalize accordingly. This allows the generator to choose content from several documents when producing an answer. Concretely, the top K documents are retrieved using the retriever, and then the generator produces a distribution for the next output token for each document, before marginalizing, and repeating the process with the following output token, Formally, we define:<br><br>pRAG-Token(y|x) ≈ ∏Ni ∑z∈top-k(p(·|x)) pη(z|x)pθ(yi|x,z,y1:i−1)</p></div>
+
+<p><strong>RAG-Token 模型</strong>：在 RAG-Token 模型中，我们可以为每个目标 token 抽取不同的隐含文档并相应地做边缘化。这使生成器在产出答案时可以从多份文档中选取内容。具体而言，先用检索器取出 top-K 文档，然后生成器对每篇文档分别产生下一个输出 token 的分布，做边缘化，再对下一个输出 token 重复该过程。形式上定义为：</p>
+<pre><code>p_RAG-Token(y|x) ≈ ∏_{i=1}^{N} Σ_{z∈top-k(p(·|x))} p_η(z|x) p_θ(y_i|x,z,y_{1:i−1})
+</code></pre>
+<p>中文解释：与 RAG-Sequence 相比，这里的求和（边缘化）发生在每个 token 之内、连乘发生在 token 之间，即"每个 token 可以由不同的文档负责"，生成器因此能组合多份文档的内容。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>Finally, we note that RAG can be used for sequence classification tasks by considering the target class as a target sequence of length one, in which case RAG-Sequence and RAG-Token are equivalent.</p></div>
+
+<p>最后我们指出，如果把目标类别视为长度为 1 的目标序列，RAG 也可用于序列分类任务，此时 RAG-Sequence 与 RAG-Token 等价。</p>
+<h4 id="22-dprretriever-dpr">2.2 检索器：DPR（Retriever: DPR）</h4>
+<div class="en-orig"><span class="en-tag">EN</span><p>The retrieval component pη(z|x) is based on DPR [26]. DPR follows a bi-encoder architecture:<br><br>pη(z|x) ∝ exp(d(z)⊤q(x))<br>d(z) = BERTd(z), q(x) = BERTq(x)<br><br>where d(z) is a dense representation of a document produced by a BERTBASE document encoder [8], and q(x) a query representation produced by a query encoder, also based on BERTBASE. Calculating top-k(pη(·|x)), the list of k documents z with highest prior probability pη(z|x), is a Maximum Inner Product Search (MIPS) problem, which can be approximately solved in sub-linear time [23]. We use a pre-trained bi-encoder from DPR to initialize our retriever and to build the document index. This retriever was trained to retrieve documents which contain answers to TriviaQA [24] questions and Natural Questions [29]. We refer to the document index as the non-parametric memory.</p></div>
+
+<p>检索组件 <code>p_η(z|x)</code> 基于 DPR [26]。DPR 采用双编码器（bi-encoder）架构：</p>
+<pre><code>p_η(z|x) ∝ exp(d(z)^⊤ q(x))
+d(z) = BERT_d(z),  q(x) = BERT_q(x)
+</code></pre>
+<p>其中 <code>d(z)</code> 是由 BERT-BASE 文档编码器 [8] 产生的文档稠密表示，<code>q(x)</code> 是同样基于 BERT-BASE 的查询编码器产生的查询表示。计算 <code>top-k(p_η(·|x))</code>（即先验概率 <code>p_η(z|x)</code> 最高的 <code>k</code> 篇文档 <code>z</code> 的列表）是一个最大内积搜索（Maximum Inner Product Search, MIPS）问题，可在亚线性时间内近似求解 [23]。我们用 DPR 的预训练双编码器初始化检索器并构建文档索引。该检索器的训练目标是检索包含 TriviaQA [24] 与 Natural Questions [29] 问题答案的文档。论文把这个文档索引称为<strong>非参数记忆</strong>。</p>
+<h4 id="23-bartgenerator-bart">2.3 生成器：BART（Generator: BART）</h4>
+<div class="en-orig"><span class="en-tag">EN</span><p>The generator component pθ(yi|x,z,y1:i−1) could be modelled using any encoder-decoder. We use BART-large [32], a pre-trained seq2seq transformer [58] with 400M parameters. To combine the input x with the retrieved content z when generating from BART, we simply concatenate them. BART was pre-trained using a denoising objective and a variety of different noising functions. It has obtained state-of-the-art results on a diverse set of generation tasks and outperforms comparably-sized T5 models [32]. We refer to the BART generator parameters θ as the parametric memory henceforth.</p></div>
+
+<p>生成器组件 <code>p_θ(y_i|x,z,y_1:i−1)</code> 可以用任意编码器—解码器模型来建模。我们使用 BART-large [32]，一个拥有 400M 参数的预训练 seq2seq Transformer [58]。在用 BART 生成时组合输入 <code>x</code> 与检索内容 <code>z</code> 的方式是直接拼接。BART 使用去噪目标（denoising objective）与多种不同的噪声函数预训练，已在多种生成任务上取得最优结果，并优于同等规模的 T5 模型 [32]。此后论文把 BART 生成器的参数 <code>θ</code> 称为<strong>参数记忆</strong>。</p>
+<h4 id="24-training">2.4 训练（Training）</h4>
+<div class="en-orig"><span class="en-tag">EN</span><p>We jointly train the retriever and generator components without any direct supervision on what document should be retrieved. Given a fine-tuning training corpus of input/output pairs (xj,yj), we minimize the negative marginal log-likelihood of each target, ∑j − log p(yj|xj) using stochastic gradient descent with Adam [28]. Updating the document encoder BERTd during training is costly as it requires the document index to be periodically updated as REALM does during pre-training [20]. We do not find this step necessary for strong performance, and keep the document encoder (and index) fixed, only fine-tuning the query encoder BERTq and the BART generator.</p></div>
+
+<p>我们在联合训练检索器与生成器组件时，不使用任何"应当检索哪篇文档"的直接监督。给定由输入/输出对 <code>(x_j, y_j)</code> 组成的微调训练语料，我们使用 Adam [28] 随机梯度下降最小化每个目标的负边缘对数似然 <code>∑_j − log p(y_j|x_j)</code>。训练中更新文档编码器 <code>BERT_d</code> 代价高昂，因为它要求像 REALM 在预训练中那样周期性地更新文档索引 [20]。我们发现这一步对取得强性能并非必要，因此保持文档编码器（及索引）固定，只微调查询编码器 <code>BERT_q</code> 与 BART 生成器。</p>
+<h4 id="25-decoding">2.5 解码（Decoding）</h4>
+<div class="en-orig"><span class="en-tag">EN</span><p>At test time, RAG-Sequence and RAG-Token require different ways to approximate arg maxy p(y|x).</p></div>
+
+<p>测试时，RAG-Sequence 与 RAG-Token 需要用不同的方式近似 <code>arg max_y p(y|x)</code>。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>RAG-Token The RAG-Token model can be seen as a standard, autoregressive seq2seq generator with transition probability: p′θ(yi|x,y1:i−1) = ∑z∈top-k(p(·|x)) pη(zi|x)pθ(yi|x,zi,y1:i−1) To decode, we can plug p′θ(yi|x,y1:i−1) into a standard beam decoder.</p></div>
+
+<p><strong>RAG-Token</strong>：RAG-Token 模型可以看作一个标准的自回归 seq2seq 生成器，其转移概率为：</p>
+<pre><code>p′_θ(y_i|x, y_{1:i−1}) = Σ_{z∈top-k(p(·|x))} p_η(z_i|x) p_θ(y_i|x, z_i, y_{1:i−1})
+</code></pre>
+<p>即把各文档下的下一 token 分布按检索概率加权求和。解码时，只需把 <code>p′_θ(y_i|x, y_{1:i−1})</code> 代入标准 beam 解码器即可。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>RAG-Sequence For RAG-Sequence, the likelihood p(y|x) does not break into a conventional per-token likelihood, hence we cannot solve it with a single beam search. Instead, we run beam search for each document z, scoring each hypothesis using pθ(yi|x,z,y1:i−1). This yields a set of hypotheses Y, some of which may not have appeared in the beams of all documents. To estimate the probability of an hypothesis y we run an additional forward pass for each document z for which y does not appear in the beam, multiply generator probability with pη(z|x) and then sum the probabilities across beams for the marginals. We refer to this decoding procedure as &quot;Thorough Decoding.&quot; For longer output sequences, |Y| can become large, requiring many forward passes. For more efficient decoding, we can make a further approximation that pθ(y|x,zi) ≈ 0 where y was not generated during beam search from x,zi. This avoids the need to run additional forward passes once the candidate set Y has been generated. We refer to this decoding procedure as &quot;Fast Decoding.&quot;</p></div>
+
+<p><strong>RAG-Sequence</strong>：对 RAG-Sequence 而言，似然 <code>p(y|x)</code> 无法分解为常规的逐 token 似然，因此不能用单次 beam 搜索求解。我们的做法是对每篇文档 <code>z</code> 分别运行 beam 搜索，用 <code>p_θ(y_i|x,z,y_{1:i−1})</code> 为每条候选假设打分。这得到一组假设 <code>Y</code>，其中某些假设可能未出现在所有文档的 beam 中。为估计某条假设 <code>y</code> 的概率，我们对"<code>y</code> 未出现在其 beam 中"的每篇文档 <code>z</code> 额外跑一次前向传播，将生成器概率乘以 <code>p_η(z|x)</code>，再跨 beam 对概率求和得到边缘概率。我们称这种解码流程为 <strong>Thorough Decoding（彻底解码）</strong>。当输出序列较长时，<code>|Y|</code> 可能变得很大，需要很多次前向传播。为更高效地解码，可以进一步近似：若 <code>y</code> 未在以 <code>x, z_i</code> 为条件的 beam 搜索中被生成，则 <code>p_θ(y|x,z_i) ≈ 0</code>。这样一旦候选集 <code>Y</code> 已生成，就无需再跑额外的前向传播。我们称这种解码流程为 <strong>Fast Decoding（快速解码）</strong>。</p>
+<h3 id="3-experiments">3 实验（Experiments）</h3>
+<div class="en-orig"><span class="en-tag">EN</span><p>We experiment with RAG in a wide range of knowledge-intensive tasks. For all experiments, we use a single Wikipedia dump for our non-parametric knowledge source. Following Lee et al. [31] and Karpukhin et al. [26], we use the December 2018 dump. Each Wikipedia article is split into disjoint 100-word chunks, to make a total of 21M documents. We use the document encoder to compute an embedding for each document, and build a single MIPS index using FAISS [23] with a Hierarchical Navigable Small World approximation for fast retrieval [37]. During training, we retrieve the top k documents for each query. We consider k ∈ {5, 10} for training and set k for test time using dev data. We now discuss experimental details for each task.</p></div>
+
+<p>我们在一系列知识密集型任务上实验 RAG。所有实验的非参数知识源都使用同一份维基百科转储（Wikipedia dump）。沿用 Lee et al. [31] 与 Karpukhin et al. [26] 的做法，我们使用 2018 年 12 月的转储。每篇维基百科文章被切成互不重叠的 100 词块（chunk），共约 2100 万（21M）篇文档。我们用文档编码器为每篇文档计算嵌入，并用 FAISS [23] 建立单一 MIPS 索引，采用分层可导航小世界（Hierarchical Navigable Small World, HNSW）近似以实现快速检索 [37]。训练时，我们对每条查询检索 top-k 文档；训练中考虑 k ∈ {5, 10}，测试时的 k 由开发集（dev data）选定。下面讨论每个任务的实验细节。</p>
+<h4 id="31-open-domain-question-answering">3.1 开放域问答（Open-domain Question Answering）</h4>
+<div class="en-orig"><span class="en-tag">EN</span><p>Open-domain question answering (QA) is an important real-world application and common testbed for knowledge-intensive tasks [20]. We treat questions and answers as input-output text pairs (x, y) and train RAG by directly minimizing the negative log-likelihood of answers. We compare RAG to the popular extractive QA paradigm [5, 7, 31, 26], where answers are extracted spans from retrieved documents, relying primarily on non-parametric knowledge. We also compare to &quot;Closed-Book QA&quot; approaches [52], which, like RAG, generate answers, but which do not exploit retrieval, instead relying purely on parametric knowledge. We consider four popular open-domain QA datasets: Natural Questions (NQ) [29], TriviaQA (TQA) [24]. WebQuestions (WQ) [3] and CuratedTrec (CT) [2]. As CT and WQ are small, we follow DPR [26] by initializing CT and WQ models with our NQ RAG model. We use the same train/dev/test splits as prior work [31, 26] and report Exact Match (EM) scores. For TQA, to compare with T5 [52], we also evaluate on the TQA Wiki test set.</p></div>
+
+<p>开放域问答（open-domain question answering, QA）是重要的现实应用，也是知识密集型任务的常见试验场 [20]。我们把问题与答案当作输入—输出文本对 (x, y)，通过直接最小化答案的负对数似然来训练 RAG。我们把 RAG 与流行的抽取式问答（extractive QA）范式 [5, 7, 31, 26] 相比较——后者从检索文档中抽取片段作为答案，主要依赖非参数知识；还与"闭卷问答"（Closed-Book QA）方法 [52] 相比较——后者与 RAG 一样生成答案，但不利用检索，纯靠参数知识。我们考虑四个流行的开放域问答数据集：Natural Questions（NQ）[29]、TriviaQA（TQA）[24]、WebQuestions（WQ）[3] 与 CuratedTrec（CT）[2]。由于 CT 与 WQ 较小，我们沿用 DPR [26] 的做法，用在 NQ 上训练的 RAG 模型初始化 CT 与 WQ 模型。我们使用与先前工作 [31, 26] 相同的训练/开发/测试划分，并报告精确匹配（Exact Match, EM）分数。对 TQA，为了与 T5 [52] 比较，我们还在 TQA-Wiki 测试集上评估。</p>
+<h4 id="32-abstractive-question-answering">3.2 生成式问答（Abstractive Question Answering）</h4>
+<div class="en-orig"><span class="en-tag">EN</span><p>RAG models can go beyond simple extractive QA and answer questions with free-form, abstractive text generation. To test RAG&#x27;s natural language generation (NLG) in a knowledge-intensive setting, we use the MSMARCO NLG task v2.1 [43]. The task consists of questions, ten gold passages retrieved from a search engine for each question, and a full sentence answer annotated from the retrieved passages. We do not use the supplied passages, only the questions and answers, to treat MSMARCO as an open-domain abstractive QA task. MSMARCO has some questions that cannot be answered in a way that matches the reference answer without access to the gold passages, such as &quot;What is the weather in Volcano, CA?&quot; so performance will be lower without using gold passages. We also note that some MSMARCO questions cannot be answered using Wikipedia alone. Here, RAG can rely on parametric knowledge to generate reasonable responses.</p></div>
+
+<p>RAG 模型可以超越简单的抽取式问答，用自由形式的生成式（abstractive）文本回答问题。为在知识密集场景下检验 RAG 的自然语言生成（NLG）能力，我们使用 MSMARCO NLG 任务 v2.1 [43]。该任务由问题、为每个问题从搜索引擎检索的 10 个黄金段落（gold passage）、以及从检索段落标注的完整句答案组成。我们不使用给定的段落，只用问题与答案，从而把 MSMARCO 当作开放域生成式问答任务。MSMARCO 中有些问题若不访问黄金段落就无法以匹配参考答案的方式作答，例如"Volcano, CA 的天气如何？"（What is the weather in Volcano, CA?），因此不使用黄金段落后性能必然偏低。我们还注意到，有些 MSMARCO 问题仅靠维基百科无法回答，此时 RAG 可以依靠参数知识生成合理的回答。</p>
+<h4 id="33-jeopardy-jeopardy-question-generation">3.3 Jeopardy 问题生成（Jeopardy Question Generation）</h4>
+<div class="en-orig"><span class="en-tag">EN</span><p>To evaluate RAG&#x27;s generation abilities in a non-QA setting, we study open-domain question generation. Rather than use questions from standard open-domain QA tasks, which typically consist of short, simple questions, we propose the more demanding task of generating Jeopardy questions. Jeopardy is an unusual format that consists of trying to guess an entity from a fact about that entity. For example, &quot;The World Cup&quot; is the answer to the question &quot;In 1986 Mexico scored as the first country to host this international sports competition twice.&quot; As Jeopardy questions are precise, factual statements, generating Jeopardy questions conditioned on their answer entities constitutes a challenging knowledge-intensive generation task.</p></div>
+
+<p>为在非问答场景下评估 RAG 的生成能力，我们研究开放域问题生成（question generation）。标准开放域问答任务的问题通常短小简单，我们不使用它们，而是提出更有难度的任务：生成 Jeopardy（美国智力竞猜节目）题目。Jeopardy 形式特殊：根据关于某实体的事实来猜出该实体。例如，"The World Cup"（世界杯）是问题"In 1986 Mexico scored as the first country to host this international sports competition twice."（1986 年，墨西哥成为首个两次举办这项国际体育竞赛的国家）的答案。由于 Jeopardy 题目本身是精确的事实陈述，"以其答案实体为条件生成题目"构成一个颇具挑战的知识密集型生成任务。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>We use the splits from SearchQA [10], with 100K train, 14K dev, and 27K test examples. As this is a new task, we train a BART model for comparison. Following [67], we evaluate using the SQuAD-tuned Q-BLEU-1 metric [42]. Q-BLEU is a variant of BLEU with a higher weight for matching entities and has higher correlation with human judgment for question generation than standard metrics. We also perform two human evaluations, one to assess generation factuality, and one for specificity. We define factuality as whether a statement can be corroborated by trusted external sources, and specificity as high mutual dependence between the input and output [33]. We follow best practice and use pairwise comparative evaluation [34]. Evaluators are shown an answer and two generated questions, one from BART and one from RAG. They are then asked to pick one of four options—quuestion A is better, question B is better, both are good, or neither is good.</p></div>
+
+<p>我们使用 SearchQA [10] 的划分：10 万训练、1.4 万开发、2.7 万测试样本。由于这是一个新任务，我们另外训练一个 BART 模型作对照。沿用 [67]，我们用经 SQuAD 调校的 Q-BLEU-1 指标 [42] 评估。Q-BLEU 是 BLEU 的变体，对实体匹配赋予更高权重，在问题生成上比标准指标与人类判断的相关性更高。我们还做了两项人工评估：一项评估生成的事实性（factuality），另一项评估具体性（specificity）。我们把事实性定义为"陈述能否被可信的外部来源证实"，把具体性定义为"输入与输出之间的高相互依赖" [33]。我们遵循最佳实践，采用成对比较评估（pairwise comparative evaluation）[34]：评估者看到一个答案与两条生成的题目（一条来自 BART、一条来自 RAG），然后从四个选项中择一——问题 A 更好、问题 B 更好、都好、都不好。</p>
+<blockquote>
+<p>译注：句中"quuestion"为论文原文拼写（应为 question），照录。</p>
+</blockquote>
+<h4 id="34-fact-verification">3.4 事实验证（Fact Verification）</h4>
+<div class="en-orig"><span class="en-tag">EN</span><p>FEVER [56] requires classifying whether a natural language claim is supported or refuted by Wikipedia, or whether there is not enough information to decide. The task requires retrieving evidence from Wikipedia relating to the claim and then reasoning over this evidence to classify whether the claim is true, false, or unverifiable from Wikipedia alone. FEVER is a retrieval problem coupled with an challenging entailment reasoning task. It also provides an appropriate testbed for exploring the RAG models&#x27; ability to handle classification rather than generation. We map FEVER class labels (supports, refutes, or not enough info) to single output tokens and directly train with claim-class pairs. Crucially, unlike most other approaches to FEVER, we do not use supervision on retrieved evidence. In many real-world applications, retrieval supervision signals aren&#x27;t available, and models that do not require such supervision will be applicable to a wider range of tasks. We explore two variants: the standard 3-way classification task (supports/refutes/not enough info) and the 2-way (supports/refutes) task studied in Thorne and Vlachos [57]. In both cases we report label accuracy.</p></div>
+
+<p>FEVER [56] 要求判断一条自然语言断言（claim）被维基百科支持（supports）、反驳（refutes），还是没有足够信息（not enough info）可作判断。该任务需要从维基百科检索与断言相关的证据，再基于证据推理，判断断言为真、为假、还是仅凭维基百科无法验证。FEVER 是一个检索问题与一个富有挑战的蕴含推理（entailment reasoning）任务的耦合，同时也为检验 RAG 模型处理分类（而非生成）任务的能力提供了合适的试验场。我们把 FEVER 的类别标签（supports / refutes / not enough info）映射为单个输出 token，直接用"断言—类别"对训练。关键在于，与大多数 FEVER 方法不同，我们不使用任何针对检索证据的监督。现实应用中往往没有检索监督信号可用，不需要此类监督的模型将适用于更广泛的任务。我们探索两种变体：标准三分类任务（supports/refutes/not enough info），以及 Thorne and Vlachos [57] 研究过的二分类（supports/refutes）任务。两种情况都报告标签准确率（label accuracy）。</p>
+<h3 id="4-results">4 结果（Results）</h3>
+<h4 id="41-open-domain-question-answering">4.1 开放域问答（Open-domain Question Answering）</h4>
+<div class="en-orig"><span class="en-tag">EN</span><p>Table 1 shows results for RAG along with state-of-the-art models. On all four open-domain QA tasks, RAG sets a new state of the art (only on the T5-comparable split for TQA). RAG combines the generation flexibility of the &quot;closed-book&quot; (parametric only) approaches and the performance of &quot;open-book&quot; retrieval-based approaches. Unlike REALM and T5+SSM, RAG enjoys strong results without expensive, specialized &quot;salient span masking&quot; pre-training [20]. It is worth noting that RAG&#x27;s retriever is initialized using DPR&#x27;s retriever, which uses retrieval supervision on Natural Questions and TriviaQA. RAG compares favourably to the DPR QA system, which uses a BERT-based &quot;cross-encoder&quot; to re-rank documents, along with an extractive reader. RAG demonstrates that neither a re-ranker nor extractive reader is necessary for state-of-the-art performance.</p></div>
+
+<p>表 1 给出 RAG 与最先进模型的结果。在全部四个开放域问答任务上，RAG 均刷新纪录（TQA 仅在与 T5 可比的划分上）。RAG 既具备"闭卷"（纯参数）方法的生成灵活性，又具备"开卷"检索式方法的性能。与 REALM 和 T5+SSM 不同，RAG 无需昂贵的专用"显著片段掩码"（salient span masking）预训练 [20] 即可获得强结果。值得指出的是，RAG 的检索器是用 DPR 的检索器初始化的，而 DPR 检索器在 Natural Questions 与 TriviaQA 上使用了检索监督。RAG 的成绩也优于 DPR 问答系统——后者用基于 BERT 的"交叉编码器"（cross-encoder）对文档重排序，并配有抽取式阅读器。RAG 证明：要达到最优性能，重排序器与抽取式阅读器都不是必需的。</p>
+<p>[表 1：Table 1: Open-Domain QA Test Scores. For TQA, left column uses the standard test set for Open-Domain QA, right column uses the TQA-Wiki test set. See Appendix D for further details.]</p>
 <table>
 <thead>
 <tr>
@@ -84,28 +156,28 @@
 </thead>
 <tbody>
 <tr>
-<td>T5-11B（闭卷）</td>
+<td>T5-11B（闭卷）[52]</td>
 <td>34.5</td>
 <td>-/50.1</td>
 <td>37.4</td>
 <td>-</td>
 </tr>
 <tr>
-<td>T5-11B+SSM（闭卷）</td>
+<td>T5-11B+SSM（闭卷）[52]</td>
 <td>36.6</td>
 <td>-/60.5</td>
 <td>44.7</td>
 <td>-</td>
 </tr>
 <tr>
-<td>REALM（开卷）</td>
+<td>REALM（开卷）[20]</td>
 <td>40.4</td>
 <td>-/-</td>
 <td>40.7</td>
 <td>46.8</td>
 </tr>
 <tr>
-<td>DPR（开卷）</td>
+<td>DPR（开卷）[26]</td>
 <td>41.5</td>
 <td>57.9/-</td>
 <td>41.1</td>
@@ -119,7 +191,7 @@
 <td>50.0</td>
 </tr>
 <tr>
-<td><strong>RAG-Sequence</strong></td>
+<td><strong>RAG-Seq.</strong></td>
 <td><strong>44.5</strong></td>
 <td>56.8/<strong>68.0</strong></td>
 <td>45.2</td>
@@ -127,34 +199,501 @@
 </tr>
 </tbody>
 </table>
-<p>RAG 兼具闭卷（纯参数）方法的生成灵活性与开卷（检索）方法的性能。与 REALM、T5+SSM 不同，RAG 不需要昂贵的"显著片段掩码"（salient span masking）专用预训练；与 DPR 问答系统相比，也不需要交叉编码器重排器和抽取式阅读器即可达到最优。即便可以抽取，直接生成也有优势：那些含有线索但不含逐字答案的文档也能促成正确答案被生成（抽取式方法无法利用）；更进一步，即使正确答案不在任何检索文档中，RAG 仍能生成正确答案——在 NQ 上这种情况的准确率为 11.8%，而抽取式模型只能是 0%。</p>
-<h4 id="42-ms-marco">4.2 生成式问答（MS-MARCO）</h4>
-<p>RAG-Sequence 在 Open MS-MARCO NLG 上比 BART 高 2.6 个 BLEU 点（40.8 vs 38.2）和 2.6 个 Rouge-L 点（44.2 vs 41.6），逼近使用黄金上下文的最优系统（Rouge-L 49.8*）。定性来看，RAG 幻觉更少、生成事实正确文本的频率高于 BART。</p>
-<h4 id="43-jeopardy">4.3 Jeopardy 问题生成</h4>
-<p>RAG-Token 在该任务上优于 RAG-Sequence（Q-BLEU-1 22.2 vs 21.4），两者都超过 BART（19.7）。对 452 对 BART/RAG-Token 生成的人工评估显示：事实性上 RAG 更好的占 42.7%、BART 更好的仅占 7.1%（两者都好 11.7%、都不好 17.7%、无多数 20.8%）；具体性上 RAG 也以 37.4% vs 16.8% 大幅领先。作者推测：Jeopardy 题目常含两条独立信息，而 RAG-Token 能从多份文档组合内容，故表现最佳。图 2 给出了直观例子：输入"Hemingway"时，生成"The Sun Also Rises"时文档 2 的后验概率高，生成"A Farewell to Arms"时文档 1 占优；而书名首 token 生成后文档后验变平——说明剩余书名靠参数记忆即可补全（BART 确实能自行补全两个书名）。这展示了参数与非参数记忆如何协作：非参数组件引导生成，把参数记忆中的具体知识"引出来"。</p>
-<h4 id="44-fever">4.4 事实验证（FEVER）</h4>
-<p>三分类上 RAG-Token 达到 72.5% 标签准确率，距最优的复杂流水线系统（76.8，使用中间检索监督）仅 4.3%；二分类上 RAG 达 89.5%，距在黄金证据句上训练 RoBERTa 的 Thorne and Vlachos 方法（92.2*）仅 2.7%——而 RAG 只拿到断言、自己检索证据。分析检索质量发现：RAG 检索的首篇文档有 71% 来自黄金证据文章，top-10 中含黄金文章的比例达 90%。</p>
-<h4 id="45">4.5 附加结果</h4>
-<ul>
-<li><strong>生成多样性</strong>：以"不同 n-gram 与总 n-gram 之比"度量，RAG-Sequence 的生成比 RAG-Token 更多样，两者都显著高于 BART（MS-MARCO 三元组比例：83.5/77.8 vs 70.7；Jeopardy：53.8/46.8 vs 32.4），且无需任何多样性促进解码。</li>
-<li><strong>检索消融</strong>：冻结检索器会全面降低效果（如 NQ 上 RAG-Sequence 从 44.0 降至 41.2）；把稠密检索器换成 BM25（以其检索分数作 logits）降得更多（31.8）。BM25 仅在 FEVER 上最好——FEVER 断言高度以实体为中心，适合词重叠式检索；可微检索在其余所有任务上都有优势，在开放域 QA 上尤为关键。</li>
-<li><strong>索引热插拔（index hot-swapping）</strong>：用 DrQA 的 2016 年 12 月维基百科转储另建索引，取 82 位在两个时间点之间更替的世界领导人，以模板"Who is {position}?"查询 NQ RAG 模型。用 2016 索引答 2016 年领导人正确率 70%，用 2018 索引答 2018 年领导人 68%；索引与问题年份错配时仅 12%/4%。说明<strong>只需替换非参数记忆即可更新模型的世界知识</strong>，无需再训练。</li>
-<li><strong>检索文档数量的影响</strong>：训练时 5 或 10 篇性能差异不大；测试时可灵活调整。检索更多文档使 RAG-Sequence 在开放域 QA 上单调提升，RAG-Token 在 10 篇处达峰。</li>
-</ul>
-<h3 id="5-related-work">5. 相关工作（Related Work）</h3>
-<p>论文从四条线梳理：（1）<strong>单任务检索</strong>——检索此前后于问答、事实核查、对话、翻译、语言建模等单个任务，本文统一了这些成功，证明单一检索架构可在多任务上取得强性能；（2）<strong>通用 NLP 架构</strong>——从 GLUE 微调、GPT-2 到 BART/T5 的统一编码器—解码器，本文通过学习检索模块进一步扩展单一架构可覆盖的任务空间；（3）<strong>可学习检索</strong>——用搜索、强化学习或隐变量方法优化检索器以服务下游任务的工作，但都限于单一任务；（4）<strong>基于记忆的架构</strong>——文档索引可视为供注意力访问的大型外部记忆；与检索分布式实体嵌入的并行工作不同，本文记忆由<strong>原始文本</strong>构成，因而（i）人类可读、带来可解释性，（ii）人类可写、可通过编辑索引动态更新模型记忆。此外与"检索—编辑"（retrieve-and-edit）方法（机器翻译、语义解析中）也有关联，但 RAG 强调聚合多份检索内容而非轻改一条，且学习的是隐式检索、检索的是证据文档而非相似训练对。</p>
-<h3 id="6">6. 讨论、更广泛影响与附录要点</h3>
-<p><strong>讨论</strong>：本文提出了可访问参数与非参数记忆的混合生成模型，在开放域 QA 上取得最优结果；人工评估显示人们认为 RAG 的生成更事实、更具体；作者验证了学习到的检索组件的有效性，并演示了索引热插拔无需重训即可更新模型。未来方向包括让两个组件从头联合预训练（如用 BART 式去噪目标），以及研究两类记忆如何交互、如何最有效地结合。</p>
-<p><strong>更广泛影响</strong>：更扎实地 grounding 于真实知识（维基百科）使模型幻觉更少、更可控、更可解释，可用于医疗索引问答等有益场景。但风险同样存在：维基百科或其他外部知识源不可能完全无偏、完全事实；RAG 可被当作语言模型滥用（生成辱骂、假新闻、钓鱼内容、冒充他人等），也可能加剧职业自动化。可以用 AI 系统对抗误导内容与自动化垃圾信息以缓解风险。</p>
-<p><strong>附录要点</strong>（对复现很重要）：</p>
-<ul>
-<li><strong>解码设置</strong>：开放域 QA 上 RAG-Token 用 15 篇检索文档、RAG-Sequence 用 50 篇并采用 Thorough Decoding（答案通常较短），QA 用贪心解码即可；Open MS-MARCO 与 Jeopardy 用 10 篇、beam 大小 4，RAG-Sequence 用 Fast Decoding。</li>
-<li><strong>训练设置</strong>：基于 Fairseq 实现，混合精度，8 块 32GB NVIDIA V100 GPU（单卡亦可训练推理）；FAISS 的 MIPS 在 CPU 上已足够快，全部维基百科索引向量约占 100GB CPU 内存，经 FAISS 压缩后降至 36GB。代码已并入 HuggingFace Transformers 并开源。</li>
-<li><strong>参数量</strong>：可训练参数为 DPR 的 BERT-base 查询编码器（110M）与 BART-large（406M），共约 626M（文档编码器固定不训练）；而可比参数量的 T5-large（770M）在 NQ 上只有 28.9 EM，远低于 RAG-Sequence 的 44.5，也远低于 110 亿参数闭卷模型 T5-11B+SSM 的 36.6——说明混合记忆能用少得多的可训练参数取得强性能。非参数索引含 2100 万个 728 维向量（共 153 亿个数值），可用 8 位浮点存储以控制内存。</li>
-<li><strong>数据细节</strong>：NQ/TQA/WQ/CT 的训练—开发—测试规模分别为 79169/8758/3611、78786/8838/11314、3418/362/2033、635/134/635；Jeopardy 为 97392/13714/26849；MS-MARCO 为 153726/12468/101093（隐藏测试子集）；FEVER 三分类 145450/10000/10000、二分类 96966/6666/6666。TriviaQA 存在大量有效答案变体，作者过滤掉不出现在 top-1000 检索文档中的候选答案；CuratedTrec 答案以正则表达式给出，先用检索统计最常匹配的答案作监督目标。</li>
-<li><strong>空文档机制</strong>：尝试类似 REALM 的"空文档"（null document）建模检索不到有用信息的情形（学习空文档嵌入、静态偏置或小网络预测 logit），均无性能提升，为简洁起见省略。在 Open MS-MARCO 上，模型学会对不太需要检索的问题总是检索某组固定文档，说明该机制可能不必要。</li>
-<li><strong>检索坍缩（Retrieval Collapse）</strong>：初步实验中，故事生成等任务会出现检索组件"坍缩"——不管输入都检索同一批文档；一旦坍缩，生成器学会忽略文档，RAG 退化为 BART。原因可能是此类任务对事实知识的要求较弱，或目标序列过长导致给检索器的梯度信息不足。</li>
-</ul>
+<p>中文说明：开放域问答测试集得分（Exact Match）。闭卷（Closed Book）= 纯参数模型直接生成答案；开卷（Open Book）= 依赖检索的模型。TQA 列左值为标准开放域问答测试集、右值为 TQA-Wiki 测试集（可与 T5 闭卷方法比较的划分），RAG-Sequence 在 NQ（44.5）、TQA-Wiki（68.0）、CT（52.2）上均为当时最优。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>There are several advantages to generating answers even when it is possible to extract them. Documents with clues about the answer but do not contain the answer verbatim can still contribute towards a correct answer being generated, which is not possible with standard extractive approaches, leading to more effective marginalization over documents. Furthermore, RAG can generate correct answers even when the correct answer is not in any retrieved document, achieving 11.8% accuracy in such cases for NQ, where an extractive model would score 0%.</p></div>
+
+<p>即便答案可以抽取，直接生成答案也有若干优势。那些含有答案线索、但不含逐字答案的文档，仍能促成正确答案被生成——标准抽取式方法无法利用这一点，因此（生成式）对文档的边缘化更为有效。此外，即使正确答案不在任何检索到的文档中，RAG 也能生成正确答案：在 NQ 上这种情况的准确率为 11.8%，而抽取式模型只能是 0%。</p>
+<h4 id="42-abstractive-question-answering">4.2 生成式问答（Abstractive Question Answering）</h4>
+<div class="en-orig"><span class="en-tag">EN</span><p>As shown in Table 2, RAG-Sequence outperforms BART on Open MS-MARCO NLG by 2.6 Bleu points and 2.6 Rouge-L points. RAG approaches state-of-the-art model performance, which is impressive given that (i) those models access gold passages with specific information required to generate the reference answer, (ii) many questions are unanswerable without the gold passages, and (iii) not all questions are answerable from Wikipedia alone. Table 3 shows some generated answers from our models. Qualitatively, we find that RAG models hallucinate less and generate factually correct text more often than BART. Later, we also show that RAG generations are more diverse than BART generations (see §4.5).</p></div>
+
+<p>如表 2 所示，在 Open MS-MARCO NLG 上，RAG-Sequence 比 BART 高 2.6 个 Bleu 点与 2.6 个 Rouge-L 点。RAG 逼近了最先进模型的性能——考虑到 (i) 那些模型能访问黄金段落、其中含有生成参考答案所需的特定信息，(ii) 许多问题离开黄金段落就无法回答，(iii) 并非所有问题都能仅凭维基百科作答，这一成绩相当可观。表 3 给出我们模型的一些生成答案示例。定性来看，RAG 模型比 BART 幻觉更少、生成事实正确文本的频率更高。后文（§4.5）还会展示 RAG 的生成比 BART 更多样。</p>
+<p>[表 2：Table 2: Generation and classification Test Scores. MS-MARCO SotA is [4], FEVER-3 is [68] and FEVER-2 is [57] *Uses gold context/evidence. Best model without gold access underlined.]</p>
+<table>
+<thead>
+<tr>
+<th>模型</th>
+<th>Jeopardy B-1</th>
+<th>Jeopardy QB-1</th>
+<th>MSMARCO B-1</th>
+<th>MSMARCO R-L</th>
+<th>FVR3 Label Acc.</th>
+<th>FVR2</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SotA</td>
+<td>-</td>
+<td>-</td>
+<td>49.8*</td>
+<td>49.9*</td>
+<td>76.8</td>
+<td>92.2*</td>
+</tr>
+<tr>
+<td>BART</td>
+<td>15.1</td>
+<td>19.7</td>
+<td>38.2</td>
+<td>41.6</td>
+<td>64.0</td>
+<td>81.1</td>
+</tr>
+<tr>
+<td>RAG-Tok.</td>
+<td>17.3</td>
+<td>22.2</td>
+<td>40.1</td>
+<td>41.5</td>
+<td>72.5</td>
+<td>89.5</td>
+</tr>
+<tr>
+<td>RAG-Seq.</td>
+<td>14.7</td>
+<td>21.4</td>
+<td><strong>40.8</strong></td>
+<td><strong>44.2</strong></td>
+<td>-</td>
+<td>-</td>
+</tr>
+</tbody>
+</table>
+<p>中文说明：生成与分类任务测试集得分。B-1 为 Bleu-1，QB-1 为 Q-BLEU-1，R-L 为 Rouge-L，FVR3/FVR2 为 FEVER 三分类/二分类的标签准确率；带 * 的 SotA（当前最优）结果使用了黄金上下文/证据，原文以"下划线"标出无黄金访问时的最优模型（此处以加粗表示，即 RAG-Sequence 的 MS-MARCO 两项）。MS-MARCO 的 SotA 来自 [4]（PALM），FEVER-3 为 [68]、FEVER-2 为 [57]。</p>
+<h4 id="43-jeopardy-jeopardy-question-generation">4.3 Jeopardy 问题生成（Jeopardy Question Generation）</h4>
+<div class="en-orig"><span class="en-tag">EN</span><p>Table 2 shows that RAG-Token performs better than RAG-Sequence on Jeopardy question generation, with both models outperforming BART on Q-BLEU-1. 4 shows human evaluation results, over 452 pairs of generations from BART and RAG-Token. Evaluators indicated that BART was more factual than RAG in only 7.1% of cases, while RAG was more factual in 42.7% of cases, and both RAG and BART were factual in a further 17% of cases, clearly demonstrating the effectiveness of RAG on the task over a state-of-the-art generation model. Evaluators also find RAG generations to be more specific by a large margin. Table 3 shows typical generations from each model.</p></div>
+
+<p>表 2 显示，在 Jeopardy 问题生成上 RAG-Token 优于 RAG-Sequence，且两个模型在 Q-BLEU-1 上都超过 BART。人工评估结果（表 4）基于 452 对来自 BART 与 RAG-Token 的生成。评估者认为 BART 比 RAG 更事实的情况仅占 7.1%，而 RAG 更事实的占 42.7%，两者都事实的另有约 17% 的案例——清楚表明 RAG 在该任务上胜过最先进的生成模型。评估者还认为 RAG 的生成在具体性上以大幅优势领先。表 3 给出各模型的典型生成。</p>
+<blockquote>
+<p>译注：原文"4 shows"处缺"Table"一词；"a further 17%"与表 4 中"Both good 11.7%"略有出入，均照原文译出。</p>
+</blockquote>
+<div class="en-orig"><span class="en-tag">EN</span><p>Jeopardy questions often contain two separate pieces of information, and RAG-Token may perform best because it can generate responses that combine content from several documents. Figure 2 shows an example. When generating &quot;Sun&quot;, the posterior is high for document 2 which mentions &quot;The Sun Also Rises&quot;. Similarly, document 1 dominates the posterior when &quot;A Farewell to Arms&quot; is generated. Intriguingly, after the first token of each book is generated, the document posterior flattens. This observation suggests that the generator can complete the titles without depending on specific documents. In other words, the model&#x27;s parametric knowledge is sufficient to complete the titles. We find evidence for this hypothesis by feeding the BART-only baseline with the partial decoding &quot;The Sun. BART completes the generation &quot;The Sun Also Rises&quot; is a novel by this author of &quot;The Sun Also Rises&quot; indicating the title &quot;The Sun Also Rises&quot; is stored in BART&#x27;s parameters. Similarly, BART will complete the partial decoding &quot;The Sun Also Rises&quot; is a novel by this author of &quot;A with &quot;The Sun Also Rises&quot; is a novel by this author of &quot;A Farewell to Arms&quot;. This example shows how parametric and non-parametric memories work together—the non-parametric component helps to guide the generation, drawing out specific knowledge stored in the parametric memory.</p></div>
+
+<p>Jeopardy 题目常常包含两条相互独立的信息，RAG-Token 表现最好，可能正因为它能生成组合多份文档内容的回答。图 2 给出一个例子。生成"Sun"时，提及"The Sun Also Rises"（《太阳照常升起》）的文档 2 的后验概率高；类似地，生成"A Farewell to Arms"（《永别了，武器》）时文档 1 主导后验。有趣的是，每本书名的首 token 生成之后，文档后验就变平了。这一观察说明，生成器不依赖特定文档也能补全书名——换言之，模型的参数记忆足以补全书名。我们用如下证据支持这一假设：给纯 BART 基线输入部分解码"The Sun，BART 会补全为"The Sun Also Rises" is a novel by this author of "The Sun Also Rises"，说明书名"The Sun Also Rises"存储在 BART 的参数中；类似地，输入部分解码"The Sun Also Rises" is a novel by this author of "A，BART 会补全为"The Sun Also Rises" is a novel by this author of "A Farewell to Arms"。这个例子展示了参数记忆与非参数记忆如何协作——非参数组件帮助引导生成，把存储在参数记忆中的具体知识"引出来"。</p>
+<p>[图 2：Figure 2: RAG-Token document posterior p(zi|x,yi,y−i) for each generated token for input "Hemingway" for Jeopardy generation with 5 retrieved documents. The posterior for document 1 is high when generating "A Farewell to Arms" and for document 2 when generating "The Sun Also Rises".]</p>
+<p>中文说明：图 2 展示输入"Hemingway"（海明威）时，RAG-Token（检索 5 篇文档）在 Jeopardy 生成中每个 token 上的文档后验 <code>p(z_i|x, y_i, y_{−i})</code>。图中 Document 1 含"His wartime experiences formed the basis for his novel 'A Farewell to Arms' (1929)…"，Document 2 含"His debut novel, 'The Sun Also Rises', was published in 1926."。生成"A Farewell to Arms"时文档 1 后验高、生成"The Sun Also Rises"时文档 2 后验高；而生成书名首 token 之后，后验分布趋于平坦——说明剩余书名靠参数记忆即可补全。</p>
+<p>[表 4：Table 4: Human assessments for the Jeopardy Question Generation Task.]</p>
+<table>
+<thead>
+<tr>
+<th>选项</th>
+<th>事实性（Factuality）</th>
+<th>具体性（Specificity）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>BART better</td>
+<td>7.1%</td>
+<td>16.8%</td>
+</tr>
+<tr>
+<td>RAG better</td>
+<td>42.7%</td>
+<td>37.4%</td>
+</tr>
+<tr>
+<td>Both good</td>
+<td>11.7%</td>
+<td>11.8%</td>
+</tr>
+<tr>
+<td>Both poor</td>
+<td>17.7%</td>
+<td>6.9%</td>
+</tr>
+<tr>
+<td>No majority</td>
+<td>20.8%</td>
+<td>20.1%</td>
+</tr>
+</tbody>
+</table>
+<p>中文说明：Jeopardy 问题生成任务的人工评估：452 对 BART/RAG-Token 生成的成对比较中，"RAG 更好"在事实性与具体性上都大幅领先"BART 更好"；No majority 指标注者未形成多数意见。</p>
+<p>[表 3：Table 3: Examples from generation tasks. RAG models generate more specific and factually accurate responses. '?' indicates factually incorrect responses, * indicates partially correct responses.]</p>
+<table>
+<thead>
+<tr>
+<th>任务</th>
+<th>输入</th>
+<th>模型</th>
+<th>生成</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MS-MARCO</td>
+<td>define middle ear</td>
+<td>BART</td>
+<td>?The middle ear is the part of the ear between the middle ear and the nose.</td>
+</tr>
+<tr>
+<td>MS-MARCO</td>
+<td>define middle ear</td>
+<td>RAG-T</td>
+<td>The middle ear is the portion of the ear internal to the eardrum.</td>
+</tr>
+<tr>
+<td>MS-MARCO</td>
+<td>define middle ear</td>
+<td>RAG-S</td>
+<td>The middle ear includes the tympanic cavity and the three ossicles.</td>
+</tr>
+<tr>
+<td>MS-MARCO</td>
+<td>what currency needed in scotland</td>
+<td>BART</td>
+<td>The currency needed in Scotland is Pound sterling.</td>
+</tr>
+<tr>
+<td>MS-MARCO</td>
+<td>what currency needed in scotland</td>
+<td>RAG-T</td>
+<td>Pound is the currency needed in Scotland.</td>
+</tr>
+<tr>
+<td>MS-MARCO</td>
+<td>what currency needed in scotland</td>
+<td>RAG-S</td>
+<td>The currency needed in Scotland is the pound sterling.</td>
+</tr>
+<tr>
+<td>Jeopardy 问题生成</td>
+<td>Washington</td>
+<td>BART</td>
+<td>?This state has the largest number of counties in the U.S.</td>
+</tr>
+<tr>
+<td>Jeopardy 问题生成</td>
+<td>Washington</td>
+<td>RAG-T</td>
+<td>It's the only U.S. state named for a U.S. president</td>
+</tr>
+<tr>
+<td>Jeopardy 问题生成</td>
+<td>Washington</td>
+<td>RAG-S</td>
+<td>It's the state where you'll find Mount Rainier National Park</td>
+</tr>
+<tr>
+<td>Jeopardy 问题生成</td>
+<td>The Divine Comedy</td>
+<td>BART</td>
+<td>*This epic poem by Dante is divided into 3 parts: the Inferno, the Purgatorio &amp; the Purgatorio</td>
+</tr>
+<tr>
+<td>Jeopardy 问题生成</td>
+<td>The Divine Comedy</td>
+<td>RAG-T</td>
+<td>Dante's "Inferno" is the first part of this epic poem</td>
+</tr>
+<tr>
+<td>Jeopardy 问题生成</td>
+<td>The Divine Comedy</td>
+<td>RAG-S</td>
+<td>This 14th century work is divided into 3 sections: "Inferno", "Purgatorio" &amp; "Paradiso"</td>
+</tr>
+</tbody>
+</table>
+<p>中文说明：生成任务示例（RAG-T = RAG-Token，RAG-S = RAG-Sequence）。? 标记事实错误的生成，* 标记部分正确的生成。可以看出：BART 把"中耳"定义成"耳与鼻之间的部分"（事实错误）、把《神曲》说成包含"Inferno, Purgatorio, Purgatorio"（部分错误），而 RAG 两个变体的生成均具体且事实正确（如"中耳包括鼓室与三块听小骨""这部 14 世纪作品分为《地狱》《炼狱》《天堂》三部分"）。</p>
+<h4 id="44-fact-verification">4.4 事实验证（Fact Verification）</h4>
+<div class="en-orig"><span class="en-tag">EN</span><p>Table 2 shows our results on FEVER. For 3-way classification, RAG scores are within 4.3% of state-of-the-art models, which are complex pipeline systems with domain-specific architectures and substantial engineering, trained using intermediate retrieval supervision, which RAG does not require.</p></div>
+
+<p>表 2 给出我们在 FEVER 上的结果。三分类上，RAG 与最先进模型相差不超过 4.3%——后者是采用领域专用架构与大量工程实践的复杂流水线系统，并用中间检索监督训练，而 RAG 不需要这些。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>For 2-way classification, we compare against Thorne and Vlachos [57], who train RoBERTa [35] to classify the claim as true or false given the gold evidence sentence. RAG achieves an accuracy within 2.7% of this model, despite being supplied with only the claim and retrieving its own evidence. We also analyze whether documents retrieved by RAG correspond to documents annotated as gold evidence in FEVER. We calculate the overlap in article titles between the topk documents retrieved by RAG and gold evidence annotations. We find that the top retrieved document is from a gold article in 71% of cases, and a gold article is present in the top 10 retrieved articles in 90% of cases.</p></div>
+
+<p>二分类上，我们与 Thorne and Vlachos [57] 比较——他们训练 RoBERTa [35] 在给定黄金证据句的条件下判断断言真假。RAG 只拿到断言、自行检索证据，准确率仍与该模型相差不到 2.7%。我们还分析了 RAG 检索到的文档是否与 FEVER 中标注为黄金证据的文档对应：计算 RAG 检索的 top-k 文档与黄金证据标注在文章标题上的重合度。我们发现，检索的首篇文档有 71% 的情况来自黄金证据文章，top-10 检索文章中包含黄金文章的比例达 90%。</p>
+<h4 id="45-additional-results">4.5 附加结果（Additional Results）</h4>
+<div class="en-orig"><span class="en-tag">EN</span><p>Generation Diversity Section 4.3 shows that RAG models are more factual and specific than BART for Jeopardy question generation. Following recent work on diversity-promoting decoding [33, 59, 39], we also investigate generation diversity by calculating the ratio of distinct ngrams to total ngrams generated by different models. Table 5 shows that RAG-Sequence&#x27;s generations are more diverse than RAG-Token&#x27;s, and both are significantly more diverse than BART without needing any diversity-promoting decoding.</p></div>
+
+<p><strong>生成多样性（Generation Diversity）</strong>：第 4.3 节表明，在 Jeopardy 问题生成上 RAG 模型比 BART 更事实、更具体。沿用近期关于促进多样性的解码（diversity-promoting decoding）的工作 [33, 59, 39]，我们还通过计算"各模型生成的互异 n-gram 与总 n-gram 之比"来研究生成多样性。表 5 显示，RAG-Sequence 的生成比 RAG-Token 更多样，且两者都显著比 BART 多样，同时无需任何促进多样性的解码。</p>
+<p>[表 5：Table 5: Ratio of distinct to total tri-grams for generation tasks.]</p>
+<table>
+<thead>
+<tr>
+<th>模型</th>
+<th>MSMARCO</th>
+<th>Jeopardy QGen</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Gold</td>
+<td>89.6%</td>
+<td>90.0%</td>
+</tr>
+<tr>
+<td>BART</td>
+<td>70.7%</td>
+<td>32.4%</td>
+</tr>
+<tr>
+<td>RAG-Token</td>
+<td>77.8%</td>
+<td>46.8%</td>
+</tr>
+<tr>
+<td>RAG-Seq.</td>
+<td>83.5%</td>
+<td>53.8%</td>
+</tr>
+</tbody>
+</table>
+<p>中文说明：生成任务中"互异三元组（tri-gram）占总三元组之比"，越高越多样。两个任务上 RAG-Sequence 都最接近黄金（Gold）文本，BART 最低（Jeopardy 上仅 32.4%）。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>Retrieval Ablations A key feature of RAG is learning to retrieve relevant information for the task. To assess the effectiveness of the retrieval mechanism, we run ablations where we freeze the retriever during training. As shown in Table 6, learned retrieval improves results for all tasks.</p></div>
+
+<p><strong>检索消融（Retrieval Ablations）</strong>：RAG 的一个关键特性是为任务学习检索相关信息。为评估检索机制的有效性，我们做了在训练中冻结检索器的消融实验。如表 6 所示，学习到的检索在所有任务上都带来提升。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>We compare RAG&#x27;s dense retriever to a word overlap-based BM25 retriever [53]. Here, we replace RAG&#x27;s retriever with a fixed BM25 system, and use BM25 retrieval scores as logits when calculating p(z|x). Table 6 shows the results. For FEVER, BM25 performs best, perhaps since FEVER claims are heavily entity-centric and thus well-suited for word overlap-based retrieval. Differentiable retrieval improves results on all other tasks, especially for Open-Domain QA, where it is crucial.</p></div>
+
+<p>我们还把 RAG 的稠密检索器与基于词重叠的 BM25 检索器 [53] 相比较：把 RAG 的检索器替换为固定的 BM25 系统，并在计算 <code>p(z|x)</code> 时把 BM25 检索分数当作 logits。表 6 给出结果。在 FEVER 上 BM25 表现最好，可能因为 FEVER 断言高度以实体为中心，很适合词重叠式检索；在其余所有任务上，可微检索（differentiable retrieval）都带来提升，在开放域问答上尤为关键。</p>
+<p>[表 6：Table 6: Ablations on the dev set. As FEVER is a classification task, both RAG models are equivalent.]</p>
+<table>
+<thead>
+<tr>
+<th>模型</th>
+<th>NQ</th>
+<th>TQA</th>
+<th>WQ</th>
+<th>CT</th>
+<th>Jeopardy B-1</th>
+<th>Jeopardy QB-1</th>
+<th>MSMarco R-L</th>
+<th>MSMarco B-1</th>
+<th>FVR-3</th>
+<th>FVR-2</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>RAG-Token-BM25</td>
+<td>29.7</td>
+<td>41.5</td>
+<td>32.1</td>
+<td>33.1</td>
+<td>17.5</td>
+<td>22.3</td>
+<td>55.5</td>
+<td>48.4</td>
+<td>75.1</td>
+<td>91.6</td>
+</tr>
+<tr>
+<td>RAG-Sequence-BM25</td>
+<td>31.8</td>
+<td>44.1</td>
+<td>36.6</td>
+<td>33.8</td>
+<td>11.1</td>
+<td>19.5</td>
+<td>56.5</td>
+<td>46.9</td>
+<td>-</td>
+<td>-</td>
+</tr>
+<tr>
+<td>RAG-Token-Frozen</td>
+<td>37.8</td>
+<td>50.1</td>
+<td>37.1</td>
+<td>51.1</td>
+<td>16.7</td>
+<td>21.7</td>
+<td>55.9</td>
+<td>49.4</td>
+<td>72.9</td>
+<td>89.4</td>
+</tr>
+<tr>
+<td>RAG-Sequence-Frozen</td>
+<td>41.2</td>
+<td>52.1</td>
+<td>41.8</td>
+<td>52.6</td>
+<td>11.8</td>
+<td>19.6</td>
+<td>56.7</td>
+<td>47.3</td>
+<td>-</td>
+<td>-</td>
+</tr>
+<tr>
+<td>RAG-Token</td>
+<td>43.5</td>
+<td>54.8</td>
+<td>46.5</td>
+<td>51.9</td>
+<td>17.9</td>
+<td>22.6</td>
+<td>56.2</td>
+<td>49.4</td>
+<td>74.5</td>
+<td>90.6</td>
+</tr>
+<tr>
+<td>RAG-Sequence</td>
+<td>44.0</td>
+<td>55.8</td>
+<td>44.9</td>
+<td>53.4</td>
+<td>15.3</td>
+<td>21.5</td>
+<td>57.2</td>
+<td>47.5</td>
+<td>-</td>
+<td>-</td>
+</tr>
+</tbody>
+</table>
+<p>中文说明：开发集消融。NQ/TQA/WQ/CT 为 Exact Match，Jeopardy 报 B-1/QB-1，MSMarco 报 R-L/B-1，FEVER 报标签准确率；因 FEVER 是分类任务，两种 RAG 等价，故 RAG-Sequence 行不重复报告。冻结检索器（-Frozen）会全面降低效果（如 NQ 上 RAG-Sequence 从 44.0 降至 41.2）；换成 BM25 降得更多（31.8），唯一例外是 FEVER——BM25 在此最好。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>Index hot-swapping An advantage of non-parametric memory models like RAG is that knowledge can be easily updated at test time. Parametric-only models like T5 or BART need further training to update their behavior as the world changes. To demonstrate, we build an index using the DrQA [5] Wikipedia dump from December 2016 and compare outputs from RAG using this index to the newer index from our main results (December 2018). We prepare a list of 82 world leaders who had changed between these dates and use a template &quot;Who is {position}?&quot; (e.g. &quot;Who is the President of Peru?&quot;) to query our NQ RAG model with each index. RAG answers 70% correctly using the 2016 index for 2016 world leaders and 68% using the 2018 index for 2018 world leaders. Accuracy with mismatched indices is low (12% with the 2018 index and 2016 leaders, 4% with the 2016 index and 2018 leaders). This shows we can update RAG&#x27;s world knowledge by simply replacing its non-parametric memory.</p></div>
+
+<p><strong>索引热插拔（Index hot-swapping）</strong>：RAG 这类非参数记忆模型的一个优势是知识可以在测试时轻松更新；纯参数模型（如 T5 或 BART）则需要进一步训练才能随世界变化更新行为。为作演示，我们用 DrQA [5] 的 2016 年 12 月维基百科转储另建索引，把 RAG 使用该索引的输出与主结果中更新的索引（2018 年 12 月）相比较。我们准备了 82 位在这两个日期之间更替的世界领导人名单，用模板"Who is {position}?"（如"Who is the President of Peru?"，"谁是秘鲁总统？"）分别用两个索引查询我们在 NQ 上训练的 RAG 模型。用 2016 索引回答 2016 年领导人，RAG 正确率 70%；用 2018 索引回答 2018 年领导人，正确率 68%。索引与问题年份错配时准确率很低（2018 索引配 2016 领导人为 12%，2016 索引配 2018 领导人为 4%）。这说明只需替换非参数记忆，即可更新 RAG 的世界知识。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>Effect of Retrieving more documents Models are trained with either 5 or 10 retrieved latent documents, and we do not observe significant differences in performance between them. We have the flexibility to adjust the number of retrieved documents at test time, which can affect performance and runtime. Figure 3 (left) shows that retrieving more documents at test time monotonically improves Open-domain QA results for RAG-Sequence, but performance peaks for RAG-Token at 10 retrieved documents. Figure 3 (right) shows that retrieving more documents leads to higher Rouge-L for RAG-Token at the expense of Bleu-1, but the effect is less pronounced for RAG-Sequence.</p></div>
+
+<p><strong>检索文档数量的影响（Effect of Retrieving more documents）</strong>：模型分别用 5 或 10 篇检索隐含文档训练，我们未观察到两者性能有显著差异。测试时可以灵活调整检索文档数量，这会影响性能与运行时间。图 3（左）显示，测试时检索更多文档使 RAG-Sequence 在开放域问答上的结果单调提升，而 RAG-Token 在 10 篇处达到峰值。图 3（右）显示，检索更多文档使 RAG-Token 的 Rouge-L 升高、但以 Bleu-1 为代价；对 RAG-Sequence 该效应较不明显。</p>
+<p>[图 3：Figure 3: Left: NQ performance as more documents are retrieved. Center: Retrieval recall performance in NQ. Right: MS-MARCO Bleu-1 and Rouge-L as more documents are retrieved.]</p>
+<p>中文说明：图 3 含三个子图（横轴均为检索文档数 K，10–50）。左：NQ 精确匹配随 K 变化——RAG-Seq 单调升至约 44，RAG-Tok 在 K=10 处达峰；中：NQ 的检索召回（Answer Recall@K）——RAG-Tok/RAG-Seq 随 K 上升，并对比 Fixed DPR 与 BM25 两条参照线；右：MS-MARCO 的 Bleu-1 与 Rouge-L 随 K 变化（RAG-Tok R-L、RAG-Tok B-1、RAG-Seq R-L、RAG-Seq B-1 四条曲线）。</p>
+<h3 id="5-related-work">5 相关工作（Related Work）</h3>
+<div class="en-orig"><span class="en-tag">EN</span><p>Single-Task Retrieval Prior work has shown that retrieval improves performance across a variety of NLP tasks when considered in isolation. Such tasks include open-domain question answering [5, 29], fact checking [56], fact completion [48], long-form question answering [12], Wikipedia article generation [36], dialogue [41, 65, 9, 13], translation [17], and language modeling [19, 27]. Our work unifies previous successes in incorporating retrieval into individual tasks, showing that a single retrieval-based architecture is capable of achieving strong performance across several tasks.</p></div>
+
+<p><strong>单任务检索（Single-Task Retrieval）</strong>：先前工作已证明，把检索单独用于各种 NLP 任务都能提升性能，包括开放域问答 [5, 29]、事实核查 [56]、事实补全（fact completion）[48]、长文问答（long-form question answering）[12]、维基百科文章生成 [36]、对话 [41, 65, 9, 13]、翻译 [17] 与语言建模 [19, 27]。我们的工作统一了以往"把检索引入单个任务"的成功经验，证明单一检索式架构即可在多个任务上取得强性能。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>General-Purpose Architectures for NLP Prior work on general-purpose architectures for NLP tasks has shown great success without the use of retrieval. A single, pre-trained language model has been shown to achieve strong performance on various classification tasks in the GLUE benchmarks [60, 61] after fine-tuning [49, 8]. GPT-2 [50] later showed that a single, left-to-right, pre-trained language model could achieve strong performance across both discriminative and generative tasks. For further improvement, BART [32] and T5 [51, 52] propose a single, pre-trained encoder-decoder model that leverages bi-directional attention to achieve stronger performance on discriminative and generative tasks. Our work aims to expand the space of possible tasks with a single, unified architecture, by learning a retrieval module to augment pre-trained, generative language models.</p></div>
+
+<p><strong>NLP 的通用架构（General-Purpose Architectures for NLP）</strong>：先前关于 NLP 通用架构的工作在不使用检索的情况下已大获成功。单个预训练语言模型经微调后，被证明能在 GLUE 基准 [60, 61] 的多个分类任务上取得强性能 [49, 8]；GPT-2 [50] 随后表明，单个从左到右的预训练语言模型可以在判别与生成两类任务上都取得强性能；为进一步提升，BART [32] 与 T5 [51, 52] 提出单一预训练编码器—解码器模型，利用双向注意力在判别与生成任务上取得更强性能。我们的工作目标是通过学习检索模块来增强预训练生成式语言模型，从而以单一统一架构扩展可覆盖的任务空间。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>Learned Retrieval There is significant work on learning to retrieve documents in information retrieval, more recently with pre-trained, neural language models [44, 26] similar to ours. Some work optimizes the retrieval module to aid in a specific, downstream task such as question answering, using search [46], reinforcement learning [6, 63, 62], or a latent variable approach [31, 20] as in our work. These successes leverage different retrieval-based architectures and optimization techniques to achieve strong performance on a single task, while we show that a single retrieval-based architecture can be fine-tuned for strong performance on a variety of tasks.</p></div>
+
+<p><strong>可学习检索（Learned Retrieval）</strong>：信息检索领域有大量关于学习检索文档的工作，近期更多使用与我们类似的预训练神经语言模型 [44, 26]。一些工作优化检索模块以辅助特定下游任务（如问答），采用的手段包括搜索 [46]、强化学习 [6, 63, 62]，或与我们一样的隐变量方法 [31, 20]。这些成功利用不同的检索式架构与优化技术在单一任务上取得强性能，而我们表明：单一检索式架构经微调即可在多种任务上取得强性能。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>Memory-based Architectures Our document index can be seen as a large external memory for neural networks to attend to, analogous to memory networks [64, 55]. Concurrent work [14] learns to retrieve a trained embedding for each entity in the input, rather than to retrieve raw text as in our work. Other work improves the ability of dialog models to generate factual text by attending over fact embeddings [15, 13]. A key feature of our memory is that it is comprised of raw text rather than distributed representations, which makes the memory both (i) human-readable, lending a form of interpretability to our model, and (ii) human-writable, enabling us to dynamically update the model&#x27;s memory by editing the document index. This approach has also been used in knowledge-intensive dialog, where generators have been conditioned on retrieved text directly, albeit obtained via TF-IDF rather than end-to-end learnt retrieval [9].</p></div>
+
+<p><strong>基于记忆的架构（Memory-based Architectures）</strong>：我们的文档索引可看作供神经网络做注意力访问的大型外部记忆，与记忆网络（memory networks）[64, 55] 类似。并行工作 [14] 学习为输入中每个实体检索一个训练好的嵌入，而非像我们这样检索原始文本；另一些工作通过在事实嵌入上做注意力来提升对话模型生成事实文本的能力 [15, 13]。我们记忆的一个关键特征是：它由原始文本而非分布式表示构成，因而记忆 (i) 人类可读——赋予模型一种可解释性，(ii) 人类可写——使我们能通过编辑文档索引来动态更新模型的记忆。类似做法也用于知识密集型对话：生成器直接条件于检索到的文本，只是检索用 TF-IDF 而非端到端学习的检索获得 [9]。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>Retrieve-and-Edit approaches Our method shares some similarities with retrieve-and-edit style approaches, where a similar training input-output pair is retrieved for a given input, and then edited to provide a final output. These approaches have proved successful in a number of domains including Machine Translation [18, 22] and Semantic Parsing [21]. Our approach does have several differences, including less of emphasis on lightly editing a retrieved item, but on aggregating content from several pieces of retrieved content, as well as learning latent retrieval, and retrieving evidence documents rather than related training pairs. This said, RAG techniques may work well in these settings, and could represent promising future work.</p></div>
+
+<p><strong>"检索—编辑"方法（Retrieve-and-Edit approaches）</strong>：我们的方法与"检索—编辑"式方法有相似之处：为给定输入检索一条相似的训练输入—输出对，再对其编辑得到最终输出。这类方法在机器翻译 [18, 22] 与语义解析 [21] 等多个领域已被证明成功。我们的方法有若干不同：不那么强调对检索到的条目做轻量编辑，而是强调聚合多份检索内容；学习的是隐式检索；检索的是证据文档而非相似的训练对。话虽如此，RAG 技术在这些场景中可能同样奏效，是有前景的未来工作。</p>
+<h3 id="6-discussion">6 讨论（Discussion）</h3>
+<div class="en-orig"><span class="en-tag">EN</span><p>In this work, we presented hybrid generation models with access to parametric and non-parametric memory. We showed that our RAG models obtain state of the art results on open-domain QA. We found that people prefer RAG&#x27;s generation over purely parametric BART, finding RAG more factual and specific. We conducted an thorough investigation of the learned retrieval component, validating its effectiveness, and we illustrated how the retrieval index can be hot-swapped to update the model without requiring any retraining. In future work, it may be fruitful to investigate if the two components can be jointly pre-trained from scratch, either with a denoising objective similar to BART or some another objective. Our work opens up new research directions on how parametric and non-parametric memories interact and how to most effectively combine them, showing promise in being applied to a wide variety of NLP tasks.</p></div>
+
+<p>在本工作中，我们提出了可访问参数与非参数记忆的混合生成模型。我们证明了 RAG 模型在开放域问答上取得最优结果；发现人们更喜欢 RAG 的生成而非纯参数的 BART，认为 RAG 更事实、更具体；我们对学习到的检索组件做了彻底考察，验证了其有效性；并演示了检索索引可以热插拔、无需任何重训即可更新模型。未来工作中，研究两个组件能否从头联合预训练（用类似 BART 的去噪目标或其他目标）可能卓有成效。我们的工作开辟了新的研究方向：参数与非参数记忆如何交互、如何最有效地结合——并展示了应用于广泛 NLP 任务的前景。</p>
+<h3 id="broader-impact">更广泛的影响（Broader Impact）</h3>
+<div class="en-orig"><span class="en-tag">EN</span><p>This work offers several positive societal benefits over previous work: the fact that it is more strongly grounded in real factual knowledge (in this case Wikipedia) makes it &quot;hallucinate&quot; less with generations that are more factual, and offers more control and interpretability. RAG could be employed in a wide variety of scenarios with direct benefit to society, for example by endowing it with a medical index and asking it open-domain questions on that topic, or by helping people be more effective at their jobs.</p></div>
+
+<p>相对以往工作，本工作带来若干积极的社会效益：由于更扎实地接地（grounding）于真实事实知识（本文中是维基百科），它"幻觉"更少、生成更符合事实，并提供了更强的可控性与可解释性。RAG 可用于多种直接造福社会的场景，例如为其配备医学索引、就相关主题提出开放域问题，或帮助人们更高效地完成工作。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>With these advantages also come potential downsides: Wikipedia, or any potential external knowledge source, will probably never be entirely factual and completely devoid of bias. Since RAG can be employed as a language model, similar concerns as for GPT-2 [50] are valid here, although arguably to a lesser extent, including that it might be used to generate abuse, faked or misleading content in the news or on social media; to impersonate others; or to automate the production of spam/phishing content [54]. Advanced language models may also lead to the automation of various jobs in the coming decades [16]. In order to mitigate these risks, AI systems could be employed to fight against misleading content and automated spam/phishing.</p></div>
+
+<p>伴随这些优势的还有潜在弊端：维基百科或任何潜在的外部知识源，恐怕永远无法做到完全事实、毫无偏见。由于 RAG 可被当作语言模型使用，对 GPT-2 [50] 的类似担忧在此同样成立（尽管可以说程度较轻），包括：可能被用于生成辱骂内容、在新闻或社交媒体上生成伪造或误导性内容；冒充他人；或自动化生产垃圾/钓鱼内容 [54]。未来数十年，先进的语言模型还可能导致各种职业的自动化 [16]。为缓解这些风险，可以用 AI 系统来对抗误导性内容与自动化垃圾/钓鱼信息。</p>
+<h3 id="acknowledgments">致谢（Acknowledgments）</h3>
+<div class="en-orig"><span class="en-tag">EN</span><p>The authors would like to thank the reviewers for their thoughtful and constructive feedback on this paper, as well as HuggingFace for their help in open-sourcing code to run RAG models. The authors would also like to thank Kyunghyun Cho and Sewon Min for productive discussions and advice. EP thanks supports from the NSF Graduate Research Fellowship. PL is supported by the FAIR PhD program.</p></div>
+
+<p>作者感谢审稿人对本文周到而建设性的反馈，感谢 HuggingFace 帮助开源运行 RAG 模型的代码，也感谢 Kyunghyun Cho 与 Sewon Min 富有成效的讨论和建议。EP 感谢美国国家科学基金会研究生奖学金（NSF Graduate Research Fellowship）的资助；PL 受 FAIR（Facebook AI Research）博士项目资助。</p>
+<p>（References 部分共 68 条文献，不收录于本页，详见原文。）</p>
+<h3 id="a-appendix-a-implementation-details">附录 A 实现细节（Appendix A: Implementation Details）</h3>
+<div class="en-orig"><span class="en-tag">EN</span><p>For Open-domain QA we report test numbers using 15 retrieved documents for RAG-Token models. For RAG-Sequence models, we report test results using 50 retrieved documents, and we use the Thorough Decoding approach since answers are generally short. We use greedy decoding for QA as we did not find beam search improved results. For Open-MSMarco and Jeopardy question generation, we report test numbers using ten retrieved documents for both RAG-Token and RAG-Sequence, and we also train a BART-large model as a baseline. We use a beam size of four, and use the Fast Decoding approach for RAG-Sequence models, as Thorough Decoding did not improve performance.</p></div>
+
+<p>开放域问答：RAG-Token 模型的测试结果使用 15 篇检索文档报告；RAG-Sequence 模型使用 50 篇检索文档，并采用 Thorough Decoding（彻底解码），因为答案通常较短。问答用贪心解码——我们发现 beam 搜索并无提升。Open-MSMarco 与 Jeopardy 问题生成：RAG-Token 与 RAG-Sequence 的测试结果都用 10 篇检索文档报告，同时训练 BART-large 作基线；beam 大小为 4，RAG-Sequence 采用 Fast Decoding（快速解码），因为 Thorough Decoding 没有带来提升。</p>
+<h3 id="b-appendix-b-human-evaluation">附录 B 人工评估（Appendix B: Human Evaluation）</h3>
+<div class="en-orig"><span class="en-tag">EN</span><p>Figure 4 shows the user interface for human evaluation. To avoid any biases for screen position, which model corresponded to sentence A and sentence B was randomly selected for each example. Annotators were encouraged to research the topic using the internet, and were given detailed instructions and worked examples in a full instructions tab. We included some gold sentences in order to assess the accuracy of the annotators. Two annotators did not perform well on these examples and their annotations were removed from the results.</p></div>
+
+<p>图 4 展示人工评估的用户界面。为避免屏幕位置带来的偏差，每个样例中"哪个模型对应句子 A、哪个对应句子 B"是随机指定的。标注者被鼓励用互联网查证主题，并在完整的说明页中获得详细说明与示例。我们还掺入了一些黄金句（gold sentence）以评估标注者的准确度；有两位标注者在这些样例上表现不佳，其标注被从结果中剔除。</p>
+<p>[图 4：Figure 4: Annotation interface for human evaluation of factuality. A pop-out for detailed instructions and a worked example appear when clicking "view tool guide".]</p>
+<p>中文说明：图 4 为事实性人工评估的标注界面：评估者对每对陈述做成对比较，可点击"view tool guide"弹出详细说明与示例。</p>
+<h3 id="c-appendix-c-training-setup-details">附录 C 训练设置细节（Appendix C: Training setup Details）</h3>
+<div class="en-orig"><span class="en-tag">EN</span><p>We train all RAG models and BART baselines using Fairseq [45].2 We train with mixed precision floating point arithmetic [40], distributing training across 8, 32GB NVIDIA V100 GPUs, though training and inference can be run on one GPU. We find that doing Maximum Inner Product Search with FAISS is sufficiently fast on CPU, so we store document index vectors on CPU, requiring ∼100 GB of CPU memory for all of Wikipedia. After submission, We have ported our code to HuggingFace Transformers [66]3, which achieves equivalent performance to the previous version but is a cleaner and easier to use implementation. This version is also open-sourced. We also compress the document index using FAISS&#x27;s compression tools, reducing the CPU memory requirement to 36GB. Scripts to run experiments with RAG can be found at https://github.com/huggingface/transformers/blob/master/examples/rag/README.md and an interactive demo of a RAG model can be found at https://huggingface.co/rag/</p></div>
+
+<p>所有 RAG 模型与 BART 基线都用 Fairseq [45] 训练。训练采用混合精度浮点运算 [40]，分布在 8 块 32GB NVIDIA V100 GPU 上进行，不过训练与推理也可以在单块 GPU 上运行。我们发现用 FAISS 做最大内积搜索（MIPS）在 CPU 上已足够快，因此把文档索引向量存在 CPU 上，全部维基百科约需 100GB CPU 内存。论文提交后，我们把代码移植到了 HuggingFace Transformers [66]，性能与之前版本相当，但实现更干净、更易用，同样已开源。我们还用 FAISS 的压缩工具压缩文档索引，把 CPU 内存需求降到 36GB。运行 RAG 实验的脚本见 https://github.com/huggingface/transformers/blob/master/examples/rag/README.md ，RAG 模型的交互式 demo 见 https://huggingface.co/rag/ 。</p>
+<blockquote>
+<p>译注（脚注 2、3）：Fairseq 代码库为 https://github.com/pytorch/fairseq ；Transformers 代码库为 https://github.com/huggingface/transformers 。</p>
+</blockquote>
+<h3 id="d-appendix-d-further-details-on-open-domain-qa">附录 D 开放域问答的更多细节（Appendix D: Further Details on Open-Domain QA）</h3>
+<div class="en-orig"><span class="en-tag">EN</span><p>For open-domain QA, multiple answer annotations are often available for a given question. These answer annotations are exploited by extractive models during training as typically all the answer annotations are used to find matches within documents when preparing training data. For RAG, we also make use of multiple annotation examples for Natural Questions and WebQuestions by training the model with each (q, a) pair separately, leading to a small increase in accuracy. For TriviaQA, there are often many valid answers to a given question, some of which are not suitable training targets, such as emoji or spelling variants. For TriviaQA, we filter out answer candidates if they do not occur in top 1000 documents for the query.</p></div>
+
+<p>开放域问答中，一个问题常有多个答案标注。抽取式模型在训练时会利用这些标注——准备训练数据时通常用所有答案标注在文档中找匹配。对 RAG，我们在 Natural Questions 与 WebQuestions 上同样利用多标注样本：把每个 (q, a) 对分别用于训练，带来小幅准确率提升。TriviaQA 的一个问题往往有许多有效答案，其中一些并不适合作为训练目标，比如 emoji 或拼写变体；对 TriviaQA，我们把不出现在该查询 top-1000 检索文档中的候选答案过滤掉。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>CuratedTrec preprocessing The answers for CuratedTrec are given in the form of regular expressions, which has been suggested as a reason why it is unsuitable for answer-generation models [20]. To overcome this, we use a pre-processing step where we first retrieve the top 1000 documents for each query, and use the answer that most frequently matches the regex pattern as the supervision target. If no matches are found, we resort to a simple heuristic: generate all possible permutations for each regex, replacing non-deterministic symbols in the regex nested tree structure with a whitespace.</p></div>
+
+<p><strong>CuratedTrec 预处理</strong>：CuratedTrec 的答案以正则表达式形式给出——有观点认为这正是它不适合答案生成模型的原因 [20]。为克服这一点，我们采用预处理步骤：先为每个查询检索 top-1000 文档，把最常匹配该正则模式的答案作为监督目标。若找不到匹配，就退而用一个简单启发式：对每个正则表达式生成所有可能的排列，把正则嵌套树结构中的非确定符号替换为空白。</p>
+<div class="en-orig"><span class="en-tag">EN</span><p>TriviaQA Evaluation setups The open-domain QA community customarily uses public development datasets as test datasets, as test data for QA datasets is often restricted and dedicated to reading compehension purposes. We report our results using the datasets splits used in DPR [26], which are consistent with common practice in Open-domain QA. For TriviaQA, this test dataset is the public TriviaQA Web Development split. Roberts et al. [52] used the TriviaQA official Wikipedia test set instead. Févry et al. [14] follow this convention in order to compare with Roberts et al. [52] (See appendix of [14]). We report results on both test sets to enable fair comparison to both approaches. We find that our performance is much higher using the official Wiki test set, rather than the more conventional open-domain test set, which we attribute to the official Wiki test set questions being simpler to answer from Wikipedia.</p></div>
+
+<p><strong>TriviaQA 评估设置</strong>：开放域问答社区习惯把公开的开发集当作测试集使用，因为问答数据集的测试集常常受限、专供阅读理解之用。我们沿用 DPR [26] 使用的数据划分报告结果，与开放域问答的通行做法一致。对 TriviaQA，该测试集是公开的 TriviaQA Web Development 划分；Roberts et al. [52] 则使用 TriviaQA 官方 Wikipedia 测试集；Févry et al. [14] 为与 Roberts et al. [52] 比较也沿用后者约定（见 [14] 附录）。我们同时报告两个测试集上的结果，以便与两条路线公平比较。我们发现用官方 Wiki 测试集的性能远高于更常规的开放域测试集，原因在于官方 Wiki 测试集的问题更易于从维基百科作答。</p>
+<h3 id="e-fever-appendix-e-further-details-on-fever">附录 E FEVER 的更多细节（Appendix E: Further Details on FEVER）</h3>
+<div class="en-orig"><span class="en-tag">EN</span><p>For FEVER classification, we follow the practice from [32], and first re-generate the claim, and then classify using the representation of the final hidden state, before finally marginalizing across documents to obtain the class probabilities. The FEVER task traditionally has two sub-tasks. The first is to classify the claim as either &quot;Supported&quot;, &quot;Refuted&quot; or &quot;Not Enough Info&quot;, which is the task we explore in the main paper. FEVER&#x27;s other sub-task involves extracting sentences from Wikipedia as evidence supporting the classification prediction. As FEVER uses a different Wikipedia dump to us, directly tackling this task is not straightforward. We hope to address this in future work.</p></div>
+
+<p>FEVER 分类上，我们沿用 [32]（BART）的做法：先重新生成断言，再用最终隐状态的表示做分类，最后跨文档边缘化得到类别概率。FEVER 任务传统上有两个子任务：其一是把断言分类为"Supported"（支持）、"Refuted"（反驳）或"Not Enough Info"（信息不足），即正文探讨的任务；其二是从维基百科中抽取支持分类预测的句子作为证据。由于 FEVER 使用的维基百科转储与我们的不同，直接处理该子任务并不简单，我们希望在未来工作中解决。</p>
+<h3 id="f-appendix-f-null-document-probabilities">附录 F 空文档概率（Appendix F: Null Document Probabilities）</h3>
+<div class="en-orig"><span class="en-tag">EN</span><p>We experimented with adding &quot;Null document&quot; mechanism to RAG, similar to REALM [20] in order to model cases where no useful information could be retrieved for a given input. Here, if k documents were retrieved, we would additionally &quot;retrieve&quot; an empty document and predict a logit for the null document, before marginalizing over k + 1 predictions. We explored modelling this null document logit by learning (i) a document embedding for the null document, (ii) a static learnt bias term, or (iii) a neural network to predict the logit. We did not find that these improved performance, so in the interests of simplicity, we omit them. For Open MS-MARCO, where useful retrieved documents cannot always be retrieved, we observe that the model learns to always retrieve a particular set of documents for questions that are less likely to benefit from retrieval, suggesting that null document mechanisms may not be necessary for RAG.</p></div>
+
+<p>我们实验过为 RAG 加入类似 REALM [20] 的"空文档"（null document）机制，以建模"给定输入检索不到有用信息"的情形：若检索了 k 篇文档，就额外"检索"一篇空文档并预测空文档的 logit，再对 k+1 个预测做边缘化。我们探索了三种建模该 logit 的方式：(i) 为空文档学习一个文档嵌入，(ii) 一个静态的可学习偏置项，(iii) 一个预测 logit 的神经网络。这些都没有带来性能提升，为简洁起见我们将其省略。在 Open MS-MARCO 上（并非总能检索到有用的文档），我们观察到模型学会了对不太可能从检索获益的问题总是检索某一组固定文档——这提示空文档机制对 RAG 可能并非必要。</p>
+<h3 id="g-appendix-g-parameters">附录 G 参数量（Appendix G: Parameters）</h3>
+<div class="en-orig"><span class="en-tag">EN</span><p>Our RAG models contain the trainable parameters for the BERT-base query and document encoder of DPR, with 110M parameters each (although we do not train the document encoder ourselves) and 406M trainable parameters from BART-large, 406M parameters, making a total of 626M trainable parameters. The best performing &quot;closed-book&quot; (parametric only) open-domain QA model is T5-11B with 11 Billion trainable parameters. The T5 model with the closest number of parameters to our models is T5-large (770M parameters), which achieves a score of 28.9 EM on Natural Questions [52], substantially below the 44.5 that RAG-Sequence achieves, indicating that hybrid parametric/non-parametric models require far fewer trainable parameters for strong open-domain QA performance. The non-parametric memory index does not consist of trainable parameters, but does consists of 21M 728 dimensional vectors, consisting of 15.3B values. These can be easily be stored at 8-bit floating point precision to manage memory and disk footprints.</p></div>
+
+<p>我们的 RAG 模型的可训练参数包括：DPR 的 BERT-base 查询编码器与文档编码器各 110M（其中文档编码器我们并不训练），以及 BART-large 的 406M 可训练参数，合计约 626M 可训练参数。表现最好的"闭卷"（纯参数）开放域问答模型是 T5-11B，有 110 亿可训练参数；参数量与我们最接近的 T5 模型是 T5-large（770M 参数），在 Natural Questions 上得 28.9 EM [52]，远低于 RAG-Sequence 的 44.5——说明混合参数/非参数模型只需少得多的可训练参数即可获得强开放域问答性能。非参数记忆索引不含可训练参数，但由 2100 万个 728 维向量组成、共约 153 亿（15.3B）个数值，可用 8 位浮点精度存储以控制内存与磁盘占用。</p>
+<h3 id="h-appendix-h-retrieval-collapse">附录 H 检索坍缩（Appendix H: Retrieval Collapse）</h3>
+<div class="en-orig"><span class="en-tag">EN</span><p>In preliminary experiments, we observed that for some tasks such as story generation [11], the retrieval component would &quot;collapse&quot; and learn to retrieve the same documents regardless of the input. In these cases, once retrieval had collapsed, the generator would learn to ignore the documents, and the RAG model would perform equivalently to BART. The collapse could be due to a less-explicit requirement for factual knowledge in some tasks, or the longer target sequences, which could result in less informative gradients for the retriever. Perez et al. [46] also found spurious retrieval results when optimizing a retrieval component in order to improve performance on downstream tasks.</p></div>
+
+<p>在初步实验中，我们观察到在故事生成 [11] 等某些任务上，检索组件会"坍缩"（collapse）：无论输入是什么都检索同一批文档。一旦检索坍缩，生成器就会学着忽略文档，RAG 模型退化为与 BART 相当。坍缩可能源于某些任务对事实知识的要求不那么明确，也可能源于目标序列过长——这会导致传给检索器的梯度信息量不足。Perez et al. [46] 在为提升下游任务性能而优化检索组件时，也发现了伪检索（spurious retrieval）结果。</p>
+<h3 id="i-appendix-i-number-of-instances-per-dataset">附录 I 每个数据集的实例数量（Appendix I: Number of instances per dataset）</h3>
+<div class="en-orig"><span class="en-tag">EN</span><p>The number of training, development and test datapoints in each of our datasets is shown in Table 7.</p></div>
+
+<p>我们各数据集的训练、开发、测试数据点数量见表 7。</p>
+<p>[表 7：Table 7: Number of instances in the datasets used. *A hidden subset of this data is used for evaluation]</p>
+<table>
+<thead>
+<tr>
+<th>任务</th>
+<th>训练</th>
+<th>开发</th>
+<th>测试</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Natural Questions</td>
+<td>79169</td>
+<td>8758</td>
+<td>3611</td>
+</tr>
+<tr>
+<td>TriviaQA</td>
+<td>78786</td>
+<td>8838</td>
+<td>11314</td>
+</tr>
+<tr>
+<td>WebQuestions</td>
+<td>3418</td>
+<td>362</td>
+<td>2033</td>
+</tr>
+<tr>
+<td>CuratedTrec</td>
+<td>635</td>
+<td>134</td>
+<td>635</td>
+</tr>
+<tr>
+<td>Jeopardy Question Generation</td>
+<td>97392</td>
+<td>13714</td>
+<td>26849</td>
+</tr>
+<tr>
+<td>MS-MARCO</td>
+<td>153726</td>
+<td>12468</td>
+<td>101093*</td>
+</tr>
+<tr>
+<td>FEVER-3-way</td>
+<td>145450</td>
+<td>10000</td>
+<td>10000</td>
+</tr>
+<tr>
+<td>FEVER-2-way</td>
+<td>96966</td>
+<td>6666</td>
+<td>6666</td>
+</tr>
+</tbody>
+</table>
+<p>中文说明：各数据集实例数；MS-MARCO 带 * 表示实际用于评估的是该数据的隐藏子集。</p>
 <h2 id="_3">要点速览</h2>
 <ul>
 <li>RAG 首次把"参数记忆（BART-large 生成器）+ 非参数记忆（维基百科稠密索引，DPR 检索）"带入通用 seq2seq 微调范式，检索文档作为隐变量端到端边缘化，无需检索监督。</li>
