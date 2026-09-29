@@ -21,7 +21,7 @@
   </div>
 </header>
 <div class="read-layout">
-  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">全文对照翻译</a><ul><li><a href="#_3">标题与作者</a></li><li><a href="#abstract">Abstract(摘要)</a></li><li><a href="#1-introduction">1 Introduction(引言)</a></li><li><a href="#2-next-action-prediction">2 Next Action Prediction(下一动作预测)</a></li><li><a href="#3-labeling-interaction-data-at-scale">3 Labeling Interaction Data At Scale(大规模标注交互数据)</a></li><li><a href="#4-long-context-next-action-predictors-longnap">4 Long-Context Next Action Predictors (LongNAP)(长上下文下一动作预测器)</a></li><li><a href="#5-experimental-setup">5 Experimental Setup(实验设置)</a></li></ul></li></ul></aside>
+  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">全文对照翻译</a><ul><li><a href="#_3">标题与作者</a></li><li><a href="#abstract">Abstract(摘要)</a></li><li><a href="#1-introduction">1 Introduction(引言)</a></li><li><a href="#2-next-action-prediction">2 Next Action Prediction(下一动作预测)</a></li><li><a href="#3-labeling-interaction-data-at-scale">3 Labeling Interaction Data At Scale(大规模标注交互数据)</a></li><li><a href="#4-long-context-next-action-predictors-longnap">4 Long-Context Next Action Predictors (LongNAP)(长上下文下一动作预测器)</a></li><li><a href="#5-experimental-setup">5 Experimental Setup(实验设置)</a></li><li><a href="#6-results">6 Results(结果)</a></li><li><a href="#7-what-makes-longnap-work-longnap">7 What Makes LongNAP Work?(什么让 LongNAP 生效?)</a></li><li><a href="#8-beyond-next-action-prediction">8 Beyond Next Action Prediction(超越下一动作预测)</a></li><li><a href="#9-related-work">9 Related Work(相关工作)</a></li><li><a href="#10-discussion">10 Discussion(讨论)</a></li><li><a href="#11-conclusion">11 Conclusion(结论)</a></li><li><a href="#contribution-statement-acknowledgements">贡献声明与致谢(Contribution Statement &amp;amp; Acknowledgements)</a></li><li><a href="#a-napsackappendix-a-napsack">附录 A NAPsack(Appendix A: NAPsack)</a></li><li><a href="#b-longnap-appendix-b-longnap-details">附录 B LongNAP 细节(Appendix B: LongNAP details)</a></li></ul></li><li><a href="#task">任务(Task)</a></li><li><a href="#previous-actions">过往动作(Previous Actions)</a></li><li><a href="#relevant-retrieved-actions-few-shot">检索到的相关动作(Relevant Retrieved Actions)〔译注:此节为 few-shot 增补部分〕</a></li><li><a href="#instructions">指令(Instructions)</a></li></ul></aside>
   <main class="read-main">
       <link rel="stylesheet" href="../assets/katex/katex.min.css">
       <script defer src="../assets/katex/katex.min.js"></script>
@@ -226,6 +226,601 @@
 <p>最后,作者做了一次小规模<strong>人工评估</strong>来验证 LLM 评审。两位作者独立地对各方法做两两偏好标注,合计 300 次比较。对每一对,标注者会看到一条真值序列与来自每种方法的各一条输出,并被要求按总体质量选出更匹配者(平局各计 0.5 胜)。样本对跨用户分层抽样,以确保每名用户都被充分代表。作者报告两位标注者的平均总胜率。</p>
 <h4 id="53-baselines">5.3 基线(Baselines)</h4>
 <div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Our baselines consist of closed and open models, both across prompting and finetuning methods. For prompting, we have a zero-shot baseline, where we give the model the immediate past actions the user took, and simply prompt it to predict what the user would do next. We additionally implement a basic few-shot RAG baseline, where we use past actions as a query for retrieving. Prompts for the above baselines are in §B.2. For finetuned baselines, we evaluate supervised finetuning, testing if simply finetuning over the set of actions is helpful. For closed models, we evaluate prompted baselines with Gemini&#x27;s 3.0 Flash.⁵ For open models, we prompt and finetune Qwen-2.5-VL-7B (Bai et al., 2025).<br><br>⁵ We use Flash since preliminary experiments show marginal improvements over Pro for a fraction of the cost.</p></div><p>基线涵盖闭源与开源模型,以及提示与微调两类方法。提示类包括一个 <strong>zero-shot</strong> 基线:把用户刚做过的近期动作给模型,直接提示它预测用户下一步会做什么;另外实现了一个基础 <strong>few-shot RAG</strong> 基线:用过往动作作为检索查询。上述基线的提示见 §B.2。微调类基线评估<strong>监督微调(supervised finetuning, SFT)</strong>,检验单纯在动作集合上微调是否有帮助。闭源模型方面,用 Gemini 3.0 Flash 做提示基线评估;⁵ 开源模型方面,对 Qwen-2.5-VL-7B 做提示与微调(Bai et al., 2025)。(⁵ 选用 Flash 是因为初步实验显示其相对 Pro 的提升微乎其微,而成本只是零头。)</p></div>
+<h3 id="6-results">6 Results(结果)</h3>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>We synthesize takeaways from our evaluation, with main results summarized in Tab. 3 and Tab. 5.<br><br>LongNAP can learn from just a single user, predicting their future interaction When we train on just a single user, LongNAP is able to predict what the user does next with significantly higher accuracy compared to baselines. When we compare against SFT on Qwen-2.5-VL-7B, LongNAP achieves 79% higher performance (0.21 → 0.38). LongNAP also substantially outperforms prompted baselines. LongNAP achieves 106% higher performance than zero-shot prompting (0.18 → 0.38) and 88% higher performance compared to few-shot prompting (0.20 → 0.38). These gains extend to closed-source models: LongNAP achieves 43% and 39% higher performance than zero-shot (0.26 → 0.38) and few-shot (0.27 → 0.38) prompted Gemini 3.0 Flash, respectively.<br><br>Our human evaluation further validates these findings (Tab. 4). LongNAP achieves a 79% win rate against other methods, substantially outperforming SFT (29.5%), zero-shot (33%), and RAG (45%) baselines on Qwen 2.5 VL. Notably, LongNAP also surpasses stronger closed-source baselines, beating both zero-shot (55%) and RAG-prompted (59%) Gemini.</p></div><p>作者提炼评估中的关键结论,主要结果汇总于表 3 与表 5。</p></div>
+<p><strong>LongNAP 能只从单个用户学习,预测其未来交互。</strong> 只在单个用户上训练时,LongNAP 能以显著高于基线的准确率预测该用户接下来做什么。与 Qwen-2.5-VL-7B 上的 SFT 相比,LongNAP 性能高出 79%(0.21 → 0.38)。LongNAP 也大幅超过提示基线:比 zero-shot 提示高 106%(0.18 → 0.38),比 few-shot 提示高 88%(0.20 → 0.38)。这些增益同样延伸到闭源模型:LongNAP 分别比 zero-shot(0.26 → 0.38)与 few-shot(0.27 → 0.38)提示的 Gemini 3.0 Flash 高 43% 与 39%。</p>
+<p>人工评估进一步验证了这些发现(表 4)。LongNAP 对其他方法取得 79% 的胜率,大幅超过 Qwen 2.5 VL 上的 SFT(29.5%)、zero-shot(33%)与 RAG(45%)基线;值得注意的是,LongNAP 也超过了更强的闭源基线,战胜了 zero-shot(55%)与 RAG 提示(59%)的 Gemini。</p>
+<p><strong>表 3:在单个用户上训练显著优于基线方法,相对最强基线(Gemini Few-shot RAG)平均性能提升 39.4%(+0.11)。报告的是由 LLM 评审(§3.2)判定的与真值未来动作的相似度分(0-1)。<span class="math-inline">$u_i$</span> 表示在 20 用户数据集中单个用户上训练的 LongNAP 实例,<span class="math-inline">$u_\mu$</span> 表示全部 20 个单独训练模型的平均性能。</strong></p>
+<table>
+<thead>
+<tr>
+<th>用户</th>
+<th>Gemini Zero-shot</th>
+<th>Gemini RAG</th>
+<th>Qwen-2.5-VL-7B Zero-shot</th>
+<th>Qwen-2.5-VL-7B RAG</th>
+<th>Qwen-2.5-VL-7B SFT</th>
+<th>LongNAP</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>u1</td>
+<td>0.28</td>
+<td>0.29</td>
+<td>0.21</td>
+<td>0.23</td>
+<td>0.23 (+0.12)</td>
+<td><strong>0.41</strong></td>
+</tr>
+<tr>
+<td>u2</td>
+<td>0.21</td>
+<td>0.22</td>
+<td>0.15</td>
+<td>0.17</td>
+<td>0.18 (+0.12)</td>
+<td><strong>0.34</strong></td>
+</tr>
+<tr>
+<td>u3</td>
+<td>0.23</td>
+<td>0.23</td>
+<td>0.19</td>
+<td>0.18</td>
+<td>0.17 (+0.10)</td>
+<td><strong>0.33</strong></td>
+</tr>
+<tr>
+<td>u4</td>
+<td>0.24</td>
+<td>0.23</td>
+<td>0.14</td>
+<td>0.16</td>
+<td>0.17 (+0.09)</td>
+<td><strong>0.32</strong></td>
+</tr>
+<tr>
+<td>u5</td>
+<td>0.23</td>
+<td>0.24</td>
+<td>0.18</td>
+<td>0.16</td>
+<td>0.16 (+0.10)</td>
+<td><strong>0.34</strong></td>
+</tr>
+<tr>
+<td>u6</td>
+<td>0.24</td>
+<td>0.25</td>
+<td>0.16</td>
+<td>0.20</td>
+<td>0.19 (+0.12)</td>
+<td><strong>0.37</strong></td>
+</tr>
+<tr>
+<td>u7</td>
+<td>0.40</td>
+<td>0.42</td>
+<td>0.20</td>
+<td>0.22</td>
+<td>0.40 (+0.04)</td>
+<td><strong>0.46</strong></td>
+</tr>
+<tr>
+<td>u8</td>
+<td>0.23</td>
+<td>0.24</td>
+<td>0.15</td>
+<td>0.18</td>
+<td>0.17 (+0.15)</td>
+<td><strong>0.39</strong></td>
+</tr>
+<tr>
+<td>u9</td>
+<td>0.25</td>
+<td>0.25</td>
+<td>0.18</td>
+<td>0.21</td>
+<td>0.22 (+0.12)</td>
+<td><strong>0.37</strong></td>
+</tr>
+<tr>
+<td>u10</td>
+<td>0.29</td>
+<td>0.29</td>
+<td>0.24</td>
+<td>0.26</td>
+<td>0.24 (+0.10)</td>
+<td><strong>0.39</strong></td>
+</tr>
+<tr>
+<td>u11</td>
+<td>0.26</td>
+<td>0.26</td>
+<td>0.17</td>
+<td>0.17</td>
+<td>0.19 (+0.04)</td>
+<td><strong>0.30</strong></td>
+</tr>
+<tr>
+<td>u12</td>
+<td>0.25</td>
+<td>0.27</td>
+<td>0.18</td>
+<td>0.22</td>
+<td>0.26 (+0.13)</td>
+<td><strong>0.40</strong></td>
+</tr>
+<tr>
+<td>u13</td>
+<td>0.26</td>
+<td>0.26</td>
+<td>0.18</td>
+<td>0.20</td>
+<td>0.19 (+0.11)</td>
+<td><strong>0.37</strong></td>
+</tr>
+<tr>
+<td>u14</td>
+<td>0.27</td>
+<td>0.28</td>
+<td>0.20</td>
+<td>0.21</td>
+<td>0.18 (+0.08)</td>
+<td><strong>0.36</strong></td>
+</tr>
+<tr>
+<td>u15</td>
+<td>0.23</td>
+<td>0.25</td>
+<td>0.17</td>
+<td>0.20</td>
+<td>0.20 (+0.11)</td>
+<td><strong>0.36</strong></td>
+</tr>
+<tr>
+<td>u16</td>
+<td>0.24</td>
+<td>0.24</td>
+<td>0.17</td>
+<td>0.18</td>
+<td>0.21 (+0.17)</td>
+<td><strong>0.41</strong></td>
+</tr>
+<tr>
+<td>u17</td>
+<td>0.25</td>
+<td>0.25</td>
+<td>0.17</td>
+<td>0.18</td>
+<td>0.15 (+0.10)</td>
+<td><strong>0.34</strong></td>
+</tr>
+<tr>
+<td>u18</td>
+<td>0.27</td>
+<td>0.27</td>
+<td>0.17</td>
+<td>0.22</td>
+<td>0.16 (+0.11)</td>
+<td><strong>0.38</strong></td>
+</tr>
+<tr>
+<td>u19</td>
+<td>0.41</td>
+<td>0.41</td>
+<td>0.28</td>
+<td>0.27</td>
+<td>0.30 (+0.05)</td>
+<td><strong>0.46</strong></td>
+</tr>
+<tr>
+<td>u20</td>
+<td>0.24</td>
+<td>0.26</td>
+<td>0.15</td>
+<td>0.17</td>
+<td>0.24 (+0.15)</td>
+<td><strong>0.41</strong></td>
+</tr>
+<tr>
+<td>uµ</td>
+<td>0.26</td>
+<td>0.27</td>
+<td>0.18</td>
+<td>0.20</td>
+<td>0.21 (+0.11)</td>
+<td><strong>0.38</strong></td>
+</tr>
+</tbody>
+</table>
+<p>(表 3 中文说明:SFT 列括号内为相对其自身 zero-shot 基线的增量。LongNAP 在全部 20 个用户上都取得最高分,范围 0.30-0.46。)</p>
+<p><strong>表 4:人工评估显示 LongNAP 的胜率显著更高。展示各方法的两两人工评估胜率(2 位标注者合计、共 300 次比较、95% bootstrap 置信区间)。</strong></p>
+<table>
+<thead>
+<tr>
+<th>模型</th>
+<th>方法</th>
+<th>胜率(%)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Qwen 2.5 VL</td>
+<td>LongNAP</td>
+<td><strong>79.0±6.6</strong></td>
+</tr>
+<tr>
+<td></td>
+<td>SFT</td>
+<td>29.5±6.9</td>
+</tr>
+<tr>
+<td></td>
+<td>Few-shot RAG</td>
+<td>45.0±7.6</td>
+</tr>
+<tr>
+<td></td>
+<td>Zero-shot</td>
+<td>33.0±7.2</td>
+</tr>
+<tr>
+<td>Gemini</td>
+<td>Few-shot RAG</td>
+<td>58.5±6.8</td>
+</tr>
+<tr>
+<td></td>
+<td>Zero-shot</td>
+<td>55.0±7.7</td>
+</tr>
+</tbody>
+</table>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>LongNAP can learn from many users, generalizing to entirely new users. We find that LongNAP, when trained on many users at once, generalizes to new users. While the gains are not as large as in the single-user setting, LongNAP still substantially outperforms prompted open-source baselines. In particular, LongNAP achieves 66% higher performance than zero-shot prompting Qwen-2.5-VL-7B and 53% higher performance than few-shot prompting. Improvements over the closed-source baseline (Gemini 3.0 Flash) are more modest: LongNAP achieves 19% and 13% higher performance than zero-shot and few-shot prompting, respectively. These are smaller gains relative to the single-user setting, so we suspect user-specific weights are especially effective for NAP. Scaling users may close this gap; we leave this to future work.<br><br>We also suspect that this variant of LongNAP relies more heavily on the reasoning to retrieve process. At inference time, LongNAP must learn general strategies for saving and retrieving user-specific inferences, depending less on parametric memorization and more on retrieval and in-context learning.</p></div><p><strong>LongNAP 能从多个用户学习,泛化到全新用户。</strong> 作者发现,同时在多个用户上训练时,LongNAP 能泛化到新用户。虽然增益不如单用户设置大,LongNAP 仍大幅超过开源提示基线:比 zero-shot 提示的 Qwen-2.5-VL-7B 高 66%,比 few-shot 提示高 53%。相对闭源基线(Gemini 3.0 Flash)的改进更温和:LongNAP 分别比 zero-shot 与 few-shot 提示高 19% 与 13%。这些增益小于单用户设置,因此作者推测<strong>用户专属权重对 NAP 尤其有效</strong>;扩大用户规模或许能缩小这一差距,留作未来工作。</p></div>
+<p>作者还推测,这一 LongNAP 变体更依赖"为检索而推理"过程:推理时,LongNAP 必须学会保存与检索用户专属推断的<strong>通用</strong>策略——更少依赖参数化记忆,更多依赖检索与上下文学习。</p>
+<p>[图 5: Some users are more predictable than others. When LongNAP is trained on a single user (in our generalizing over time experiments, §5.1), LLM-as-a-judge evals vary substantially from one user's LongNAP to another user's. In the above figure, we re-evaluate across checkpoints from training epochs for each user, highlighting variance.]</p>
+<p>图 5(中文说明):有些用户比其他用户更可预测。当 LongNAP 在单个用户上训练时(即 §5.1 的时间泛化实验),LLM 评审评估结果在一个用户的 LongNAP 与另一个用户的 LongNAP 之间差异很大。图中对每个用户在各训练 epoch 的 checkpoint 上重新评估,以突出方差。</p>
+<p><strong>表 5:在多个用户上联合训练时,LongNAP 对未见用户表现出适度的泛化,相对最强基线(同样是 Gemini Few-Shot RAG)平均性能提升 13.0%。报告由 LLM 评审(§3.2)判定的与真值未来动作的相似度。为检验对未见用户的泛化,随机在 10 个用户上训练、5 个上验证、5 个上测试(即上表所报)。<span class="math-inline">$u_\mu$</span> 表示各评估用户上的平均性能,<span class="math-inline">$u_i$</span> 表示在用户 <span class="math-inline">$i$</span> 上的性能。</strong></p>
+<table>
+<thead>
+<tr>
+<th>模型</th>
+<th>方法</th>
+<th><span class="math-inline">$u_\mu$</span></th>
+<th>u2</th>
+<th>u6</th>
+<th>u12</th>
+<th>u14</th>
+<th>u16</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Gemini</td>
+<td>Zero-shot</td>
+<td>0.22</td>
+<td>0.27</td>
+<td>0.22</td>
+<td>0.20</td>
+<td>0.20</td>
+<td>0.21</td>
+</tr>
+<tr>
+<td></td>
+<td>Few-shot RAG</td>
+<td>0.23</td>
+<td>0.26</td>
+<td><strong>0.23</strong></td>
+<td>0.22</td>
+<td>0.21</td>
+<td>0.22</td>
+</tr>
+<tr>
+<td>Qwen VL</td>
+<td>Zero-shot</td>
+<td>0.16</td>
+<td>0.22</td>
+<td>0.13</td>
+<td>0.14</td>
+<td>0.16</td>
+<td>0.14</td>
+</tr>
+<tr>
+<td></td>
+<td>Few-shot RAG</td>
+<td>0.17</td>
+<td>0.23</td>
+<td>0.15</td>
+<td>0.18</td>
+<td>0.14</td>
+<td>0.18</td>
+</tr>
+<tr>
+<td></td>
+<td>SFT</td>
+<td>0.17</td>
+<td>0.22</td>
+<td>0.14</td>
+<td>0.16</td>
+<td>0.15</td>
+<td>0.17</td>
+</tr>
+<tr>
+<td>LongNAP</td>
+<td></td>
+<td><strong>0.26</strong></td>
+<td><strong>0.31</strong></td>
+<td><strong>0.28</strong></td>
+<td><strong>0.22</strong></td>
+<td><strong>0.21</strong></td>
+<td><strong>0.26</strong></td>
+</tr>
+</tbody>
+</table>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>LongNAP&#x27;s most confident predictions are aligned with what users actually do 26% of the time. To provide a more interpretable measure of performance, we report pass@k: the probability that at least one of k independent samples from a model exceeds a similarity threshold against the ground truth future trajectory. We selected an LLM-judge threshold of 0.5; trajectories that get this score are often well aligned with the actual intent of the user, but miss details or skip a few actions (see §5.2 for an example). At this threshold, LongNAP achieves 17.1% at pass@1 across users, rising to 36.3% at pass@20 (Fig. 9). In addition, we observe that model confidence, measured as intra-cluster variance among the 20 sampled trajectories, is correlated with accuracy (Fig. 10). For prompts in the 90th percentile of confidence (lowest variance), pass@1 rises to 25.9%.</p></div><p><strong>LongNAP 最高置信的预测有 26% 的时间与用户实际行为对齐。</strong> 为给出更可解释的性能度量,作者报告 pass@k:模型 <span class="math-inline">$k$</span> 次独立采样中至少有一次超过与真值未来轨迹的相似度阈值的概率。作者选取 LLM 评审阈值 0.5;得到该分的轨迹往往与用户实际意图高度对齐,只是漏掉细节或跳过个别动作(示例见 §5.2)。在该阈值下,LongNAP 跨用户的 pass@1 为 <strong>17.1%</strong>,pass@20 升至 <strong>36.3%</strong>(图 9)。此外,作者观察到以 20 条采样轨迹簇内方差度量的模型置信度与准确率相关(图 10):在置信度第 90 百分位(方差最低)的提示上,pass@1 升至 <strong>25.9%</strong>。</p></div>
+<p>[图 9: Pass@k scores for LongNAP. To count as a "pass," we selected an LLM-judge threshold of 0.5; trajectories that get this score are often well aligned with the actual intent of the user, but miss minor details or skip a few actions (see §5.2 for an example). At this threshold, LongNAP achieves 17.1% at pass@1 across users, rising to 36.3% at pass@20.]</p>
+<p>图 9(中文说明):LongNAP 的 pass@k 分数。记为"通过(pass)"的标准取 LLM 评审阈值 0.5;得到该分的轨迹往往与用户实际意图高度对齐,只是漏掉次要细节或跳过个别动作(示例见 §5.2)。在该阈值下,LongNAP 跨用户的 pass@1 为 17.1%,pass@20 升至 36.3%。</p>
+<p>[图 10: Empirical calibration of LongNAP. Confidence percentiles are computed per-user from intra-cluster variance of 20 sampled trajectories. Higher confidence prompts yield substantially higher pass@1 accuracy (25.9% vs. 10.3%).]</p>
+<p>图 10(中文说明):LongNAP 的经验校准(empirical calibration)。置信度百分位按用户分别计算,依据是 20 条采样轨迹的簇内方差。置信度更高的提示带来显著更高的 pass@1 准确率(25.9% 对 10.3%)。</p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Predictability across users and generalization. While LongNAP results are on average better than our baselines, there is still substantial variability across users. For some users, relative improvement against the strongest baseline is limited, while for others, improvement is substantial. On u11, for example, the strongest baseline is Gemini (few-shot), which achieves a score of 0.26 with the LLM judge; LongNAP improves modestly to 0.30 – an absolute gain of 4 points (15% relative improvement). In contrast, on u8, the strongest baseline is Gemini few-shot (0.24), and LongNAP reaches 0.39, corresponding to a 15-point absolute gain (63% relative improvement). We suspect that some users are inherently more predictable. They repeat similar tasks each day, making them easier to model with finetuning or prompting alone, limiting the additional benefit of RL (Chu et al., 2025).</p></div><p><strong>跨用户的可预测性与泛化。</strong> 虽然 LongNAP 平均优于基线,用户间仍存在显著差异:有些用户相对最强基线的提升有限,有些则提升巨大。例如 u11,最强基线是 Gemini(few-shot),LLM 评审分 0.26;LongNAP 温和地提升到 0.30——绝对增益 4 个点(相对提升 15%)。相比之下,u8 的最强基线是 Gemini few-shot(0.24),LongNAP 达到 0.39,相当于绝对增益 15 个点(相对提升 63%)。作者怀疑部分用户<strong>本质上更可预测</strong>:他们每天重复相似的任务,仅靠微调或提示就易于建模,从而限制了 RL 的额外收益(Chu et al., 2025)。</p></div>
+<h3 id="7-what-makes-longnap-work-longnap">7 What Makes LongNAP Work?(什么让 LongNAP 生效?)</h3>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>In this section, we analyze the impact of various decisions in designing LongNAP (§7.1) and analyze how reasoning traces evolve over the course of training and across users (§7.2).</p></div><p>本节分析设计 LongNAP 时的各项决策的影响(§7.1),并分析推理轨迹在训练过程中与跨用户的演变(§7.2)。</p></div>
+<h4 id="71-algorithm-ablations">7.1 算法消融(Algorithm Ablations)</h4>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>We apply a handful of targeted ablations to LongNAP, surfacing the impact of various components. First, we ablate reasoning: we optimize LongNAP without generating reasoning traces for retrieval and prediction. Without reasoning, we retrieve only past observations, directly using the current observation as a query. In a separate ablation, we remove the retriever entirely, skipping the reasoning-to-retrieve step. Finally, we analyze the impact of our training order. We suspect chronological training over user traces helps model performance—reasoning traces accumulate and evolve in the order of observed interaction—so we shuffle our train data. To evaluate these ablations, we select a random subset of 5 users: the same subset of test users from our across-user generalization experiments (see Tab. 5 and §5.1).</p></div><p>作者对 LongNAP 做了若干针对性消融,以揭示各组件的影响。第一,消融<strong>推理(reasoning)</strong>:优化 LongNAP 时不生成用于检索与预测的推理轨迹;没有推理时,只检索过往观察,直接用当前观察作为查询。第二,在另一项消融中<strong>完全移除检索器</strong>,跳过"为检索而推理"这一步。最后,分析训练顺序的影响:作者怀疑在用户轨迹上按时间顺序训练有助于模型性能——推理轨迹按观察交互的顺序累积与演化——因此把训练数据<strong>打乱(shuffle)</strong>。为评估这些消融,作者选取 5 名用户的随机子集:即跨用户泛化实验中的同一批测试用户(见表 5 与 §5.1)。</p></div>
+<p>[图 6: At a given time (top), LongNAP is likely to retrieve over a substantial part of its past context (bottom) to predict what a user will do next. The visualization above (for a random user) shows what context from the past is retrieved for a query at the current time.]</p>
+<p>图 6(中文说明):在给定时刻(上),LongNAP 很可能检索其过往上下文的相当大一部分(下)来预测用户下一步。上图(对一名随机用户)展示了当前时刻的一条查询从过去检索到了哪些上下文。</p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>All ablations reduce performance to varying degrees (main results in Tab. 6). First, removing reasoning degrades performance substantially (by 19.2%, from 0.38 → 0.30). The same applies to retrieval: removing the ability to observe past reasoning and observations also degrades performance by 15.2% (0.38 → 0.32). To illustrate the impact of the retriever, we additionally visualize how context is retrieved over the course of training compared to the non-retriever ablation (Fig. 6). LongNAP learns to retrieve context from across its full interaction history, drawing on observations spread days apart rather than relying only on recent activity. Finally, shuffling the training data also has an impact (albeit smaller) on final performance: we observe a 9.3% relative reduction in performance compared to LongNAP (0.38 → 0.34).</p></div><p>所有消融都在不同程度上降低性能(主要结果见表 6)。首先,移除推理使性能大幅下降(19.2%,0.38 → 0.30)。检索同理:失去观察过往推理与观察的能力也使性能下降 15.2%(0.38 → 0.32)。为展示检索器的影响,作者还可视化了训练过程中上下文如何被检索、并与"无检索器"消融对比(图 6):LongNAP 学会了从其<strong>完整</strong>交互历史中检索上下文,引用相隔数天的观察,而非只依赖近期活动。最后,打乱训练数据对最终性能也有影响(尽管较小):相对 LongNAP 观察到 9.3% 的相对性能下降(0.38 → 0.34)。</p></div>
+<p><strong>表 6:推理与检索对 LongNAP 的性能都至关重要。作者选取一个随机用户子集做消融。移除推理组件导致平均性能最大幅下降(绝对 −0.07),移除检索器平均降低 −0.06。打乱数据集同样损害结果(−0.04),说明保持时间结构很重要。<span class="math-inline">$u_\mu$</span> 表示各评估用户的平均性能,<span class="math-inline">$u_i$</span> 表示在用户 <span class="math-inline">$i$</span> 上的性能;消融在 5 名用户的随机子集上进行。</strong></p>
+<table>
+<thead>
+<tr>
+<th>模型</th>
+<th></th>
+<th><span class="math-inline">$u_\mu$</span></th>
+<th>u2</th>
+<th>u6</th>
+<th>u12</th>
+<th>u14</th>
+<th>u16</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>LongNAP</td>
+<td></td>
+<td>0.38</td>
+<td>0.34</td>
+<td>0.37</td>
+<td>0.40</td>
+<td>0.36</td>
+<td>0.41</td>
+</tr>
+<tr>
+<td>消融</td>
+<td>→ Remove reasoning</td>
+<td>0.30 (−0.07)</td>
+<td>0.25 (−0.09)</td>
+<td>0.30 (−0.06)</td>
+<td>0.35 (−0.09)</td>
+<td>0.27 (−0.06)</td>
+<td>0.35 (−0.06)</td>
+</tr>
+<tr>
+<td></td>
+<td>→ Remove retriever</td>
+<td>0.32 (−0.06)</td>
+<td>0.27 (−0.07)</td>
+<td>0.30 (−0.07)</td>
+<td>0.39 (−0.01)</td>
+<td>0.29 (−0.08)</td>
+<td>0.42 (+0.01)</td>
+</tr>
+<tr>
+<td></td>
+<td>→ Shuffle dataset</td>
+<td>0.34 (−0.04)</td>
+<td>0.29 (−0.05)</td>
+<td>0.32 (−0.04)</td>
+<td>0.40 (+0.00)</td>
+<td>0.32 (−0.05)</td>
+<td>0.41 (−0.00)</td>
+</tr>
+</tbody>
+</table>
+<p>(表 6 中文说明:括号内为相对 LongNAP 的绝对变化。Remove reasoning = 去推理;Remove retriever = 去检索器;Shuffle dataset = 打乱数据集。)</p>
+<h4 id="72-analyzing-reasoning-traces">7.2 推理轨迹分析(Analyzing Reasoning Traces)</h4>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>In our ablations, we find that allowing the model to reason plays a critical role in LongNAP&#x27;s performance. In some cases, these traces may serve as explanations for a particular user&#x27;s decisions (Zhu et al., 2025). Here, we study how reasoning traces evolve during the course of training, across both reasoning for retrieval and for prediction.<br><br>First, we analyze reasoning lengths from users for every epoch of training, for 10 full epochs. Across training, we find that reasoning traces generally get shorter, both for retrieval and prediction phases (Fig. 8). Generally, traces for retrieval are shorter than for prediction (avg. 10.11 retrieval tokens v.s. 85.34 prediction). Thinking to retrieve traces become query-like (e.g. message Michael Diyi reminder or ice cream salted caramel youtube), likely optimized for the underlying BM25 retriever.<br><br>Analyzing the content of the prediction traces themselves, we find substantial variance across—and often even within—users. Qualitatively, many of these traces describe a user&#x27;s habits and preferences. To get a sense for this, we embed reasoning traces with sentence-transformers (using the all-MiniLM-L6-v2 model; Wang et al. (2020); Reimers &amp; Gurevych (2019)) and then visualize the embeddings (in Fig. 7).</p></div><p>在消融中,作者发现允许模型推理对 LongNAP 的性能起着关键作用。某些情况下,这些轨迹或许可以作为对特定用户决策的解释(Zhu et al., 2025)。这里,作者研究推理轨迹在训练过程中的演变,涵盖为检索的推理与为预测的推理。</p></div>
+<p>首先,分析 10 个完整训练 epoch 中各 epoch 的推理轨迹长度。整个训练过程中,检索与预测两个阶段的推理轨迹总体都在变短(图 8)。总体上,检索轨迹比预测轨迹短(平均检索 10.11 个 token,预测 85.34 个)。"为检索而思考"的轨迹变得像查询语句(例如 "message Michael Diyi reminder" 或 "ice cream salted caramel youtube"),很可能是针对底层 BM25 检索器优化了。</p>
+<p>[图 8: Reasoning traces grow shorter across model training. Traces for the retrieve phase grow far shorter than queries for the predict phase (avg. 10.11 retrieval tokens v.s. 85.34 prediction). Qualitatively, we find that reasoning for the retrieve phase resembles queries to a retriever; while reasoning for the prediction phase resembles higher order descriptions of a user's behavior.]</p>
+<p>图 8(中文说明):推理轨迹随模型训练推进而变短。检索阶段的轨迹远短于预测阶段的查询(平均检索 10.11 个 token,预测 85.34 个)。定性来看,检索阶段的推理近似于发给检索器的查询,而预测阶段的推理近似于对用户行为的更高阶描述。</p>
+<p>分析预测轨迹本身的内容,作者发现轨迹在用户之间、甚至常常在用户内部都差异巨大。定性地说,许多轨迹描述了用户的习惯与偏好。为获得直观感受,作者用句向量转换器(all-MiniLM-L6-v2 模型;Wang et al. (2020); Reimers &amp; Gurevych (2019))嵌入推理轨迹,并可视化嵌入(图 7)。</p>
+<p>[图 7: LongNAP learns diverse reasoning strategies when trained on different users. Different colors correspond to different users. We embed (using the all-MiniLM-L6-v2 model; Wang et al. (2020); Reimers &amp; Gurevych (2019)) and visualize traces from the reasoning to predict phase across a subset of users with tSNE. For some users (e.g. u7, blue, almost exclusively takes online surveys), reasoning strategies are homogenous. For others, LongNAP generates a library of reasoning patterns for specific contexts (u8; in orange).]</p>
+<p>图 7(中文说明):在不同用户上训练时,LongNAP 学到多样的推理策略。不同颜色对应不同用户。作者嵌入(all-MiniLM-L6-v2 模型)并用 tSNE 可视化一部分用户"为预测而推理"阶段的轨迹。对某些用户(如 u7,蓝色,几乎只做在线问卷),推理策略是同质的;对另一些用户,LongNAP 则生成针对特定情境的推理模式库(u8,橙色)。</p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Some users have limited spread in reasoning traces. As a measure of spread, we compute the mean distance of all the user&#x27;s embedded traces to the user centroid (<span class="math-inline">$r_{\text{avg}}$</span>). Consider the following trace from u7, a user who uses their phone almost exclusively to complete surveys online (<span class="math-inline">$r_{\text{avg}}$</span> = 4.94):<br><br>The user&#x27;s actions suggest a habitual and possibly patterned behavior of completing surveys and managing their Yahoo Mail inbox. This could involve clicking &quot;Next&quot; on a survey to &quot;Continue,&quot; possibly indicating the completion of a set of survey questions...<br><br>Many of this user&#x27;s traces are similar in content and style. In contrast, other users have models that produce more diverse traces, capturing variance in their behavior. u8 (<span class="math-inline">$r_{\text{avg}}$</span> = 16.26) regularly goes house-hunting during the day:<br><br>The user systematically goes through an interactive map, view detailed photos of houses on the listing details page, and then pan again through the [ANONYMIZED] area properties.<br><br>and switches between various social media apps at night:<br><br>Since communication on personal social media platforms is a common activity, following the successful completion of Instagram Stories, the user may turn to other notifications to check for any incoming emails, messages from their list of contacts, or potential bottom notifications from social media apps.<br><br>While reasoning improves our models&#x27; predictive power, exploring if the reasoning itself is indeed faithful or accurate is an avenue for future work.</p></div><p>有些用户的推理轨迹离散度有限。作为离散度的度量,作者计算该用户全部嵌入轨迹到用户质心的平均距离(<span class="math-inline">$r_{\text{avg}}$</span>)。看 u7(一个几乎只用手机完成在线问卷的用户,<span class="math-inline">$r_{\text{avg}}$</span> = 4.94)的如下轨迹:</p></div>
+<p>"该用户的行为提示了一种完成问卷并管理其 Yahoo 邮箱的习惯性、可能模式化的行为。这可能包括在问卷上点击 'Next' 到 'Continue',或表明一组问卷问题的完成……"</p>
+<p>该用户的许多轨迹在内容与风格上都相似。相比之下,另一些用户的模型会产生更多样的轨迹,捕捉其行为中的方差。u8(<span class="math-inline">$r_{\text{avg}}$</span> = 16.26)白天定期看房:</p>
+<p>"该用户系统性地遍历一幅交互式地图,在房源详情页查看房屋照片,然后继续平移浏览 [匿名化] 区域的房源。"</p>
+<p>夜间则在各种社交媒体应用之间切换:</p>
+<p>"由于在个人社交媒体平台上交流是常见活动,在成功看完 Instagram Stories 之后,用户可能转向其他通知,查看是否有新邮件、联系人列表发来的消息、或社交媒体应用底部的通知。"</p>
+<p>虽然推理提升了模型的预测能力,但探究这些推理本身是否<strong>忠实(faithful)</strong>或准确,是未来工作的一个方向。</p>
+<h3 id="8-beyond-next-action-prediction">8 Beyond Next Action Prediction(超越下一动作预测)</h3>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>We outline two applications enabled by our work; namely the ability to learn entirely online from user interactions, and the ability to generalize as helpful assistants.<br><br>Learning online The distribution of a person&#x27;s behavior is always shifting. As the person changes over time, so does the work they do and the patterns they exhibit. LongNAP should be able to adapt to this drift as we observe additional interaction data. In our work, we present data collection and training as two processes that occur synchronously, but this need not be the case! Instead of storing data and training offline with multiple epochs, we can convert the entire pipeline to run online, where training proceeds continuously in the background; or overnight (Lin et al., 2025). We call this version powerNAP. In powerNAP, NAPsack and LongNAP operate asynchronously: NAPsack continuously tracks and labels user actions, enqueueing them for training, while LongNAP consumes labeled actions from the queue and trains on them in a single pass, discarding data after use. Crucially, memory is never reset and reasoning traces accumulate, allowing the model to continually build a better representation of the user over time. We release powerNAP as a demo⁶ for users to try on their own data.<br><br>⁶ Available at https://github.com/GeneralUserModels/powernap<br><br>Assistants Once a user has a good LongNAP, we can anticipate what they want and intend to do. This should enable an assistant that finishes predictable tasks for users by acting on predictions about what the user would do next. While LongNAP is not a computer use agent, we can easily use it to pilot one. We release a simple version of such an assistant, called SleepWalk, which relies on an off-the-shelf computer use agent (Anthropic, 2024) to execute on actions predicted by LongNAP.</p></div><p>作者概述本文工作启用的两个应用:完全在线地从用户交互中学习的能力,以及泛化为有用助手的能力。</p></div>
+<p><strong>在线学习(Learning online)</strong>:一个人的行为分布总在漂移。随着人随时间变化,其工作与呈现的模式也在变化。随着观察到更多交互数据,LongNAP 应能适应这种漂移。论文中,作者把数据收集与训练呈现为两个<strong>同步</strong>发生的过程,但并非必须如此!与其存储数据、离线多 epoch 训练,可以把整条流水线改为在线运行:训练在后台持续进行,或夜间进行(Lin et al., 2025)。作者称这一版本为 <strong>powerNAP</strong>。在 powerNAP 中,NAPsack 与 LongNAP 异步运作:NAPsack 持续跟踪并标注用户动作、将其入队等待训练;LongNAP 从队列消费已标注动作、单遍训练、用后即弃。关键在于,<strong>记忆永不重置</strong>、推理轨迹持续累积,使模型得以随时间不断构建更好的用户表示。作者将 powerNAP 作为演示⁶ 发布,供用户在自己的数据上试用。(⁶ 见 https://github.com/GeneralUserModels/powernap 。)</p>
+<p><strong>助手(Assistants)</strong>:一旦用户拥有了一个好的 LongNAP,我们就能预判其想要什么、打算做什么。这应当能催生一种"依据对用户下一步会做什么的预测、替用户完成可预测任务"的助手。LongNAP 本身不是计算机使用智能体,但可以轻松用它为一个此类智能体<strong>领航(pilot)</strong>。作者发布了这类助手的一个简单版本,名为 <strong>SleepWalk</strong>,它依赖现成的计算机使用智能体(Anthropic, 2024)来执行 LongNAP 预测出的动作。</p>
+<h3 id="9-related-work">9 Related Work(相关工作)</h3>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>World, Human, and User Models The ability to predict the dynamics of complex physical and social behaviors are longstanding goals in both human-computer interaction and artificial intelligence. Progress on large, multimodal models has revitalized this vision. Trained on enough video data, large-scale generative video models show promise in predicting world dynamics, for example through next frame prediction (Hafner et al., 2019; Bruce et al., 2024; Yang et al., 2023). These predictive world models have opened a range of research directions in robotics, enabling data efficient robotic learning (Sharma et al., 2023; Quevedo et al., 2025; Du et al., 2023). Similarly, LLMs have been used to simulate general human behavior (Park et al., 2023; Wu et al., 2026) for social science research (Argyle et al., 2023; Hewitt et al., 2024; Park et al., 2024) or to build proactive, question-asking assistants (Sun et al., 2025; Wu et al., 2025). Both approaches rely on a similar assumption: that the internet contains substantial amounts of realistic behavioral data to bootstrap simulation. While these methods are sometimes effective, they tend to suffer from a sim-to-real gap (Zhao et al., 2020). In other words, we apply these simulators in very specific situations (e.g. specific individuals, robots, etc.) that are out of distribution. And continually collecting new training data to mend this distribution shift is technically challenging (Mirchandani et al., 2024) and/or prohibitively expensive (Halevy et al., 2009).<br><br>In this paper, we train models directly at the level of an individual user—a user model. The user models cannot afford to suffer from the sim-to-real gap: they are immediately deployed to specific people. So instead of relying on datasets that serve as proxies, we directly collect data from individual interaction traces. We rely on work showing that VLMs can effectively describe individual behavior through observation (Shaikh et al., 2025; Wang et al., 2025c). We then validate and build infrastructure (§3) for continually labeling low-level trajectories of individual behavior at scale.</p></div><p><strong>世界模型、人类模型与用户模型(World, Human, and User Models)</strong>:预测复杂物理与社会行为动态的能力,是人机交互与人工智能两个领域的长期目标。大型多模态模型的进展让这一愿景重焕生机。在足够多的视频数据上训练后,大规模生成式视频模型在<strong>预测世界动态</strong>上展现出前景,例如通过下一帧预测(Hafner et al., 2019; Bruce et al., 2024; Yang et al., 2023)。这些预测式世界模型在机器人学中开启了一系列研究方向,实现了数据高效的机器人学习(Sharma et al., 2023; Quevedo et al., 2025; Du et al., 2023)。类似地,LLM 也被用于模拟一般人类行为(Park et al., 2023; Wu et al., 2026),服务于社会科学研究(Argyle et al., 2023; Hewitt et al., 2024; Park et al., 2024),或用于构建主动提问的助手(Sun et al., 2025; Wu et al., 2025)。这两条路线都依赖一个相似的假设:互联网上有大量现实行为数据可用于引导(bootstrap)仿真。这些方法虽然有时有效,但往往受<strong>仿真-现实鸿沟(sim-to-real gap)</strong>之苦(Zhao et al., 2020)。换句话说,我们把这些模拟器用在非常特定的情形(如特定个体、机器人等)中,而这些情形恰恰是分布外的;要持续收集新训练数据去修补这种分布漂移,要么技术上困难(Mirchandani et al., 2024)、要么昂贵得不可行(Halevy et al., 2009)。</p></div>
+<p>本文在<strong>个体用户</strong>层面直接训练模型——即用户模型。用户模型承受不起仿真-现实鸿沟:它们会被即刻部署到具体的人身上。因此,作者不依赖充当代理的数据集,而是直接从个体交互轨迹收集数据;并依托"VLM 能通过观察有效描述个体行为"的既有工作(Shaikh et al., 2025; Wang et al., 2025c),验证并构建(§3)了大规模持续标注个体行为底层轨迹的基础设施。</p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Personal Reasoning Training models that understand what people want requires personal reasoning (Li et al., 2025a): the ability to flexibly reason over our opaque personal preferences and beliefs. In contrast, the predominant RL setting relies on tasks where the outcome is easily verifiable, like math or symbolic reasoning (Silver et al., 2016; 2017; Trinh et al., 2024). Most LLMs are similarly trained to reason on easily verifiable tasks (Zelikman et al., 2022; Cobbe et al., 2021). Because of this reliance on verifiability, LLM reasoning often fails to generalize beyond these domains (Shaikh et al., 2023; Sprague et al., 2024). Training a model that can instead reason effectively over everyday interaction enables a range of human-centered applications: from proactive assistants that know your context well enough to autonomously do &quot;the right thing at the right time,&quot; (Weiser, 1991) to AI models that know when and how to defer effectively to users (Horvitz, 1999).<br><br>In our work, we train such a model (LongNAP) over everything a person sees and does on their computer. Most related to our work is Gandhi et al. (2026), where an LLM is trained to reason for dialogue simulation. We instead learn to predict a user&#x27;s general actions over the entirety of their digital context. In addition, LongNAP takes inspiration from work on metacognitive reuse (Suzgun et al., 2025; Didolkar et al., 2025; Sarukkai et al., 2025) and reasoning abstractions (Qu et al., 2025), where reasoning traces are re-used over the course of learning. Likewise, LongNAP learns to both generate, retrieve, and re-use reasoning traces at the individual user level.</p></div><p><strong>个性化推理(Personal Reasoning)</strong>:训练"理解人们想要什么"的模型,需要<strong>个性化推理</strong>(Li et al., 2025a):对我们那些不透明的个人偏好与信念灵活推理的能力。相比之下,主流 RL 设定依赖结果易于验证的任务,如数学或符号推理(Silver et al., 2016; 2017; Trinh et al., 2024);大多数 LLM 也同样在易验证任务上训练推理(Zelikman et al., 2022; Cobbe et al., 2021)。由于这种对可验证性的依赖,LLM 推理常常无法泛化到这些领域之外(Shaikh et al., 2023; Sprague et al., 2024)。转而训练一个能在日常交互上有效推理的模型,将支撑一系列以人为中心的应用:从"对你的上下文了如指掌、足以自主地在正确时机做正确之事"的主动式助手(Weiser, 1991),到知道何时、如何有效地向用户<strong>让渡(defer)</strong>的 AI 模型(Horvitz, 1999)。</p></div>
+<p>本文训练了这样一个模型(LongNAP),学习的对象是一个人在计算机上<strong>所见与所做的一切</strong>。与本文最相关的是 Gandhi et al. (2026),其中 LLM 被训练为对话模拟而推理;作者则改为在个体用户数字上下文的整体上学习预测其一般动作。此外,LongNAP 从<strong>元认知复用(metacognitive reuse)</strong>(Suzgun et al., 2025; Didolkar et al., 2025; Sarukkai et al., 2025)与<strong>推理抽象(reasoning abstractions)</strong>(Qu et al., 2025)研究中汲取灵感——这些工作中推理轨迹会在学习过程中被复用。类似地,LongNAP 学会在<strong>个体用户</strong>层面生成、检索并复用推理轨迹。</p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Memory and Retrieval To predict a user&#x27;s next action, we must be able to use the entirety of their digital context, which can span months, years, or more. However, LLMs have practical context limitations. The context window is constrained to a finite number of tokens; and putting everything in-context can degrade model performance (Liu et al., 2024). One solution involves retrieval-augmented generation, where LLMs retrieve from a larger, external database (Chen et al., 2017; Lewis et al., 2020). Instead of jointly optimizing a dense retriever end-to-end, LLMs can also be trained to use retrievers by generating queries to retriever tools (Schick et al., 2023; Hsu et al., 2024; Jin et al., 2025). In addition, LLMs can judge the relevance of retrieved context for question-answering tasks (Asai et al., 2024). Similarly, we introduce models that can effectively retrieve context for next action prediction, querying a lexical retriever. Our setting is unique in a few ways. First, we are retrieving relevant context not from an external search index or a database, but from the user&#x27;s own interaction history. Second, we reason to retrieve what context is relevant specifically for predicting a user&#x27;s next action. This process is end-to-end optimized via policy gradient methods; and significantly improves LongNAP performance.</p></div><p><strong>记忆与检索(Memory and Retrieval)</strong>:要预测用户的下一动作,必须能使用其数字上下文的整体——那可能横跨数月、数年乃至更久。然而 LLM 有实际上的上下文限制:上下文窗口被约束在有限个 token 内,而且把一切都放进上下文会损害模型性能(Liu et al., 2024)。一种解决方案是检索增强生成(RAG):LLM 从更大的外部数据库检索(Chen et al., 2017; Lewis et al., 2020)。除端到端联合优化稠密检索器之外,LLM 也可以被训练成通过向"检索器工具"生成查询来使用检索器(Schick et al., 2023; Hsu et al., 2024; Jin et al., 2025);此外,LLM 还能评判检索到的上下文与问答任务的相关性(Asai et al., 2024)。同样地,作者引入了能为下一动作预测有效检索上下文的模型,查询一个词法检索器。本文设定有几个独特之处:第一,检索的相关上下文不是来自外部搜索索引或数据库,而是<strong>用户自己的交互历史</strong>;第二,作者是<strong>为"预测用户下一动作"这一特定目的推理出</strong>该检索什么上下文。整个过程经策略梯度方法端到端优化,并显著提升了 LongNAP 性能。</p></div>
+<h3 id="10-discussion">10 Discussion(讨论)</h3>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>In our evaluations, we find that LongNAPs show promise in predicting what users will do next across their digital contexts. We discuss implications of deploying models like LongNAP from privacy and alignment perspectives, and outline avenues for future work.<br><br>Privacy Models like LongNAP operate over large swaths of our context. Inevitably, they will contain private and sensitive data about users. Our architecture does limit some of this exposure, since learning to retrieve keeps the traces local; at some performance cost, one could either build the entire model locally or ensure that the learning to reason stage is not finetuned on any specific user. In addition, in our work, we rely on an approved infrastructure for processing personally identifiable information (PII) and personal health data (PHI). At our institution, only Google Cloud services are approved for processing PHI; so we rely on vetted, private pipelines to access Google&#x27;s Gemini models for annotation. All model training occurs on open models (Qwen-2.5-VL-7B), where compute instances are managed by the research team.</p></div><p>在评估中,作者发现 LongNAP 在跨数字上下文预测用户下一步行为上展现出前景。作者从隐私与对齐视角讨论部署 LongNAP 一类模型的影响,并勾勒未来工作的方向。</p></div>
+<p><strong>隐私(Privacy)</strong>:LongNAP 一类模型运行于我们上下文的大片区域之上,不可避免地会包含用户的隐私敏感数据。作者的架构确实限制了一部分暴露:"学会检索"使轨迹得以留在本地;也可以付出一些性能代价,要么把整个模型完全构建在本地、要么保证"学会推理"阶段不在任何特定用户上微调。此外,本文依赖经批准的、处理个人身份信息(PII)与个人健康数据(PHI)的基础设施:在其机构,只有 Google Cloud 服务获准处理 PHI,因此作者经由审查过的私有管线访问 Google 的 Gemini 模型做标注。所有模型训练都在开源模型(Qwen-2.5-VL-7B)上进行,算力实例由研究团队自管。</p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>We recognize that these precautions are very challenging to take for the individual user. The privacy paradox (Norberg et al., 2007) makes deploying models like LongNAP in a centralized fashion difficult. In other words, users are likely to disclose more to LongNAP, especially given (1) the ease of collecting data and (2) the benefits that come with a proactive AI system.<br><br>There are several promising approaches that can mitigate these privacy concerns. The first is decentralization. We suspect that models will continue to get cheaper and faster, enabling on-device inference and training. Methods like FlashAttention (Dao et al., 2022), effective quantization (Dettmers et al., 2023), or specialization via synthetic data (Shen et al., 2026) already save substantially on compute or memory. If local models remain difficult, we can still redact private information with a smaller local model (Li et al., 2025b), only share private data to a larger model (Nissenbaum, 2004; Mireshghallah et al., 2023; Shao et al., 2024a) based on a user&#x27;s personal context (Shaikh et al., 2025), or decouple model requests from eachother through a VPN-like system (Liu &amp; Chi, 2026).</p></div><p>作者也认识到,这些防范措施对个人用户而言极难采取。<strong>隐私悖论(privacy paradox)</strong>(Norberg et al., 2007)使以中心化方式部署 LongNAP 一类模型变得困难:换言之,用户很可能向 LongNAP 披露越来越多——尤其考虑到(1)数据收集之容易,与(2)主动式 AI 系统带来的好处。</p></div>
+<p>有几种有望缓解这些隐私顾虑的方向。其一是<strong>去中心化</strong>:作者推测模型会继续变得更便宜、更快,使端侧推理与训练成为可能;FlashAttention(Dao et al., 2022)、有效的量化(Dettmers et al., 2023)、或经合成数据的专业化(Shen et al., 2026)等方法已经大幅节省算力或内存。如果本地模型仍然困难,仍可以用更小的本地模型先脱敏私有信息(Li et al., 2025b)、基于用户个人情境只把该共享的私有数据交给更大模型(Nissenbaum, 2004; Mireshghallah et al., 2023; Shao et al., 2024a; Shaikh et al., 2025)、或经 VPN 式系统把模型请求彼此解耦(Liu &amp; Chi, 2026)。</p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Aligning LongNAPs In our current instantiation of LongNAP, we train models to do what a user might do next. There are many instances where this may not be helpful. For example, a user who habitually procrastinates may not want to use a model that helps them procrastinate. This is a challenging alignment problem with parallels to both filter bubbles on social media (Pariser, 2011; Munson &amp; Resnick, 2010; Bakshy et al., 2015) and sycophancy in chat-based LLMs (Cotra, 2021; Perez et al., 2023; Cheng et al., 2025). We want learned LongNAPs to complement users in ways that help. A promising avenue for future work involves applying methods for eliciting values to steer social media algorithms (Popowski et al., 2026). Similar methods could be applied to LongNAPs.</p></div><p><strong>对齐 LongNAP(Aligning LongNAPs)</strong>:在当前的 LongNAP 实例中,作者训练模型去做"用户接下来可能会做的事"。而很多情形下这并无帮助:例如,习惯性拖延的用户未必想用一个帮自己拖延的模型。这是一个棘手的对齐问题,与社交媒体的<strong>过滤气泡(filter bubbles)</strong>(Pariser, 2011; Munson &amp; Resnick, 2010; Bakshy et al., 2015)和聊天式 LLM 的<strong>谄媚(sycophancy)</strong>(Cotra, 2021; Perez et al., 2023; Cheng et al., 2025)构成同构难题。我们希望学得的 LongNAP 以<strong>有帮助的方式</strong>补足用户。一个有前景的未来方向,是把"为引导社交媒体算法而引出价值观"的方法(Popowski et al., 2026)应用于 LongNAP。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Limitations and Future Work There are fundamental limitations to learning from just observation. In our setting, models will only be able to make inferences from what happens on a user&#x27;s screen, which is still a narrow proxy for a user&#x27;s general context (Dourish, 2004). We are still far from models that can draw from everyday action beyond our devices, but we suspect our approach can be generalized to interaction beyond screenshots.<br><br>Both our labeling and training processes rely on large pretrained models. First, our training data itself is generated by a VLM captioning user activity. We find that VLMs are fairly performant at this task, and we expect performance to improve as VLMs improve. Still, they are not perfect—errors in captioning will cascade down to training and prediction. Like prior work, we also rely on LLM-as-a-judge for both reward and optimization (Bai et al., 2022; Dubois et al., 2023). We find that this metric continues to correlate with human judgement—humans pick samples from LongNAP over all other training approaches (§6). For longer runs, however, the judge alone may be prone to reward hacking (Wang et al., 2025a; Gandhi et al., 2026). We leave experimenting with other rewards for future work.</p></div><p><strong>局限与未来工作(Limitations and Future Work)</strong>:仅从观察学习存在根本性限制。在本文设定中,模型只能从用户屏幕上发生的事做推断,而屏幕仍是用户一般情境的一个狭窄代理(Dourish, 2004)。我们离"能从设备之外的日常行为中取材"的模型还很远,但作者推测其方法可以泛化到截图之外的交互。</p></div>
+<p>标注与训练两个流程都依赖大型预训练模型。首先,训练数据本身就是由 VLM 标注用户活动生成的;作者发现 VLM 在该任务上相当能干,并预期其性能会随 VLM 进步而提升。但它们并不完美——标注错误会级联传导到训练与预测。与既有工作一样,作者还依赖 LLM-as-a-judge 同时充当奖励与优化目标(Bai et al., 2022; Dubois et al., 2023)。作者发现该指标持续与人类判断相关——人类在所有训练方法中更偏好 LongNAP 的样本(§6)。然而在更长的训练下,仅靠评审可能易受<strong>奖励黑客(reward hacking)</strong>攻击(Wang et al., 2025a; Gandhi et al., 2026);尝试其他奖励留作未来工作。</p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>We also presented a basic scaffold for training LongNAPs. This scaffold could be made more expressive by allowing LongNAP to interleave retrieval and reasoning within a single generation pass, and by equipping it with additional tools such as web search. While we validated our method on a small sample of users and showed that LongNAP generalizes both over time and across users, it would be valuable to study how performance scales over longer time horizons and with many more users. Training separate weights for every user also presents practical challenges. Future work could explore how to efficiently train and serve per user LoRAs at scale (Sheng et al., 2023; Chen et al., 2024). Further, while current mid-training and pretraining data (Olmo et al., 2025; Havrilla et al., 2024; Penedo et al., 2024) for LLMs are optimized to improve performance on science, code and math, one can imagine that other types of data and reasoning strategies (Gandhi et al., 2025) could be better for NAP.<br><br>Finally, a few training limitations. First, we experiment only with GRPO (Shao et al., 2024b) as our policy gradient objective, due to the added memory constraints of learning an entire value network for methods like PPO (Schulman et al., 2017). In addition, we were unable to train all models to convergence because of budget constraints (our validation scores from Fig. 5 continue to increase, for example). We suspect that performance estimates in this paper may be a lower bound, and leave continued training experiments to future work.</p></div><p>作者呈现的也只是训练 LongNAP 的一个基础脚手架。可以让 LongNAP 在单次生成中<strong>交错</strong>检索与推理,并为其配备网页搜索等更多工具,使其更具表达力。虽然作者在小样本用户上验证了方法、证明 LongNAP 能随时间与跨用户泛化,但研究性能如何随更长时间视野与更多用户扩展仍有价值。为每个用户训练单独权重也带来实际挑战,未来工作可以探索如何大规模地高效训练与服务 per-user LoRA(Sheng et al., 2023; Chen et al., 2024)。此外,当前 LLM 的中期训练(mid-training)与预训练数据(Olmo et al., 2025; Havrilla et al., 2024; Penedo et al., 2024)面向科学、代码与数学优化,可以想见其他类型的数据与推理策略(Gandhi et al., 2025)或许更适合 NAP。</p></div>
+<p>最后是几点训练层面的限制。其一,由于 PPO 一类方法(Schulman et al., 2017)需要学习一整个价值网络、带来额外内存开销,作者只实验了 GRPO(Shao et al., 2024b)作为策略梯度目标。其二,受预算限制,作者未能把所有模型训练到收敛(例如图 5 中的验证分数仍在上升)。作者怀疑本文中的性能估计可能是<strong>下界</strong>,持续训练的实验留作未来工作。</p>
+<h3 id="11-conclusion">11 Conclusion(结论)</h3>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>We introduced LongNAP, a long-context next action predictor that learns to anticipate what users will do next by reasoning over their full multimodal interaction history. To collect training data, we introduced NAPsack, a passive pipeline that annotates naturalistic behavior traces at scale using vision-language models—demonstrating that rich, labeled interaction data can be obtained without any active user effort. In evaluations across 20 users and 1,800 hours of screen time, LongNAP significantly outperforms supervised finetuning and prompted baselines when trained on individual users. We also observe modest generalization when training on many users and generalizing to new ones. Altogether, we argue that learning from the full context of user behavior to anticipate user needs is now a tractable direction.</p></div><p>作者提出了 LongNAP——一个通过对用户完整多模态交互历史进行推理、来预判其下一步行为的长上下文下一动作预测器;以及 NAPsack——一条用视觉-语言模型大规模被动标注自然主义行为轨迹的流水线,证明无需用户任何主动付出即可获得丰富的带标注交互数据。在 20 名用户、1800 小时亮屏时间的评估中,单用户训练的 LongNAP 显著超过监督微调与提示基线;在多用户上训练并泛化到新用户时也观察到适度的泛化。总而言之,作者论证:从用户行为的完整上下文中学习、以预判用户需求,如今已是一个可行的研究方向。</p></div>
+<h3 id="contribution-statement-acknowledgements">贡献声明与致谢(Contribution Statement &amp; Acknowledgements)</h3>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Contribution Statement: OS conceived the initial idea, and planned/evaluated all experiments. VT and KG helped develop data labeling code, proposed and tested critical modeling ideas, and helped with framing the paper. KG also built an online implementation (powerNAP) of the paper. YC helped with Screenomics infrastructure, labeling, and data collection. DY, MB, and SY were primary co-supervisors for this project. All authors discussed results and contributed in writing the final paper.<br><br>Acknowledgements: We thank Dora Zhao, Michael Li, Vindula Jayawardana, Shardul Sapkota, Matthew Jörke, Helena Vasconcelos, Gerard de Melo, Michelle Lam, Shan Rizvi, Chris Rytting, and Vishnu Sarukkai for helpful discussions and feedback. Omar Shaikh is supported by the HAI-HPI program. The Screenomics components of this study were supported in part by a grant from the National Heart, Lung, and Blood Institute of the National Institutes of Health, under Award number R01HL16901. The content is solely the responsibility of the authors and does not necessarily represent the official views of the National Institutes of Health or other funders. Finally, we appreciate the support from Sloan Foundation, Laude Institue, Thinking Machines (for Tinker credit), and Stanford Institute for Human-Centered Artificial Intelligence, as well as ONR grant N00014-24-1-2532.</p></div><p>贡献声明:OS(Omar Shaikh)构思了最初的想法,并计划/评估了所有实验。VT 与 KG 帮助开发数据标注代码、提出并检验了关键的建模想法、协助论文框架;KG 还构建了论文的在线实现(powerNAP)。YC 协助 Screenomics 基础设施、标注与数据收集。DY、MB 与 SY 是本项目的主要共同指导者。所有作者讨论了结果并参与撰写最终论文。</p></div>
+<p>致谢:作者感谢 Dora Zhao、Michael Li、Vindula Jayawardana、Shardul Sapkota、Matthew Jörke、Helena Vasconcelos、Gerard de Melo、Michelle Lam、Shan Rizvi、Chris Rytting 与 Vishnu Sarukkai 的有益讨论与反馈。Omar Shaikh 受 HAI-HPI 计划资助。本研究的 Screenomics 部分受到美国国立卫生研究院国家心肺血液研究所拨款(R01HL16901)的部分资助;内容仅由作者负责,不一定代表国立卫生研究院或其他资助方的官方观点。最后,作者感谢 Sloan 基金会、Laude Institue、Thinking Machines(提供 Tinker 额度)、斯坦福以人为中心人工智能研究院的支持,以及 ONR 拨款 N00014-24-1-2532。(译注:"Laude Institue" 为原文拼写,应为 "Laude Institute"。)</p>
+<blockquote>
+<p>译注:References(参考文献)按站点惯例不收录,正文中的作者-年份引用均对应原文参考文献列表。以下继续收录附录 A、B。</p>
+</blockquote>
+<h3 id="a-napsackappendix-a-napsack">附录 A NAPsack(Appendix A: NAPsack)</h3>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>To record a session with NAPsack and compare it to a baseline without event-driven compression, we implement current active screen capturing using ffmpeg and apply the same recording hyperparameters for both methods.</p></div><p>为录制一段 NAPsack 会话、并与"无事件驱动压缩"的基线作对比,作者用 ffmpeg 实现了当前活动屏幕的捕获,并对两种方法采用相同的录制超参数。</p></div>
+<h4 id="a1-a1-hyperparameters">A.1 超参数(A.1 Hyperparameters)</h4>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>NAPsack uses thresholds to group input events and decide when screenshots should be persisted. All recordings are performed at 30 FPS and a resolution of 1920×1080. To ensure that interface states immediately before and after interactions are preserved, NAPsack stores screenshots 75ms before the first event of a burst and 75ms after its last event.</p></div><p>NAPsack 用若干阈值来分组输入事件,并决定何时持久化截图。所有录制均在 30 FPS、1920×1080 分辨率下进行。为确保交互前后瞬间的界面状态得以保留,NAPsack 会在突发的第一个事件之前 75 毫秒与最后一个事件之后 75 毫秒各保存一张截图。</p></div>
+<p><strong>表 7:NAPsack 使用的事件突发阈值。</strong></p>
+<table>
+<thead>
+<tr>
+<th>事件类型</th>
+<th>间隔阈值 GAP(秒)</th>
+<th>最长持续 MAX(秒)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>点击(Click)</td>
+<td>0.2</td>
+<td>0.3</td>
+</tr>
+<tr>
+<td>移动(Move)</td>
+<td>0.5</td>
+<td>4.0</td>
+</tr>
+<tr>
+<td>滚动(Scroll)</td>
+<td>0.5</td>
+<td>3.0</td>
+</tr>
+<tr>
+<td>按键(Key)</td>
+<td>0.5</td>
+<td>6.0</td>
+</tr>
+</tbody>
+</table>
+<h4 id="a2-a2-grouping-nearby-events-into-bursts">A.2 将相邻事件分组为突发(A.2 Grouping Nearby Events into Bursts)</h4>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>NAPsack groups temporally adjacent input events of the same type into event bursts. An event is assigned to the current burst if the time since the preceding event of that type does not exceed the corresponding gap threshold and the elapsed time since the burst start remains within the max duration (see table 7). If the gap threshold is exceeded, a new burst is started. If the max duration is exceeded, the first half of the current burst is finalized and saved, while the second half becomes the active burst. A burst is force-restarted when the active monitor changes. All thresholds were determined qualitatively; and should be re-tuned for new interfaces.</p></div><p>NAPsack 把时间上相邻的同类输入事件归并为<strong>事件突发(event burst)</strong>。若一个事件距该类型的上一个事件不超过相应的<strong>间隔阈值(gap threshold)</strong>、且距突发开始的耗时仍在<strong>最长持续时间(max duration)</strong>之内,该事件就被划入当前突发(见表 7)。超过间隔阈值,则开启一个新突发;超过最长持续时间,则当前突发的前半部分被定稿保存,后半部分成为新的活动突发。当活动显示器发生切换时,突发被强制重启。所有阈值均经定性确定,换用新界面时应重新调参。</p></div>
+<h4 id="a3-a3-label-prompts">A.3 标注提示(A.3 Label Prompts)</h4>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>We include all prompts for NAPsack in the following repo: https://github.com/GeneralUserModels/napsack/tree/main/src/label/prompts</p></div><p>NAPsack 的全部提示词收录在以下仓库:https://github.com/GeneralUserModels/napsack/tree/main/src/label/prompts 。(译注:提示词本体较长且随仓库演进,此处按原文指引给出链接,不再逐条照录。)</p></div>
+<h4 id="a4-napsack-a4-annotating-ground-truth-labels-for-napsack">A.4 为 NAPsack 标注真值标签(A.4 Annotating Ground Truth Labels for NAPsack)</h4>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Both authors verified ground truth labels recorded from personal screen recordings. To construct ground truth labels, the authors selected the best outputs generated from each NAPsack condition, and manually corrected the trajectories to match ground truth. Both authors reviewed the ground truth trajectories and preference annotations for errors over discussion. The author from whom the recordings were sourced resolved mistakes in ground truth labels during annotation.</p></div><p>两位作者都对来自个人录屏的真值标签进行了核验。构造真值标签时,作者先选出各 NAPsack 条件下生成的最佳输出,再人工修正轨迹使其与真值吻合;随后两位作者在讨论中共同复核真值轨迹与偏好标注有无错误。录屏来源的那位作者在标注过程中裁决真值标签中的错谬。</p></div>
+<h4 id="a5-screenomicsa5-annotating-screenomics">A.5 标注 Screenomics(A.5 Annotating Screenomics)</h4>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Demographics The Screenomics dataset we use comes from Reeves et al. (2021). We subsampled 20 participants, of which one had no demographic data. The remaining 19 participants (14 female, 5 male) were located across the United States and ranged in age from 22 to 70, with a mean of 44 and a median of 39. The majority identified as White (16/19), with 2 identifying as Asian and 1 as Black; 6 identified as Hispanic. Education levels varied across participants. 2 held a high school diploma, 7 had some college, 1 an associate&#x27;s degree, 5 a bachelor&#x27;s, and 4 a graduate degree.<br><br>Deduplicating Images Many images in the Screenomics dataset are duplicates. To identify and remove screenshots where screen content is unchanged, we compute a perceptual difference hash for each image (Krawetz, 2011). This works by resizing the image to a small fixed size, comparing adjacent pixel intensities to produce a fingerprint, and then measuring Hamming distance between fingerprints of consecutive screenshots. Qualitatively, pairs with a distance at or below a threshold of 5 (out of a 16x16 = 256-bit hash) are near-duplicates; so we filter these images.</p></div><p><strong>人口统计(Demographics)</strong>:作者使用的 Screenomics 数据集来自 Reeves et al. (2021)。作者子抽样出 20 名参与者,其中 1 人没有人口统计数据;其余 19 人(14 女、5 男)分布在美国各地,年龄从 22 岁到 70 岁,均值 44 岁、中位数 39 岁。多数自认为是白人(16/19),2 人自认为亚裔、1 人自认为黑人;6 人自认为拉美裔(Hispanic)。参与者受教育程度各异:2 人持高中文凭、7 人读过一些大学、1 人副学士、5 人学士、4 人研究生学位。</p></div>
+<p><strong>图像去重(Deduplicating Images)</strong>:Screenomics 数据集中许多图像是重复的。为识别并删除屏幕内容未变的截图,作者为每张图像计算<strong>感知差异哈希(perceptual difference hash)</strong>(Krawetz, 2011):把图像缩放到一个固定的小尺寸,比较相邻像素强度得到指纹,再度量连续截图指纹之间的汉明距离。定性来看,距离不超过阈值 5(16×16 = 256 位哈希)的图像对近似重复,因此把这些图像过滤掉。</p>
+<h4 id="a6-a6-judge-prompt">A.6 评审提示(A.6 Judge Prompt)</h4>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>We include our judge prompt for training here: https://github.com/GeneralUserModels/powernap/blob/main/src/powernap/longnap/verifiers/accuracy.txt</p></div><p>训练所用的评审提示见:https://github.com/GeneralUserModels/powernap/blob/main/src/powernap/longnap/verifiers/accuracy.txt 。(译注:同 A.3,提示词本体见链接,不在此照录。)</p></div>
+<h3 id="b-longnap-appendix-b-longnap-details">附录 B LongNAP 细节(Appendix B: LongNAP details)</h3>
+<h4 id="b1-b1-training-and-retriever-hyperparamters">B.1 训练与检索器超参数(B.1 Training and Retriever Hyperparamters)</h4>
+<p>(译注:小节标题中 "Hyperparamters" 为原文拼写,应为 "Hyperparameters"。)</p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Training We include hyperparameter details for LongNAP and our SFT baseline in Tab. 8. We detail how many actions we place in context; how many we predict; and the number of images placed in context. Even with LoRA (hyperparameters also in Tab. 8), we find that images significantly increase contexts lengths. Because of memory limitations, we only keep images associated with the last 2 events in context. Across all models, we sample with temperature 1.0.</p></div><p><strong>训练(Training)</strong>:LongNAP 与 SFT 基线的超参数细节见表 8,其中写明了放入上下文的动作数、预测的动作数、以及放入上下文的图像数。即便用了 LoRA(超参数亦见表 8),作者仍发现图像会显著拉长上下文;受内存限制,上下文中只保留与最近 2 个事件关联的图像。所有模型采样温度均为 1.0。</p></div>
+<p><strong>表 8:超参数设置。作者依据验证性能挑选最佳 checkpoint,并在合适时提前停止。受预算限制,只在基线(配合 SFT)上扫描学习率。训练使用 8 块 B200 GPU。</strong></p>
+<table>
+<thead>
+<tr>
+<th>超参数</th>
+<th>LongNAP</th>
+<th>SFT</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>有效批大小(Effective Batch Size)</td>
+<td>16</td>
+<td>16</td>
+</tr>
+<tr>
+<td>学习率(Learning Rate)</td>
+<td>3e-5</td>
+<td>1e-4</td>
+</tr>
+<tr>
+<td>组大小(Group Size)</td>
+<td>4</td>
+<td>-</td>
+</tr>
+<tr>
+<td>训练轮数(Epochs)</td>
+<td>10</td>
+<td>10</td>
+</tr>
+<tr>
+<td>历史中动作数(Actions in history)</td>
+<td>16</td>
+<td>16</td>
+</tr>
+<tr>
+<td>预测动作数(Actions to predict)</td>
+<td>8</td>
+<td>8</td>
+</tr>
+<tr>
+<td>历史中图像数(Images in history)</td>
+<td>2</td>
+<td>2</td>
+</tr>
+<tr>
+<td>LoRA 秩(LoRA rank)</td>
+<td>8</td>
+<td>8</td>
+</tr>
+<tr>
+<td>alpha</td>
+<td>32</td>
+<td>32</td>
+</tr>
+<tr>
+<td>dropout</td>
+<td>0.05</td>
+<td>0.05</td>
+</tr>
+<tr>
+<td>作用模块(modules)</td>
+<td>仅 MLP</td>
+<td>仅 MLP</td>
+</tr>
+</tbody>
+</table>
+<p>(表 8 中文说明:LongNAP 与 SFT 的大部分设置一致;区别主要在学习率——SFT 用大一个数量级的 1e-4——以及 GRPO 所需的组大小 4,后者为 SFT 所无。)</p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Retriever LongNAP uses an in-memory BM25 retriever to retrieve old reasoning traces and observations. To start, we use standard BM25 parameters k1 = 1.5 and b = 0.75. In addition, we apply a temporal decay. At query time, each candidate&#x27;s BM25 score is multiplied by exp(−λ·age), where age is the time difference between the query and the document&#x27;s event measured in days. We set λ = 0.5, which strongly favors recent context over older history. We also apply a constraint to make sure that retrieved items are diverse. We first retrieve the top-k = 10 candidates from BM25, then apply Maximal Marginal Relevance (MMR) reranking to select kmmr = 5 results with diversity parameter α = 0.5, balancing relevance and diversity equally (Carbonell &amp; Goldstein, 1998). Finally, to avoid redundancy in the retriever&#x27;s memory, we deduplicate when we insert. We use trigram Jaccard similarity (threshold of 0.8), replacing older near-duplicate entries with newer ones.</p></div><p><strong>检索器(Retriever)</strong>:LongNAP 使用一个内存中的 BM25 检索器来检索旧的推理轨迹与观察。起步采用标准 BM25 参数 <span class="math-inline">$k_1 = 1.5$</span>、<span class="math-inline">$b = 0.75$</span>;此外还施加<strong>时间衰减(temporal decay)</strong>:查询时,每个候选的 BM25 分数乘以 <span class="math-inline">$\exp(-\lambda \cdot \text{age})$</span>,其中 age 是查询与文档事件之间的时间差(以天计)。取 <span class="math-inline">$\lambda = 0.5$</span>,强烈偏向较新的上下文而非更久远的历史。作者还施加约束以保证检索条目的<strong>多样性</strong>:先从 BM25 检索 top-<span class="math-inline">$k = 10$</span> 个候选,再用<strong>最大边际相关(Maximal Marginal Relevance, MMR)</strong>重排选出 <span class="math-inline">$k_{\text{mmr}} = 5$</span> 条结果,多样性参数 <span class="math-inline">$\alpha = 0.5$</span>,即相关性与多样性均等权衡(Carbonell &amp; Goldstein, 1998)。最后,为避免检索器记忆冗余,插入时做去重:用三元组 Jaccard 相似度(阈值 0.8),以新条目替换较旧的近似重复条目。</p></div>
+<h4 id="b2-b2-prompting-baselines">B.2 提示基线(B.2 Prompting Baselines)</h4>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>For prompting baselines, we try zero-shot and few-shot prompting. Few-shot prompts use our retriever (see details in §B.1) to retrieve and place relevant few-shot examples in-context. Below, we outline our prompt (few-shot additions are highlighted in red), used for both closed and open source models:<br><br>Prompt<br><br>You are an expert at analyzing user behavior patterns and predicting future actions based on historical context.<br><br>## Task<br><br>Analyze the following sequence of user actions and predict what they will do next. Pay attention to:<br><br>- The temporal patterns and timing of actions<br>- The logical flow and context of the user&#x27;s workflow<br>- Common behavioral patterns that might indicate intent<br><br>## Previous Actions<br><br>&lt;actions&gt;<br>{past 16 actions}<br>&lt;/actions&gt;<br><br>## Relevant Retrieved Actions<br><br>&lt;actions&gt;<br>{retrieved actions}<br>&lt;/actions&gt;<br><br>## Instructions<br><br>Based on the actions above, predict the most likely next **8** actions the user will take. Output your predictions in the following format:<br><br>&lt;actions&gt;<br>{example actions}<br>&lt;/actions&gt;<br><br>Be specific and realistic in your predictions. Consider the user&#x27;s apparent goals and typical workflows. You MUST output exactly 8 actions.</p></div><p>提示基线尝试 zero-shot 与 few-shot 两种提示。Few-shot 提示使用本文的检索器(细节见 §B.1)检索相关示例并放入上下文。以下是作者所用的提示(few-shot 增补部分原文以红色标出),闭源与开源模型通用:</p></div>
+<p><strong>提示词(Prompt)</strong>:</p>
+<blockquote>
+<p>你是分析用户行为模式、并基于历史上下文预测未来动作的专家。</p>
+<h2 id="task">任务(Task)</h2>
+<p>分析以下用户动作序列,预测他们接下来会做什么。注意:</p>
+<ul>
+<li>动作的时间模式与时机</li>
+<li>用户工作流的逻辑脉络与上下文</li>
+<li>可能指示意图的常见行为模式</li>
+</ul>
+<h2 id="previous-actions">过往动作(Previous Actions)</h2>
+<p><actions>
+{过去 16 个动作}
+</actions></p>
+<h2 id="relevant-retrieved-actions-few-shot">检索到的相关动作(Relevant Retrieved Actions)〔译注:此节为 few-shot 增补部分〕</h2>
+<p><actions>
+{检索到的动作}
+</actions></p>
+<h2 id="instructions">指令(Instructions)</h2>
+<p>基于以上动作,预测用户最可能采取的接下来 <strong>8</strong> 个动作。按以下格式输出你的预测:</p>
+<p><actions>
+{示例动作}
+</actions></p>
+<p>预测要具体、现实。请考虑用户显见的目标与典型工作流。你必须恰好输出 8 个动作。</p>
+</blockquote>
+<p>(译注:原文以红色高亮标出 few-shot 增补的"Relevant Retrieved Actions"一节,Markdown 无法呈现红色,此处以标注说明;zero-shot 版本不含该节。)</p>
       </div>
     </article>
     <nav class="pager"><a class="pager-prev" href="Shaikh2025_General_User_Models_UIST2025.html"><span>上一篇</span>从计算机使用中构建通用用户模型</a><a class="pager-next" href="Xie2024_OSWorld_NeurIPSD&B2024.html"><span>下一篇</span>&quot;OSWorld:在真实计算机环境中评测多模态智能体的开放式任务能力&quot;</a></nav>
