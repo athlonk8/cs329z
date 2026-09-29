@@ -21,7 +21,7 @@
   </div>
 </header>
 <div class="read-layout">
-  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">全文对照翻译</a><ul><li><a href="#_3">摘要</a></li><li><a href="#1">1 引言</a></li><li><a href="#2-autogen">2 AutoGen 框架</a></li><li><a href="#3-autogen">3 AutoGen 的应用</a></li><li><a href="#4">4 讨论</a></li><li><a href="#_4">伦理声明</a></li><li><a href="#a">附录 A 相关工作</a></li><li><a href="#b">附录 B 扩展讨论</a></li><li><a href="#c">附录 C 助手智能体的默认系统消息</a></li><li><a href="#d">附录 D 应用细节</a></li></ul></li></ul></aside>
+  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">全文对照翻译</a><ul><li><a href="#_3">摘要</a></li><li><a href="#1">1 引言</a></li><li><a href="#2-autogen">2 AutoGen 框架</a></li><li><a href="#3-autogen">3 AutoGen 的应用</a></li><li><a href="#4">4 讨论</a></li><li><a href="#_4">伦理声明</a></li><li><a href="#a">附录 A 相关工作</a></li><li><a href="#b">附录 B 扩展讨论</a></li><li><a href="#c">附录 C 助手智能体的默认系统消息</a></li><li><a href="#d">附录 D 应用细节</a></li><li><a href="#e">附录 E 各应用的示例输出(译注)</a></li></ul></li><li><a href="#_5">要点速览</a></li></ul></aside>
   <main class="read-main">
       <link rel="stylesheet" href="../assets/katex/katex.min.css">
       <script defer src="../assets/katex/katex.min.js"></script>
@@ -515,6 +515,268 @@ Reply &quot;TERMINATE&quot; in the end when everything is done.
 <div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>In addition, we conduct an experiment using the same prompt as illustrated in (Adlakha et al., 2023) to investigate the advantages of AutoGen W/O interactive retrieval. The F1 score and Recall for the first 500 questions are 23.40% and 62.60%, respectively, aligning closely with the results reported in Figure 4b. Consequently, we assert that AutoGen W/O interactive retrieval outperforms DPR due to differences in the retrievers employed. Specifically, we utilize a straightforward vector search retriever with the all-MiniLM-L6-v2 model for embeddings.<br><br>Furthermore, we analyze the number of LLM calls in experiments involving both AutoGen and AutoGen W/O interactive retrieval, revealing that approximately 19.4% of questions in the Natural Questions dataset trigger an &quot;Update Context&quot; operation, resulting in additional LLM calls.</p></div><p>此外,我们用与(Adlakha et al., 2023)相同的提示做了一个实验,考察"无交互式检索的 AutoGen"的表现:前 500 个问题的 F1 与 Recall 分别为 23.40% 与 62.60%,与图 4b 报告的结果高度一致。因此我们断言,无交互式检索的 AutoGen 优于 DPR 应归因于所用检索器的差异——具体来说,我们用的是以 all-MiniLM-L6-v2 模型做嵌入的朴素向量检索器。</p></div>
 <p>进一步,我们分析了 AutoGen 与无交互式检索版 AutoGen 实验中的 LLM 调用次数,发现 Natural Questions 数据集中约 <strong>19.4%</strong> 的问题触发了 "Update Context" 操作,产生了额外的 LLM 调用。</p>
 <div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>**Scenario 2: Code Generation Leveraging Latest APIs from the Codebase.** In this case, the question is &quot;How can I use FLAML to perform a classification task and use Spark for parallel training? Train for 30 seconds and force cancel jobs if the time limit is reached.&quot;. FLAML (v1) (Wang et al., 2021) is an open-source Python library designed for efficient AutoML and tuning. It was open-sourced in December 2020, and is included in the training data of GPT-4. However, the question necessitates the use of Spark-related APIs, which were added in December 2022 and are not encompassed in the GPT-4 training data. Consequently, the original GPT-4 model is unable to generate the correct code, due to its lack of knowledge regarding Spark-related APIs. Instead, it erroneously creates a non-existent parameter, spark, and sets it to &#x27;True&#x27;. Nevertheless, with Retrieval-Augmented Chat, we provide the latest reference documents as context. Then, GPT-4 generates the correct code blocks by setting use_spark and force_cancel to &#x27;True&#x27;.</p></div><p><strong>场景 2:利用代码库最新 API 的代码生成。</strong> 此案例的问题是:"如何用 FLAML 做分类任务并用 Spark 并行训练?训练 30 秒,到达时限就强制取消作业。"FLAML (v1)(Wang et al., 2021)是一个面向高效 AutoML 与调参的开源 Python 库,2020 年 12 月开源,已包含在 GPT-4 训练数据中。但该问题需要使用 Spark 相关 API——它们是 2022 年 12 月才加入的,不在 GPT-4 训练数据里。因此原生 GPT-4 因不了解 Spark 相关 API 而无法生成正确代码:它错误地编造了一个不存在的参数 spark 并设为 'True'。而借助检索增强聊天,我们提供最新参考文档作为上下文,GPT-4 随即生成了正确的代码块——正确地把 use_spark 与 force_cancel 设为 'True'。</p></div>
+<h4 id="a3-d">A3:文本世界环境中的决策(附录 D)</h4>
+<p>[图 9: We use AutoGen to solve tasks in the ALFWorld benchmark, which contains household tasks described in natural language. We propose two designs: a two-agent design where the assistant agent suggests the next step, and the Executor executes actions and provides feedback. The three-agent design adds a grounding agent that supplies commonsense facts to the executor when needed.]</p>
+<p>图 9:我们用 AutoGen 求解 ALFWorld 基准中用自然语言描述的家务任务,提出两种设计:<strong>两智能体设计(ALFChat,两智能体)</strong>——助手智能体建议下一步,执行器(Executor)执行动作并反馈环境观察(如"在书桌 2 上,你看到闹钟 3、碗 3、信用卡 2、马克杯 1、铅笔 2"),助手据此做动作决策(如"从书桌 2 拿起铅笔 2"),执行器再返回奖励与状态;<strong>三智能体设计(ALFChat,三智能体)</strong>——在助手与执行器之外增加一个锚定智能体(GroundingAgent),在需要时向执行器提供常识事实。</p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>ALFWorld (Shridhar et al., 2021) is a synthetic language-based interactive decision-making task. It comprises textual environments that aim to simulate real-world household scenes. Given a high-level goal (e.g., putting a hot apple in the fridge) and the description of the household environment, the agent needs to explore and interact with the simulated household environment through a textual interface. A typical task environment contains various types of locations and could require more than 40 steps to finish, which highlights the need for agents to decompose the goal into subtasks and tackle them one by one, while effectively exploring the environments.<br><br>**Detailed Workflow.** We first propose a straightforward two-agent system with AutoGen, illustrated on the left-hand side of Figure 9, to tackle tasks from this benchmark. The system consists of an assistant agent and an executor agent. The assistant agent generates plans and makes action decisions to solve the tasks. The executor agent is tailored specifically for ALFWorld. It performs actions proposed by the assistant and reports action execution results in the household environment as feedback to the assistant. Due to the strict format requirements for the output format, we use the BLEU metric to evaluate the similarity of the output to all valid action options. The option with the highest similarity will be chosen as the action for this round.<br><br>One major challenge encompassed in ALFWorld is commonsense reasoning. The agent needs to extract patterns from the few-shot examples provided and combine them with the agent&#x27;s general knowledge of household environments to fully understand task rules. More often than not, the assistant tends to neglect some basic knowledge of the household environment. Thanks to the easy-to-implement multi-agent conversational feature of AutoGen, enhancing the assistant agent&#x27;s reasoning ability by adding a new grounding agent to provide commonsense facts for the decision-making agent&#x27;s reference becomes straightforward. By scrutinizing the failed attempts and summarizing the reasons for failure, we obtained a holistic understanding of the commonsense knowledge that the assistant agent lacks. Then, we set a grounding agent to provide this general knowledge when the task begins and whenever the assistant outputs the same action three times in a row. This ensures the assistant takes this commonsense knowledge into consideration and prevents it from getting stuck in outputting the same content or constantly apologizing.<br><br>We compare our system&#x27;s performance with ReAct, which treats ALFWorld as a text-completion task. ReAct (Yao et al., 2022) is a few-shot prompting technique that interleaves reasoning and acting, allowing for greater synergy between the two and significantly improving performance on both language and decision-making tasks. We integrate ReAct into AutoGen by modifying the prompts in a conversational manner. Following ReAct, we employ a two-shot setting. The few-shot prompts are obtained from the corresponding repository. As shown in Table 3, the two-agent design matches the performance of ReAct, while the three-agent design significantly outperforms ReAct. We surmise that the performance discrepancy is caused by the inherent difference between dialogue-completion and text-completion tasks. On the other hand, introducing a grounding agent as a knowledge source remarkably advances performance on all types of tasks.</p></div><p>ALFWorld(Shridhar et al., 2021)是一个基于合成语言的交互式决策任务,由旨在模拟真实家居场景的文本环境组成。给定一个高层目标(如"把一个热苹果放进冰箱")与家居环境描述,智能体需要通过文本界面探索并交互于模拟家居环境。一个典型任务环境包含多种位置类型,可能需要 40 步以上才能完成——这凸显了智能体把目标分解为子任务、逐一解决并有效探索环境的需求。</p></div>
+<p><strong>详细工作流。</strong> 我们先用 AutoGen 提出一个简洁的双智能体系统(图 9 左侧)来求解该基准任务。系统由助手智能体与执行器智能体组成:助手智能体生成计划并做动作决策;执行器智能体专为 ALFWorld 定制,执行助手提议的动作,并把家居环境中的执行结果作为反馈报告给助手。由于对输出格式有严格要求,我们用 BLEU 指标评估输出与所有合法动作选项的相似度,选相似度最高的选项作为本轮动作。</p>
+<p>ALFWorld 的一大挑战是常识推理:智能体需要从提供的少样本示例中提取模式,并结合对家居环境的一般知识来完整理解任务规则;而助手往往忽略家居环境的一些基本知识。得益于 AutoGen 易于实现的多智能体对话特性,增加一个新的锚定智能体来为决策智能体提供常识参考、从而增强助手推理能力,变得很直接。通过仔细检视失败尝试并总结失败原因,我们全面掌握了助手智能体所缺的常识知识;然后设置一个锚定智能体,在任务开始时、以及每当助手连续三次输出同一动作时提供这些通用知识。这确保助手把常识纳入考虑,防止它卡在重复输出同样内容或不停道歉上。</p>
+<p>我们把该系统与把 ALFWorld 当作文本补全任务的 ReAct 比较。ReAct(Yao et al., 2022)是一种交错推理与行动的少样本提示技术,让两者更好地协同,在语言与决策任务上都显著提升性能。我们以对话方式修改提示,把 ReAct 集成进 AutoGen,并沿用 ReAct 的 two-shot 设定,少样本提示取自相应仓库。如表 3 所示:两智能体设计与 ReAct 性能相当,而三智能体设计显著超越 ReAct。我们推测性能差异源于对话补全与文本补全任务的固有差别;另一方面,引入作为知识源的锚定智能体,在所有类型任务上都显著推进了性能。</p>
+<p><strong>表 3:ReAct 与 ALFChat 两个变体在 ALFWorld 基准上的对比</strong>(每任务报告 3 次尝试的成功率;成功率 = 成功完成的任务数 ÷ 总任务数)</p>
+<table>
+<thead>
+<tr>
+<th>方法</th>
+<th>Pick</th>
+<th>Clean</th>
+<th>Heat</th>
+<th>Cool</th>
+<th>Look</th>
+<th>Pick 2</th>
+<th>全部(All)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ReAct(平均)</td>
+<td>63</td>
+<td>52</td>
+<td>48</td>
+<td>71</td>
+<td>61</td>
+<td>24</td>
+<td>54</td>
+</tr>
+<tr>
+<td>ALFChat 两智能体(平均)</td>
+<td>61</td>
+<td>58</td>
+<td>57</td>
+<td>67</td>
+<td>50</td>
+<td>19</td>
+<td>54</td>
+</tr>
+<tr>
+<td>ALFChat 三智能体(平均)</td>
+<td><strong>79</strong></td>
+<td><strong>64</strong></td>
+<td><strong>70</strong></td>
+<td><strong>76</strong></td>
+<td><strong>78</strong></td>
+<td><strong>41</strong></td>
+<td><strong>69</strong></td>
+</tr>
+<tr>
+<td>ReAct(3 次中最佳)</td>
+<td>75</td>
+<td>62</td>
+<td>61</td>
+<td>81</td>
+<td>78</td>
+<td>35</td>
+<td>66</td>
+</tr>
+<tr>
+<td>ALFChat 两智能体(3 次中最佳)</td>
+<td>71</td>
+<td>61</td>
+<td>65</td>
+<td>76</td>
+<td>67</td>
+<td>35</td>
+<td>63</td>
+</tr>
+<tr>
+<td>ALFChat 三智能体(3 次中最佳)</td>
+<td><strong>92</strong></td>
+<td><strong>74</strong></td>
+<td><strong>78</strong></td>
+<td><strong>86</strong></td>
+<td><strong>83</strong></td>
+<td><strong>41</strong></td>
+<td><strong>77</strong></td>
+</tr>
+</tbody>
+</table>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>**Case study.** Figure 10 exemplifies how a three-agent design eliminates one root cause for failure cases. Most of the tasks involve taking an object and then performing a specific action with it (e.g., finding a vase and placing it on a cupboard). Without a grounding agent, the assistant frequently conflates finding an object with taking it, as illustrated in Figure 10a). This leads to most of the failure cases in &#x27;pick&#x27; and &#x27;look&#x27; type tasks. With the introduction of a grounding agent, the assistant can break out of this loop and successfully complete the task<br><br>**Takeaways.** We introduced a grounding agent to serve as an external commonsense knowledge source, which significantly enhanced the assistant&#x27;s ability to make informed decisions. This proves that providing necessary commonsense facts to the decision-making agent can assist it in making more informed decisions, thus effectively boosting the task success rate. AutoGen brings both simplicity and modularity when adding the grounding agent.</p></div><p><strong>案例研究。</strong> 图 10 例示了三智能体设计如何消除失败案例的一个根因。多数任务涉及先拿起物体、再对其执行特定动作(如找到花瓶并放上橱柜)。没有锚定智能体时,助手经常把"找到物体"与"拿起物体"混为一谈(如图 10a),这导致 'pick' 与 'look' 类任务的大部分失败;引入锚定智能体后,助手能跳出循环并成功完成任务。</p></div>
+<p>[图 10: Comparison of results from two designs: (a) Two-agent design which consists of an assistant and an executor, (b) Three-agent design which adds a grounding agent that serves as a knowledge source. For simplicity, we omit the in-context examples and part of the exploration trajectory, and only show parts contributing to the failure/success of the attempt.]</p>
+<p>图 10:两种设计的结果对比(为简洁起见,省略了上下文示例与部分探索轨迹,只展示导致该次失败/成功的部分)。任务为"在台灯下看碗"。<strong>(a) 两智能体</strong>:助手想看碗,却只走到台灯前反复"打开台灯"(use desklamp 1)——执行器反复回应"You turn on the desklamp 1",助手陷入开灯死循环,任务失败,只能回复 TERMINATE。<strong>(b) 三智能体</strong>:助手同样陷入开灯循环时,锚定智能体(GroundingAgent)注入常识:"你必须先找到并拿起物体,才能检查它;你必须先到目标物体所在处,才能使用它。"执行器把提示转告助手后,助手改变计划:走到书桌 2 → 拿起碗 1(take bowl 1 from desk 2)→ 走到书桌 1 → 打开台灯 → 在台灯下看碗,任务成功。</p>
+<p><strong>要点(Takeaways)。</strong> 我们引入充当外部常识知识源的锚定智能体,显著增强了助手做出知情决策的能力。这证明:向决策智能体提供必要的常识事实,能帮助它做出更明智的决策,从而有效提升任务成功率。在增加锚定智能体这件事上,AutoGen 同时带来了简洁性与模块化。</p>
+<h4 id="a4-d">A4:多智能体编码(附录 D)</h4>
+<p>[图 11: Our re-implementation of OptiGuide with AutoGen streamlining agents' interactions. The Commander receives user questions (e.g., What if we prohibit shipping from supplier 1 to roastery 2?) and coordinates with the Writer and Safeguard. The Writer crafts the code and interpretation, the Safeguard ensures safety (e.g., not leaking information, no malicious code), and the Commander executes the code. If issues arise, the process can repeat until resolved. Shaded circles represent steps that may be repeated multiple times.]</p>
+<p>图 11:我们用 AutoGen 对 OptiGuide 的重新实现,精简了智能体交互。Commander 接收用户问题(如"如果禁止从供应商 1 向烘焙厂 2 运货会怎样?"),并与 Writer、Safeguard 协调:Writer 编写代码与解释;Safeguard 确保安全(如不泄露信息、无恶意代码);Commander 执行代码。若出现问题,流程可重复直至解决。带阴影的圆圈表示可能重复多次的步骤。流程编号:① 用户提问 → ② 问题与日志给 Writer → ③ 代码回传 → ④ 送 Safeguard 审查 → ⑤ 通过放行(或亮红旗)→ ⑥ 执行代码/异常回炉 → ⑦ 答案解释 → ⑧ 最终答案给用户;"③→⑥ 重复直到回答用户问题或超时"。</p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>**Detailed Workflow.** The workflow can be described as follows. The end user initiates the interaction by posing a question, such as &quot;What if we prohibit shipping from supplier 1 to roastery 2?&quot;, marked by ① to the Commander agent. The Commander manages and coordinates with two LLM-based assistant agents: the Writer and the Safeguard. Apart from directing the flow of communication, the Commander has the responsibility of handling memory tied to user interactions. This capability enables the Commander to capture and retain valuable context regarding the user&#x27;s questions and their corresponding responses. Such memory is subsequently shared across the system, empowering the other agents with context from prior user interactions and ensuring more informed and relevant responses.<br><br>In this orchestrated process, the Writer, who combines the functions of a &quot;Coder&quot; and an &quot;Interpreter&quot; as defined in (Li et al., 2023a), will craft code and also interpret execution output logs. For instance, during code writing (② and ③), the Writer may craft code &quot;model.addConstr(x[&#x27;supplier1&#x27;, &#x27;roastery2&#x27;] == 0, &#x27;prohibit&#x27;)&quot; to add an additional constraint to answer the user&#x27;s question. After receiving the code, the Commander will communicate with the Safeguard to screen the code and ascertain its safety (④); once the code obtains the Safeguard&#x27;s clearance, marked by ⑤, the Commander will use external tools (e.g., Python) to execute the code and request the Writer to interpret the execution results for the user&#x27;s question (⑥ and ⑦). For instance, the writer may say &quot;if we prohibit shipping from supplier 1 to roastery 2, the total cost would increase by 10.5%.&quot; Bringing this intricate process full circle, the Commander furnishes the user with the concluding answer (⑧).<br><br>If at a point there is an exception - either a security red flag raised by Safeguard (in ⑤) or code execution failures within Commander, the Commander redirects the issue back to the Writer with essential information in logs (⑥). So, the process from ③ to ⑥ might be repeated multiple times, until each user query receives a thorough and satisfactory resolution or until the timeout. This entire complex workflow of multi-agent interaction is elegantly managed via AutoGen.<br><br>The core workflow code for OptiGuide was reduced from over 430 lines to 100 lines using AutoGen, leading to significant productivity improvement. The new agents are customizable, conversable, and can autonomously manage their chat memories. This consolidation allows the coder and interpreter roles to merge into a single &quot;Writer&quot; agent, resulting in a clean, concise, and intuitive implementation that is easier to maintain.</p></div><p><strong>详细工作流。</strong> 流程如下:终端用户以问题(如"如果禁止从供应商 1 向烘焙厂 2 运货会怎样?")发起交互,记为 ①,送达 Commander 智能体。Commander 管理并协调两个 LLM 助手智能体:Writer 与 Safeguard。除引导通信流外,Commander 还负责管理与用户交互相关的记忆——这使它能捕捉并保留关于用户问题及其回应的宝贵上下文;该记忆随后在系统内共享,让其他智能体也拥有此前用户交互的上下文,确保更知情、更相关的回应。</p></div>
+<p>在这一编排过程中,Writer(合并了 Li et al., 2023a 定义的"Coder(编码者)"与"Interpreter(解释者)"职能)负责编写代码并解释执行输出日志。例如在写代码阶段(② 与 ③),Writer 可能编写代码 "model.addConstr(x['supplier1', 'roastery2'] == 0, 'prohibit')" 来添加额外约束以回答用户问题。Commander 收到代码后,与 Safeguard 沟通审查代码、确认其安全性(④);一旦代码获得 Safeguard 放行(⑤),Commander 将使用外部工具(如 Python)执行代码,并请 Writer 就执行结果为用户问题作解释(⑥ 与 ⑦)——例如 Writer 可能说"如果禁止从供应商 1 向烘焙厂 2 运货,总成本将上升 10.5%"。最后,Commander 把结论性答案交付给用户(⑧),使这一复杂过程闭环。</p>
+<p>若某处出现异常——要么是 Safeguard 亮起安全红旗(⑤),要么是 Commander 内代码执行失败——Commander 会带着日志中的关键信息把问题退回 Writer(⑥)。因此 ③ 到 ⑥ 的过程可能重复多次,直到每个用户查询得到彻底满意的解决或超时。这整个复杂的多智能体交互工作流由 AutoGen 优雅地管理。</p>
+<p>用 AutoGen,OptiGuide 的核心工作流代码从 430 多行减至 100 行,带来显著生产力提升。新智能体可定制、可对话,并能自主管理自己的聊天记忆。这种整合让编码者与解释者两个角色合并为单一 "Writer" 智能体,实现干净、简洁、直观、更易维护的实现。</p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>**Manual Evaluation Comparing ChatGPT + Code Interpreter and AutoGen-based OptiGuide.** ChatGPT + Code Interpreter is unable to execute code with private or customized dependencies (e.g., Gurobi), which means users need to have engineering expertise to manually handle multiple steps, disrupting the workflow and increasing the chance for mistakes. If users lack access or expertise, the burden falls on supporting engineers, increasing their on-call time.<br><br>We carried out a user study that juxtaposed OpenAI&#x27;s ChatGPT coupled with a Code Interpreter against AutoGen-based OptiGuide. The study focused on a coffee supply chain scenario, and an expert Python programmer with proficiency in Gurobi participated in the test. We evaluated both systems based on 10 randomly selected questions, measuring time and accuracy. While both systems answered 8 questions correctly, the Code Interpreter was significantly slower than OptiGuide because the former requires more manual intervention. On average, users needed to spend 4 minutes and 35 seconds to solve problems with the Code Interpreter, with a standard deviation of approximately 2.5 minutes. In contrast, OptiGuide&#x27;s average problem-solving time was around 1.5 minutes, most of which was spent waiting for responses from the GPT-4 model. This indicates a 3x saving on the user&#x27;s time with AutoGen-based OptiGuide.<br><br>While using ChatGPT + Code Interpreter, users had to read through the code and instructions to know where to paste the code snippets. Additionally, running the code involves downloading it and executing it in a terminal, a process that was both time-consuming and prone to errors. The response time from the Code Interpreter is also slower, as it generates lots of tokens to read the code, read the variables line-by-line, perform chains of thought analysis, and then produce the final answer code. In contrast, AutoGen integrates multiple agents to reduce user interactions by 3 - 5 times on average as reported in Table 4, where we evaluated our system with 2000 questions across five OptiGuide applications and measured how many prompts the user needs to type.</p></div><p><strong>ChatGPT + Code Interpreter 与基于 AutoGen 的 OptiGuide 的人工评测对比。</strong> ChatGPT + Code Interpreter 无法执行带私有或定制依赖(如 Gurobi)的代码,这意味着用户需要具备工程专业知识来手工处理多个步骤,打断工作流并增加出错机会;若用户没有权限或专长,负担就落在支持工程师身上,增加他们的值班时间。</p></div>
+<p>我们做了一项把 ChatGPT+Code Interpreter 与基于 AutoGen 的 OptiGuide 并置对比的用户研究:聚焦咖啡供应链场景,由一位精通 Gurobi 的 Python 专家程序员参与测试;基于 10 个随机选取的问题评测两个系统,测量时间与准确性。两个系统都答对了 8 题,但 Code Interpreter 明显慢于 OptiGuide,因为前者需要更多人工干预:用户用 Code Interpreter 平均需 4 分 35 秒解题(标准差约 2.5 分钟),而 OptiGuide 平均解题时间约 1.5 分钟,其中大部分是在等 GPT-4 模型响应——这表明基于 AutoGen 的 OptiGuide 为用户节省约 3 倍时间。</p>
+<p>使用 ChatGPT + Code Interpreter 时,用户必须通读代码与说明才知道把代码片段粘贴到哪里;而且运行代码还需下载并在终端执行,既耗时又易错。Code Interpreter 的响应也更慢:它要生成大量 token 来读代码、逐行读变量、做思维链分析,然后才产出最终答案代码。相比之下,AutoGen 集成多个智能体,平均减少 3-5 倍用户交互(见表 4)——我们在五个 OptiGuide 应用的 2000 个问题上评测了系统,测量用户需要输入多少条提示。</p>
+<p><strong>表 4:OptiGuide(使用 GPT-4)在保持同等编码性能下节省的人工</strong>(数据含均值与标准差(括号内))</p>
+<table>
+<thead>
+<tr>
+<th>数据集</th>
+<th>netflow</th>
+<th>facility</th>
+<th>tsp</th>
+<th>coffee</th>
+<th>diet</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>节省倍数</td>
+<td>3.14x (0.65)</td>
+<td>3.14x (0.64)</td>
+<td>4.88x (1.71)</td>
+<td>3.38x (0.86)</td>
+<td>3.03x (0.31)</td>
+</tr>
+</tbody>
+</table>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Table 13 and 15 provide a detailed comparison of user experience with ChatGPT+Code Interpreter and AutoGen-based OptiGuide. ChatGPT+Code Interpreter is unable to run code with private packages or customized dependencies (such as Gurobi); as a consequence, ChatGPT+Code Interpreter requires users to have engineering expertise and to manually handle multiple steps, disrupting the workflow and increasing the chance of mistakes. If customers lack access or expertise, the burden falls on supporting engineers, increasing their on-call time. In contrast, the automated chat by AutoGen is more streamlined and autonomous, integrating multiple agents to solve problems and address concerns. This results in a 5x reduction in interaction and fundamentally changes the overall usability of the system. A stable workflow can be potentially reused for other applications or to compose a larger one.<br><br>**Takeaways:** The implementation of the multi-agent design with AutoGen in the OptiGuide application offers several advantages. It simplifies the Python implementation and fosters a mixture of collaborative and adversarial problem-solving environments, with the Commander and Writer working together while the Safeguard acts as a virtual adversarial checker. This setup allows for proper memory management, as the Commander maintains memory related to user interactions, providing context-aware decision-making. Additionally, role-playing ensures that each agent&#x27;s memory remains isolated, preventing shortcuts and hallucinations</p></div><p>表 13 与表 15 给出了 ChatGPT+Code Interpreter 与基于 AutoGen 的 OptiGuide 的用户体验详细对比。ChatGPT+Code Interpreter 无法运行带私有包或定制依赖(如 Gurobi)的代码;因此它要求用户具备工程专业知识并手工处理多个步骤,打断工作流、增加出错机会;若客户缺乏权限或专长,负担就落在支持工程师身上,增加其值班时间。相比之下,AutoGen 的自动聊天更精简、更自主,集成多个智能体来解决问题、处理关切,带来 5 倍的交互减少,从根本上改变了系统的整体可用性。稳定的工作流还有望复用于其他应用或组合成更大的工作流。</p></div>
+<p><strong>要点(Takeaways):</strong> 在 OptiGuide 应用中用 AutoGen 实现多智能体设计有若干优势:它简化了 Python 实现,并促成协作与对抗并存的问题求解环境——Commander 与 Writer 协同工作,而 Safeguard 充当虚拟的对抗性审查者。这一设定支持妥善的记忆管理:Commander 维护与用户交互相关的记忆,提供上下文感知的决策。此外,角色扮演确保各智能体的记忆相互隔离,防止走捷径与幻觉。</p>
+<h4 id="a5-d">A5:动态群聊(附录 D)</h4>
+<p>[图 12: A5: Dynamic Group Chat: Overview of how AutoGen enables dynamic group chats to solve tasks. The Manager agent, which is an instance of the GroupChatManager class, performs the following three steps–select a single speaker (in this case Bob), ask the speaker to respond, and broadcast the selected speaker's message to all other agents.]</p>
+<p>图 12:A5 动态群聊:AutoGen 如何实现动态群聊解题的总览。Manager 智能体(GroupChatManager 类的实例)执行三步:① 选择一个发言者(本例中是 Bob);② 请该发言者回应;③ 把所选发言者的消息广播给所有其他智能体(图中含 Alice、Bob、User Proxy)。</p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>To validate the necessity of multi-agent dynamic group chat and the effectiveness of the role-play speaker selection policy, we conducted a pilot study comparing a four-agent dynamic group chat system with two possible alternatives across 12 manually crafted complex tasks. An example task is &quot;How much money would I earn if I bought 200 $AAPL stocks at the lowest price in the last 30 days and sold them at the highest price? Save the results into a file.&quot; The four-agent group chat system comprised the following group members: a user proxy to take human inputs, an engineer to write code and fix bugs, a critic to review code and provide feedback, and a code executor for executing code. One of the possible alternatives is a two-agent system involving an LLM-based assistant and a user proxy agent, and another alternative is a group chat system with the same group members but a task-based speaker selection policy. In the task-based speaker selection policy, we simply append role information, chat history, and the next speaker&#x27;s task into a single prompt. Through the pilot study, we observed that compared with a task-style prompt, utilizing a role-play prompt in dynamic speaker selection often leads to more effective consideration of both conversation context and role alignment during the process of generating the subsequent speaker, and consequently a higher success rate as reported in Table 5, fewer LLM calls and fewer termination failures, as reported in Table 6.</p></div><p>为验证多智能体动态群聊的必要性以及角色扮演式发言者选择策略的有效性,我们做了一项试点研究:在 12 个手工构造的复杂任务上,把四智能体动态群聊系统与两个备选方案对比。示例任务:"如果我以最近 30 天最低价买入 200 股 $AAPL、以最高价卖出,能赚多少钱?把结果存入文件。"四智能体群聊系统的成员是:接收人类输入的用户代理、写代码修 bug 的工程师(engineer)、审查代码并提反馈的批评者(critic)、执行代码的代码执行器。备选方案一是一个双智能体系统(LLM 助手 + 用户代理);备选方案二是成员相同、但采用<strong>基于任务的发言者选择策略</strong>的群聊系统——该策略只是把角色信息、聊天历史与下一个发言者的任务拼进单个提示。试点研究观察到:与任务式提示相比,在动态发言者选择中使用角色扮演提示,往往能在生成下一个发言者的过程中更有效地兼顾对话上下文与角色对齐,从而带来更高的成功率(表 5)、更少的 LLM 调用与更少的终止失败(表 6)。</p></div>
+<p><strong>表 5:12 个任务上的成功数(越高越好)</strong></p>
+<table>
+<thead>
+<tr>
+<th>模型</th>
+<th>双智能体</th>
+<th>群聊</th>
+<th>群聊(基于任务的发言者选择策略)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GPT-3.5-turbo</td>
+<td>8</td>
+<td>9</td>
+<td>7</td>
+</tr>
+<tr>
+<td>GPT-4</td>
+<td>9</td>
+<td><strong>11</strong></td>
+<td>8</td>
+</tr>
+</tbody>
+</table>
+<p><strong>表 6:12 个任务上的平均 LLM 调用次数与终止失败次数(越低越好)</strong></p>
+<table>
+<thead>
+<tr>
+<th>模型</th>
+<th>双智能体</th>
+<th>群聊</th>
+<th>群聊(基于任务的发言者选择策略)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GPT-3.5-turbo</td>
+<td>9.9 次调用,9 次终止失败</td>
+<td>5.3,0</td>
+<td>4,0</td>
+</tr>
+<tr>
+<td>GPT-4</td>
+<td>6.8,3</td>
+<td><strong>4.5,0</strong></td>
+<td>4,0</td>
+</tr>
+</tbody>
+</table>
+<p>[图 13: Comparison of two-agent chat (a) and group chat (b) on a given task. The group chat resolves the task successfully with a smoother conversation, while the two-agent chat fails on the same task and ends with a repeated conversation.]</p>
+<p>图 13:同一任务上双智能体聊天 (a) 与群聊 (b) 的对比。群聊以更顺畅的对话成功解决任务,而双智能体聊天在同一任务上失败,以重复对话收场。(图示为具体对话转录,内容从略。)</p>
+<h4 id="a6-d">A6:对话式国际象棋(附录 D)</h4>
+<p>[图 14: A6: Conversational Chess: Our conversational chess application can support various scenarios, as each player can be an LLM-empowered AI, a human, or a hybrid of the two. Here, the board agent maintains the rules of the game and supports the players with information about the board. Players and the board agent all use natural language for communication.]</p>
+<p>图 14:A6 对话式国际象棋:我们的对话式国际象棋应用支持多种场景——每个棋手可以是 LLM 驱动的 AI、人类或两者的混合。棋盘智能体维护游戏规则,并为棋手提供棋盘信息;棋手与棋盘智能体全部用自然语言交流(图中示例对话:"挑战你中心的兵,该你了。""把我的马走到好位置,该你了。")。</p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>In Conversational Chess, each player is a AutoGen agent and can be powered either by a human or an AI. A third party, known as the board agent, is designed to provide players with information about the board and ensure that players&#x27; moves adhere to legal chess moves. Figure 14 illustrates the scenarios supported by Conversational Chess: AI/human vs. AI/human, and demonstrates how players and the board agent interact. This setup fosters social interaction and allows players to express their moves creatively, employing jokes, meme references, and character-playing, thereby making chess games more entertaining for both players and observers (Figure 15 provides an example of conversational chess).<br><br>To realize these scenarios, we constructed a player agent with LLM and human as back-end options. When human input is enabled, before sending the input to the board agent, it first prompts the human player to input the message that contains the move along with anything else the player wants to say (such as a witty comment). If human input is skipped or disabled, LLM is used to generate the message. The board agent is implemented with a custom reply function, which employs an LLM to parse the natural language input into a legal move in a structured format (e.g., UCI), and then pushes the move to the board. If the move is not legitimate, the board agent will reply with an error. Subsequently, the player agent needs to resend a message to the board agent until a legal move is made. Once the move is successfully pushed, the player agent sends the message to the opponent. As shown in Figure 15, the conversation between AI players can be natural and entertaining. When the player agent uses LLM to generate a message, it utilizes the board state and the error message from the board agent. This helps reduce the chance of hallucinating an invalid move. The chat between one player agent and the board agent is invisible to the other player agent, which helps keep the messages used in chat completion well-managed.<br><br>There are two notable benefits of using AutoGen to implement Conversational Chess. Firstly, the agent design in AutoGen facilitates the natural creation of objects and their interactions needed in our chess game. This makes development easy and intuitive. For example, the isolation of chat messages simplifies the process of making a proper LLM chat completion inference call. Secondly, AutoGen greatly simplifies the implementation of agent behaviors using composition. Specifically, we utilized the register_reply method supported by AutoGen agents to instantiate player agents and a board agent with custom reply functions. Concentrating the extension work needed at a single point (the reply function) simplifies the reasoning processes, and development and maintenance effort.</p></div><p>在对话式国际象棋中,每个棋手都是一个 AutoGen 智能体,后端可以是人类或 AI。第三方<strong>棋盘智能体</strong>为棋手提供棋盘信息,并确保棋手走法符合国际象棋规则。图 14 展示了支持的场景(AI/人类 对 AI/人类)以及棋手与棋盘智能体的交互方式。这一设定促进社交互动,允许棋手创造性地表达走法——用笑话、梗、角色扮演,使棋局对棋手与观战者都更有趣(图 15 给出一个对话式国际象棋的例子)。</p></div>
+<p>为实现这些场景,我们构造了以 LLM 与人类为后端选项的棋手智能体。启用人类输入时,它先提示人类棋手输入包含走法及其他想说内容(如俏皮评论)的消息,再发给棋盘智能体;若跳过或禁用人类输入,则由 LLM 生成消息。棋盘智能体用自定义回复函数实现:先用 LLM 把自然语言输入解析成结构化格式的合法走法(如 UCI),再把走法推到棋盘;若走法不合法,棋盘智能体回复错误,棋手智能体须重新发消息直到走出合法着。走法成功推送后,棋手智能体把消息发给对手。如图 15 所示,AI 棋手之间的对话可以自然又有趣。棋手智能体用 LLM 生成消息时会利用棋盘状态与棋盘智能体的错误信息,这有助于减少幻觉出非法走法的几率。一个棋手智能体与棋盘智能体之间的聊天对另一个棋手智能体不可见,有助于保持聊天补全所用消息的良好管理。</p>
+<p>用 AutoGen 实现对话式国际象棋有两大显著收益。第一,AutoGen 的智能体设计让自然地创建棋类游戏所需的对象及其交互变得容易,开发简单直观——例如聊天消息的隔离简化了进行规范 LLM 聊天补全推理调用的过程。第二,AutoGen 用组合(composition)大幅简化了智能体行为的实现:我们利用 AutoGen 智能体支持的 register_reply 方法,以自定义回复函数实例化棋手智能体与棋盘智能体。把所需扩展集中在单一点(回复函数)上,简化了推理过程与开发维护成本。</p>
+<p>[图 15: Example conversations during a game involving two AI player agents and a board agent.]</p>
+<p>图 15:两个 AI 棋手智能体与一个棋盘智能体的一局示例对话。<strong>(a) 两个 AI 棋手之间的对话</strong>:"好,开局吧。我把兵从 e2 走到 e4——棋盘中心可是战局的心脏,不是吗?""啊,王兵开局,经典。我把兵从 e7 走到 e5……我一直很欣赏国际象棋如何映照人生:全在于做战略性决策,不是吗?该你了。""确实,棋如人生的写照——每一步都重要,就像人生的每个决定。我把马从 g1 走到 f3,瞄准控制中心。"<strong>(b) AI 棋手(执白)与棋盘智能体的对话</strong>:棋手自然语言提议走法,棋盘智能体解析验证;若非法(如 "Error: illegal uci: 'e4e5'")则报错,棋手改走合法着(如 "我把兵从 d2 走到 d4,为后与象打开线路")。</p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>To illustrate the effect facilitated by this board agent, we provide a demonstration of conversational chess without a board agent in Figure 16. In this demonstration, instead of employing an additional board agent for grounding, the system utilizes prompting for grounding by including the sentence &quot;You should make sure both you and the opponent are making legal moves.&quot; in the system messages directed to both players.</p></div><p>为说明棋盘智能体带来的效果,我们在图 16 中提供了一段<strong>没有</strong>棋盘智能体的对话式国际象棋演示。该演示不用额外的棋盘智能体做锚定,而是在发给双方棋手的系统消息中加入句子 "You should make sure both you and the opponent are making legal moves."(你应确保你和对手的走法都合法),用提示做锚定。</p></div>
+<p>[图 16: Comparison of two designs–(a) without a board agent, and (b) with a board agent–in Conversational Chess.]</p>
+<p>图 16:对话式国际象棋两种设计的对比。<strong>(a) 无棋盘智能体</strong>:玩家系统消息为"你的名字是 {name},你是一名棋手,与 {opponent_name} 对弈,执 {color}。你用通用棋类接口语言(UCI)传达走法,传达走法时可与对手闲聊活跃气氛。你应确保你和对手的走法都合法……"。演示中执白棋手声称"把马从 b8 走到 c6"并自行打印"更新后的棋盘"——但实际上把 a8 的车改成了马再挪到 c6,棋面状态已错乱,游戏被非法走法破坏。<strong>(b) 有棋盘智能体</strong>:棋盘智能体回复 "Your move is illegal. You changed the rock (rook) at a8 to knight and move it to c6. Please check your decision and re-make your move.",棋手道歉后改走真正合法的 "把马从 b8 走到 c6",棋盘状态保持一致。</p>
+<h4 id="a7">A7:浏览器交互的在线决策</h4>
+<blockquote>
+<p><strong>译注</strong>:A7 未出现在正文第 3 节的六个应用中,是附录 D 里追加的第七个应用示例。</p>
+</blockquote>
+<p>[图 17: We use AutoGen to build MiniWobChat, which solves tasks in the MiniWob++ benchmark. MiniWobChat consists of two agents: an assistant agent and an executor agent. The assistant agent suggests actions to manipulate the browser while the executor executes the suggested actions and returns rewards/feedback. The assistant agent records the feedback and continues until the feedback indicates task success or failure.]</p>
+<p>图 17:我们用 AutoGen 构建 <strong>MiniWobChat</strong> 来求解 MiniWoB++ 基准任务。MiniWobChat 由两个智能体组成:助手智能体建议操纵浏览器的动作;执行器执行建议的动作并返回奖励/反馈;助手记录反馈并继续,直到反馈表明任务成功或失败。环境状态是当前网页的 HTML 代码,奖励为 Success/Fail/Ongoing,动作决策形如"点击 xpath 为 '//button[id=\"subbtn\"]' 的按钮"(示例 HTML 含 "Click button ONE, then click button TWO." 的任务指令与 ONE/TWO 两个按钮)。</p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>In practice, many applications require the presence of agents capable of interacting with environments and making decisions in an online context, such as in game playing (Mnih et al., 2013; Vinyals et al., 2017), web interactions (Liu et al., 2018; Shi et al., 2017), and robot manipulations (Shen et al., 2021). With the multi-agent conversational framework in AutoGen, it becomes easy to decompose the automatic agent-environment interactions and the development of a decision-making agent by constructing an executor agent responsible for handling the interaction with the environment, thereby delegating the decision-making part to other agents. Such a decomposition allows developers to reuse the decision-making agent for new tasks with minimal effort rather than building a specialized decision-making agent for every new environment.<br><br>**Workflow.** We demonstrate how to use AutoGen to build a working system for handling such scenarios with the MiniWoB++ benchmark (Shi et al., 2017). MiniWoB++ comprises browser interaction tasks that involve utilizing mouse and keyboard actions to interact with browsers. The ultimate objective of each task is to complete the tasks described concisely in natural language, such as &quot;expand the web section below and click the submit button.&quot; Solving these tasks typically requires a sequence of web manipulation actions rather than a single action, and making action decisions at each time step requires access to the web status (in the form of HTML code) online. For the example above, clicking the submit button requires checking the web status after expanding the web section. We designed a straightforward two-agent system named MiniWobChat using AutoGen, as shown in Figure 17. The assistant agent is an instance of the built-in AssistantAgent and is responsible for making action decisions for the given task. The second agent, the executor agent, is a customized UserProxyAgent, which is responsible for interacting with the benchmark by executing the actions suggested by the AssistantAgent and returning feedback.</p></div><p>实践中,许多应用需要能与环境交互并在线做决策的智能体,例如游戏(Mnih et al., 2013; Vinyals et al., 2017)、网页交互(Liu et al., 2018; Shi et al., 2017)与机器人操作(Shen et al., 2021)。借助 AutoGen 的多智能体对话框架,可以很容易地把"智能体-环境自动交互"与"决策智能体的开发"解耦:构造一个负责与环境交互的执行器智能体,把决策部分交给其他智能体。这种分解让开发者能以最小代价把决策智能体复用到新任务上,而不必为每个新环境构建专门的决策智能体。</p></div>
+<p><strong>工作流。</strong> 我们演示如何用 AutoGen 在 MiniWoB++ 基准(Shi et al., 2017)上为此类场景构建可运行的系统。MiniWoB++ 包含需要用鼠标键盘动作与浏览器交互的任务;每个任务的最终目标是完成用自然语言简要描述的事情,如"展开下方网页区块并点击提交按钮"。解此类任务通常需要一串网页操纵动作而非单一动作,且每个时间步做动作决策都需要在线获取网页状态(HTML 代码形式)——对上例而言,点击提交按钮前需要先检查展开区块后的网页状态。我们用 AutoGen 设计了简洁的双智能体系统 <strong>MiniWobChat</strong>(图 17):助手智能体是内置 AssistantAgent 的实例,负责为给定任务做动作决策;第二个智能体——执行器智能体——是定制的 UserProxyAgent,负责通过执行 AssistantAgent 建议的动作与基准交互并返回反馈。</p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>To assess the performance of the developed working system, we compare it with RCI (Kim et al., 2023), a recent solution for the MiniWoB++ benchmark that employs a set of self-critiquing prompts and has achieved state-of-the-art performance. In our evaluation, we use all available tasks in the official RCI code, with varying degrees of difficulty, to conduct a comprehensive analysis against MiniWobChat. Figure 18 illustrates that MiniWobChat achieves competitive performance in this evaluation⁸. Specifically, among the 49 available tasks, MiniWobChat achieves a success rate of 52.8%, which is only 3.6% lower than RCI, a method specifically designed for the MiniWoB++ benchmark. It is worth noting that in most tasks, the difference between the two methods is mirrored as shown in Figure 18. If we consider 0.1 as a success rate tolerance for each task, i.e., two methods that differ within 0.1 are considered to have the same performance, both methods outperform the other on the same number of tasks. For illustration purposes, we provide a case analysis in Table 7 on four typical tasks.<br><br>Additionally, we also explored the feasibility of using Auto-GPT for handling the same tasks. Auto-GPT faces challenges in handling tasks that involve complex rules due to its limited extensibility. It provides an interface for setting task goals using natural language. However, when dealing with the MiniWoB++ benchmark, accurately instructing Auto-GPT to follow the instructions for using MiniWoB++ proves challenging. There is no clear path to extend it in the manner of the two-agent chat facilitated by AutoGen.<br><br>**Takeaways:** For this application, AutoGen stood out as a more user-friendly option, offering modularity and programmability: It streamlined the process with autonomous conversations between the assistant and executor, and provided readily available solutions for agent-environment interactions. The built-in AssistantAgent was directly reusable and exhibited strong performance without customization. Moreover, the decoupling of the execution and assistant agent ensures that modifications to one component do not adversely impact the other. This convenience simplifies maintenance and future updates.</p></div><p>为评估该系统的性能,我们将其与 RCI(Kim et al., 2023)对比——RCI 是 MiniWoB++ 基准的新近方案,使用一组自我批评提示,达到了最先进性能。评测中,我们使用官方 RCI 代码中全部可用任务(难度各异),对 MiniWobChat 做全面分析。图 18 显示 MiniWobChat 在该评测中取得了有竞争力的性能(原文脚注:⁸ RCI 的结果由运行其官方代码(默认设置)得到):在 49 个可用任务上,MiniWobChat 成功率 <strong>52.8%</strong>,仅比专为 MiniWoB++ 设计的 RCI 低 3.6%。值得注意的是,如图 18 所示,多数任务上两种方法的差距呈镜像分布;若把 0.1 视为每任务的成功率容差(差距在 0.1 内即视为性能相同),两方法互有胜负的任务数相等。为便于说明,表 7 给出四个典型任务的案例分析。</p></div>
+<p>此外,我们还探索了用 Auto-GPT 处理相同任务的可行性。Auto-GPT 因可扩展性有限,在处理涉及复杂规则的任务时面临挑战:它提供用自然语言设定任务目标的接口,但在 MiniWoB++ 基准上,要准确指示 Auto-GPT 遵循 MiniWoB++ 的使用说明颇为困难;也不存在以 AutoGen 双智能体聊天方式扩展它的清晰路径。</p>
+<p><strong>要点(Takeaways):</strong> 在该应用中,AutoGen 是更易用的选择,提供模块化与可编程性:它用助手与执行器之间的自主对话精简了流程,并为智能体-环境交互提供了现成方案。内置 AssistantAgent 可直接复用,无需定制就有强劲表现;而且执行智能体与助手智能体的解耦,确保对一个组件的修改不会对另一个组件产生不利影响——这一便利简化了维护与未来更新。</p>
+<p>[图 18: Comparisons between RCI (state-of-the-art prior work) and MiniWobChat on the MiniWob++ benchmark are elucidated herein. We utilize all available tasks in the official RCI code, each with varying degrees of difficulty, to conduct comprehensive comparisons. For each task, the success rate across ten different instances is reported. The results reveal that MiniWobChat attains a performance comparable to that of RCI. When a success rate tolerance of 0.1 is considered for each task, both methods outperform each other on an equal number of tasks.]</p>
+<p>图 18:RCI(此前的最先进工作)与 MiniWobChat 在 MiniWoB++ 基准上的对比。我们使用官方 RCI 代码中全部可用任务(难度各异)做全面比较;每个任务报告 10 个不同实例上的成功率,覆盖 click-button、click-checkboxes、enter-text、login-user、navigate-tree、search-engine、social-media、terminal、use-spinner 等 49 个任务。结果表明 MiniWobChat 达到与 RCI 相当的性能;当对每任务考虑 0.1 的成功率容差时,两方法互有胜负的任务数相等。</p>
+<p><strong>表 7:MiniWoB++ 四个典型任务的案例分析</strong></p>
+<table>
+<thead>
+<tr>
+<th>任务</th>
+<th>正确性</th>
+<th>主要失败原因</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>click-dialog</td>
+<td>AutoGen:10/10;RCI:10/10</td>
+<td>无</td>
+</tr>
+<tr>
+<td>click-checkboxes-large</td>
+<td>AutoGen:5/10;RCI:0/10</td>
+<td>AutoGen:AssistantAgent 给出的动作含不可行字符;RCI:执行了计划之外的动作</td>
+</tr>
+<tr>
+<td>count-shape</td>
+<td>AutoGen:2/10;RCI:0/10</td>
+<td>AutoGen:AssistantAgent 给出的动作含冗余内容、无法转换为基准动作;RCI:多数情况给出错误计划</td>
+</tr>
+<tr>
+<td>use-spinner</td>
+<td>AutoGen:0/10;RCI:1/10</td>
+<td>AutoGen:AssistantAgent 返回计划之外的动作;RCI:多数情况给出错误计划</td>
+</tr>
+</tbody>
+</table>
+<h3 id="e">附录 E 各应用的示例输出(译注)</h3>
+<blockquote>
+<p><strong>译注</strong>:附录 E(原文表 8-19)收录各系统的完整原始输出转录,均为直接对话/日志记录,此处概述要点、不逐行转录,细节请查阅原文 PDF:</p>
+<ul>
+<li><strong>表 8(ChatGPT+Plugin 解第一道化简题)</strong>:Wolfram 返回两个化简结果 (5√42)/27 与 (5√(14/3))/9,其中前者正确;ChatGPT 却选择了后者,答错。</li>
+<li><strong>表 9(AutoGen 解同一题)</strong>:助手生成 sympy 代码(用 sqrt/Rational/simplify 化简分数),用户代理执行成功,输出 <code>5*sqrt(42)/27</code>,回复 TERMINATE——正确解决。</li>
+<li><strong>表 10(LangChain ReAct)</strong>:生成 math 库代码只算出小数 1.200137…,未按要求给出精确化简形式——答错。</li>
+<li><strong>表 11(AutoGPT)</strong>:先误用 <code>math.simplify</code> 报错,改用 sympy 后代码又因缺少 print 而无输出,反复两轮无果后被用户 Ctrl+C 中止;过程中每次回复都带 THOUGHTS/REASONING/PLAN/CRITICISM 等冗长模板。</li>
+<li><strong>表 12(Multi-Agent Debate)</strong>:正反双方经推导均得出 7√1050/189 的"最终答案",主持人裁定反方推理更好——但该答案本身是错的(正确为 5√42/27),展示纯语言辩论无法自查计算错误。</li>
+<li><strong>表 13(ChatGPT+Code Interpreter 做 OptiGuide)</strong>:围绕"烘焙成本上涨 5%"问题,用户须手动下载代码、经 Safeguard 检查两次 DANGER 后才获 SAFE,再手动运行并把终端输出复制粘贴回去,最终得出成本从 2470 涨到 2526.5——过程繁琐、人工步骤多。</li>
+<li><strong>表 14(ChatGPT+Code Interpreter 解第一道化简题)</strong>:同样只返回小数近似 1.200…,答错。</li>
+<li><strong>表 15(AutoGen 版 OptiGuide 同题)</strong>:一句话提问后直接得到结论:"烘焙成本上涨 5% 后,新最优总成本 2526.5,较初始 2470.0 上升 56.5 个单位"。</li>
+<li><strong>表 16(BabyAGI)</strong>:解出一半后自创出 10 道同型新题加入任务列表,在任务优先级排序阶段被中止——并未解决原问题。</li>
+<li><strong>表 17(CAMEL)</strong>:构造"Math Solver"与"Python Programmer"双角色,角色扮演对话逐条索要代码片段(import 库、定义函数骨架……),始终不执行代码、不给最终答案,被人工中止。</li>
+<li><strong>表 18(MetaGPT)</strong>:面对数学题输出了产品目标、用户故事、竞品分析等"软件开发文档",完全答非所问,被中止。</li>
+<li><strong>表 19(MiniWobChat 解 click-button-sequence)</strong>:执行器把网页 HTML 与任务说明发给助手,助手给出两步计划并逐条发出 <code>clickxpath //button[@id='subbtn']</code>、<code>clickxpath //button[@id='subbtn2']</code> 指令,执行成功后返回 SUCCESS!!!! 并 TERMINATE。</li>
+</ul>
+</blockquote>
+<h2 id="_5">要点速览</h2>
+<ul>
+<li>两大抽象:<strong>可对话智能体</strong>(send/receive/generate_reply 统一接口,LLM/人/工具混合后端)+ <strong>对话编程</strong>(计算对话中心化、控制流对话驱动)。</li>
+<li><strong>auto-reply 机制</strong>是关键工程:注册好回复函数后,会话自动推进,无需中央控制平面——工作流即对话。</li>
+<li>控制流三态:自然语言(提示词)、编程语言(Python)、以及通过函数调用/自定义回复函数在两者间切换;动态会话靠自定义 generate_reply 或函数调用实现。</li>
+<li>实证亮点:MATH 上开箱即用超商业方案(52.5% vs ChatGPT+Code Interpreter 45.0%);交互式检索 +11 F1;grounding agent +15%;安全护栏拆分独立智能体 +8~35% F1;OptiGuide 代码 430→100 行。</li>
+<li>设计哲学:与其为每种工作流写专门编排,不如提供"对话"这一个原语,让工作流在对话中涌现。</li>
+<li>与课程关联:是"多智能体框架侧"的代表;读完后应接着读同讲《Why Do Multi-Agent LLM Systems Fail?》(失败分类学)与 Neubig 博客(单智能体辩护),形成完整判断;GroupChatManager 的动态发言者选择与 DyLAN 的动态团队构成互为参照。</li>
+</ul>
       </div>
     </article>
     <nav class="pager"><a class="pager-prev" href="Neubig2024_Dont_Sleep_On_Single_Agent_Systems.html"><span>上一篇</span>别忽视单智能体系统</a><a class="pager-next" href="Agrawal2026_GEPA.html"><span>下一篇</span>&quot;GEPA:反思式提示进化可以胜过强化学习&quot;</a></nav>

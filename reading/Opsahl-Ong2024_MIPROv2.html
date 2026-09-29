@@ -21,7 +21,7 @@
   </div>
 </header>
 <div class="read-layout">
-  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">全文对照翻译</a><ul><li><a href="#_3">题目与作者</a></li><li><a href="#abstract">摘要(Abstract)</a></li><li><a href="#1-introduction">1 引言(Introduction)</a></li><li><a href="#2-problem-statement">2 问题陈述(Problem Statement)</a></li><li><a href="#3-lm-designing-lm-program-optimizers">3 设计 LM 程序优化器(Designing LM Program Optimizers)</a></li><li><a href="#4-optimizers">4 优化器(Optimizers)</a></li><li><a href="#5-experimental-setup">5 实验设置(Experimental Setup)</a></li><li><a href="#6-results-discussion">6 结果与讨论(Results &amp;amp; Discussion)</a></li><li><a href="#7-related-work">7 相关工作(Related Work)</a></li><li><a href="#8-conclusion">8 结论(Conclusion)</a></li><li><a href="#limitations">局限(Limitations)</a></li><li><a href="#a-detailed-task-descriptions">附录 A 详细任务描述(Detailed Task Descriptions)</a></li><li><a href="#b-experiment-setup-details">附录 B 实验设置细节(Experiment Setup Details)</a></li><li><a href="#c-grounding-details">附录 C 接地细节(Grounding Details)</a></li><li><a href="#d-learned-feature-importances">附录 D 学到的特征重要性(Learned Feature Importances)</a></li></ul></li></ul></aside>
+  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">全文对照翻译</a><ul><li><a href="#_3">题目与作者</a></li><li><a href="#abstract">摘要(Abstract)</a></li><li><a href="#1-introduction">1 引言(Introduction)</a></li><li><a href="#2-problem-statement">2 问题陈述(Problem Statement)</a></li><li><a href="#3-lm-designing-lm-program-optimizers">3 设计 LM 程序优化器(Designing LM Program Optimizers)</a></li><li><a href="#4-optimizers">4 优化器(Optimizers)</a></li><li><a href="#5-experimental-setup">5 实验设置(Experimental Setup)</a></li><li><a href="#6-results-discussion">6 结果与讨论(Results &amp;amp; Discussion)</a></li><li><a href="#7-related-work">7 相关工作(Related Work)</a></li><li><a href="#8-conclusion">8 结论(Conclusion)</a></li><li><a href="#limitations">局限(Limitations)</a></li><li><a href="#a-detailed-task-descriptions">附录 A 详细任务描述(Detailed Task Descriptions)</a></li><li><a href="#b-experiment-setup-details">附录 B 实验设置细节(Experiment Setup Details)</a></li><li><a href="#c-grounding-details">附录 C 接地细节(Grounding Details)</a></li><li><a href="#d-learned-feature-importances">附录 D 学到的特征重要性(Learned Feature Importances)</a></li><li><a href="#e-dspy-lm-dspy-lm-programs">附录 E DSPy LM 程序(DSPy LM Programs)</a></li><li><a href="#f-algorithms">附录 F 算法(Algorithms)</a></li><li><a href="#g-optimization-results">附录 G 优化结果(Optimization Results)</a></li><li><a href="#h-prompt-progressions">附录 H 提示演进(Prompt Progressions)</a></li></ul></li><li><a href="#_4">要点速览</a></li></ul></aside>
   <main class="read-main">
       <link rel="stylesheet" href="../assets/katex/katex.min.css">
       <script defer src="../assets/katex/katex.min.js"></script>
@@ -711,7 +711,534 @@
 </tr>
 </tbody>
 </table>
-<!-- APPEND -->
+<h3 id="e-dspy-lm-dspy-lm-programs">附录 E DSPy LM 程序(DSPy LM Programs)</h3>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>We provide pseudocode for all LM programs. We will also publicly release the code for this benchmark on publication.</p></div><p>我们提供全部 LM 程序的伪码,并将在论文发表时公开该基准的代码。</p></div>
+<h4 id="e1-scone">E.1 ScoNe</h4>
+<pre><code class="language-python">class ScoNeSignature(dspy.Signature):
+    &quot;&quot;&quot;context, question -&gt; answer&quot;&quot;&quot;          # 上下文 + 问题 -&gt; 答案
+    context = dspy.InputField()
+    question = dspy.InputField()
+    answer = dspy.OutputField(desc=&quot;Yes or No&quot;)
+
+class ScoNeCoT(dspy.Module):
+    def __init__(self):
+        self.generate_answer = dspy.ChainOfThought(ScoNeSignature)
+
+    def forward(self, context, question):
+        return self.generate_answer(context, question)
+</code></pre>
+<p><strong>清单 3:ScoNe 程序。</strong></p>
+<h4 id="e2-hotpotqa">E.2 HotpotQA</h4>
+<pre><code class="language-python">class MultiHop(dspy.Module):
+    def __init__(self):
+        self.retrieve = dspy.Retrieve(k=3)
+        self.generate_query = dspy.ChainOfThought(&quot;context, question -&gt; search_query&quot;)  # 生成搜索查询
+        self.generate_answer = dspy.ChainOfThought(&quot;context, question -&gt; answer&quot;)       # 生成最终答案
+
+    def forward(self, question):
+        context = []
+        for hop in range(2):                                        # 两跳检索
+            query = self.generate_query(context, question).search_query
+            context += self.retrieve(query).passages
+        return self.generate_answer(context, question).answer
+</code></pre>
+<p><strong>清单 4:HotPotQA 程序。</strong></p>
+<h4 id="e3-hover">E.3 HoVer</h4>
+<pre><code class="language-python">class RetrieveMultiHop(dspy.Module):
+    def __init__(self):
+        super().__init__()
+        self.k = 7
+        self.create_query_hop2 = dspy.ChainOfThought(&quot;claim, summary_1 -&gt; query&quot;)
+        self.create_query_hop3 = dspy.ChainOfThought(&quot;claim, summary_1, summary_2 -&gt; query&quot;)
+        self.retrieve_k = dspy.Retrieve(k=self.k)
+        self.summarize1 = dspy.ChainOfThought(&quot;claim, passages -&gt; summary&quot;)
+        self.summarize2 = dspy.ChainOfThought(&quot;claim, context, passages -&gt; summary&quot;)
+
+    def forward(self, claim):
+        # HOP 1:直接检索声明并摘要
+        hop1_docs = self.retrieve_k(claim).passages
+        summary_1 = self.summarize1(claim=claim, passages=hop1_docs).summary  # Summarize top k docs
+        # HOP 2:基于第一份摘要提出下一查询,再检索并摘要
+        hop2_query = self.create_query_hop2(claim=claim, summary_1=summary_1).query
+        hop2_docs = self.retrieve_k(hop2_query).passages
+        summary_2 = self.summarize2(claim=claim, context=summary_1, passages=hop2_docs).summary
+        # HOP 3:基于两份摘要提出最后一跳查询并检索
+        hop3_query = self.create_query_hop3(claim=claim, summary_1=summary_1, summary_2=summary_2).query
+        hop3_docs = self.retrieve_k(hop3_query).passages
+        return dspy.Prediction(retrieved_docs=hop1_docs + hop2_docs + hop3_docs)
+</code></pre>
+<p><strong>清单 5:HoVeR 检索程序。</strong></p>
+<h4 id="e4-hotpotqa-conditional">E.4 HotPotQA Conditional(带手写种子指令)</h4>
+<pre><code class="language-python">class GenerateAnswerInstruction(dspy.Signature):
+    &quot;&quot;&quot;When the answer is a person, respond entirely in lowercase. When the answer is a place, ensure your
+    response contains no punctuation. When the answer is a date, end your response with &quot;Peace!&quot;. Never end your
+    response with &quot;Peace!&quot; under other circumstances. When the answer is none of the above categories respond
+    in all caps.&quot;&quot;&quot;
+    # 译注(种子指令内容):答案是人物时全小写作答;是地点时回答不含标点;是日期时回答以 &quot;Peace!&quot; 结尾,
+    # 其他任何情况都不得以 &quot;Peace!&quot; 结尾;答案不属于上述类别时,回答全大写。
+    context = dspy.InputField(desc=&quot;Passages relevant to answering the question&quot;)  # 与回答问题相关的段落
+    question = dspy.InputField(desc=&quot;Question we want an answer to&quot;)              # 待回答的问题
+    answer = dspy.OutputField(desc=&quot;Answer to the question&quot;)                      # 答案
+
+class MultiHopHandwritten(dspy.Module):
+    def __init__(self, passages_per_hop):
+        super().__init__()
+        self.retrieve = dspy.Retrieve(k=passages_per_hop)
+        self.generate_query = dspy.ChainOfThought(&quot;context, question -&gt; search_query&quot;)
+        self.generate_answer = dspy.ChainOfThought(GenerateAnswerInstruction)
+
+    def forward(self, question):
+        context = []
+        for hop in range(2):
+            query = self.generate_query(context=context, question=question).search_query
+            context += self.retrieve(query).passages
+        return dspy.Prediction(
+            context=context,
+            answer=self.generate_answer(context=context, question=question).answer,
+        )
+</code></pre>
+<p><strong>清单 6:带手写指令的 HotPotQA Conditional 程序。从无种子指令出发时,使用与上面相同的 HotPotQA 程序。</strong></p>
+<h4 id="e5-iris">E.5 Iris</h4>
+<pre><code class="language-python">class IrisSig(dspy.Signature):
+    &quot;Given the petal and sepal dimensions in cm, predict the iris species.&quot;
+    # 译注(种子指令):给定以厘米计的花瓣与花萼尺寸,预测鸢尾品种。
+    petal_length = dspy.InputField()   # 花瓣长
+    petal_width = dspy.InputField()    # 花瓣宽
+    sepal_length = dspy.InputField()   # 花萼长
+    sepal_width = dspy.InputField()    # 花萼宽
+    answer = dspy.OutputField(desc='setosa, versicolor, or virginica')
+
+class Classify(dspy.Module):
+    def __init__(self):
+        self.pred = dspy.ChainOfThought(IrisSig)
+
+    def forward(self, petal_length, petal_width, sepal_length, sepal_width):
+        return self.pred(petal_length=petal_length, petal_width=petal_width,
+                         sepal_length=sepal_length, sepal_width=sepal_width)
+</code></pre>
+<p><strong>清单 7:根据植物属性预测花卉品种的 Iris 程序。</strong></p>
+<h4 id="e6-iris-typo">E.6 Iris-Typo</h4>
+<pre><code class="language-python">class IrisSig(dspy.Signature):
+    &quot;Given the petal and sepal dimensions in cm, predict the iris species.&quot;
+    petal_length = dspy.InputField()
+    petal_width = dspy.InputField()
+    sepal_length = dspy.InputField()
+    sepal_width = dspy.InputField()
+    answer = dspy.OutputField(desc='setosa, versicolour, or virginica')  # 注意:versicolour 为故意保留的拼写错误
+
+class Classify(dspy.Module):
+    def __init__(self):
+        self.pred = dspy.ChainOfThought(IrisSig)
+
+    def forward(self, petal_length, petal_width, sepal_length, sepal_width):
+        return self.pred(petal_length=petal_length, petal_width=petal_width,
+                         sepal_length=sepal_length, sepal_width=sepal_width)
+</code></pre>
+<p><strong>清单 8:根据植物属性预测花卉品种的 Iris 程序。此程序含一个拼写错误:让 LM 把品种分类为 "versicolour" 而非 "versicolor"。</strong>(其余代码与清单 7 完全一致。)</p>
+<h4 id="e7-heart-disease">E.7 Heart Disease</h4>
+<pre><code class="language-python">class HeartDiseaseInput(dspy.Signature):
+    age = dspy.InputField(desc=&quot;Age in years&quot;)                                            # 年龄
+    sex = dspy.InputField(desc=&quot;Sex (male or female)&quot;)                                    # 性别
+    cp = dspy.InputField(desc=&quot;Chest pain type (typical angina, atypical angina, non-anginal pain, asymptomatic)&quot;)  # 胸痛类型
+    trestbps = dspy.InputField(desc=&quot;Resting blood pressure (in mm Hg on admission to the hospital)&quot;)  # 静息血压
+    chol = dspy.InputField(desc=&quot;Serum cholestoral in mg / dl&quot;)                           # 血清胆固醇
+    fbs = dspy.InputField(desc=&quot;Fasting blood sugar &gt; 120 mg/dl (true or false)&quot;)         # 空腹血糖
+    restecg = dspy.InputField(desc=&quot;Resting electrocardiographic results (normal, ST-T wave abnormality, left ventricular hypertrophy)&quot;)  # 静息心电图
+    thalach = dspy.InputField(desc=&quot;Maximum heart rate achieved&quot;)                         # 最大心率
+    exang = dspy.InputField(desc=&quot;Exercise induced angina (yes or no)&quot;)                   # 运动诱发心绞痛
+    oldpeak = dspy.InputField(desc=&quot;ST depression induced by exercise relative to rest&quot;)  # 运动诱发 ST 压低
+    slope = dspy.InputField(desc=&quot;The slope of the peak exercise ST segment (upsloping, flat, downsloping)&quot;)  # ST 段斜率
+    ca = dspy.InputField(desc=&quot;Number of major vessels (0-3) colored by flourosopy&quot;)     # 造影着色大血管数
+    thal = dspy.InputField(desc=&quot;Thalassemia (normal, fixed defect, reversible defect)&quot;) # 地中海贫血指标
+
+class HeartDiseaseSignature(HeartDiseaseInput):
+    &quot;&quot;&quot;Given patient information, predict the presence of heart disease.&quot;&quot;&quot;  # 给定患者信息,预测是否患心脏病
+    answer = dspy.OutputField(desc=&quot;Does this patient have heart disease? Just yes or no.&quot;)
+
+class HeartDiseaseVote(HeartDiseaseInput):
+    &quot;&quot;&quot;Given patient information, predict the presence of heart disease. I can critically assess the provided trainee opinions.&quot;&quot;&quot;
+    # 给定患者信息,预测是否患心脏病。我能批判性地评估见习医生给出的意见。
+    context = dspy.InputField(desc=&quot;A list of opinions from trainee doctors.&quot;)  # 见习医生意见列表
+    answer = dspy.OutputField(desc=&quot;Does this patient have heart disease? Just yes or no.&quot;)
+
+class Classify(dspy.Module):
+    def __init__(self):
+        # 三个温度略异(0.7 + i*0.01)的 CoT&quot;见习医生&quot; + 一个综合裁决模块
+        self.classify = [dspy.ChainOfThought(HeartDiseaseSignature, temperature=0.7 + i * 0.01) for i in range(3)]
+        self.vote = dspy.ChainOfThought(HeartDiseaseVote)
+
+    def forward(self, age, sex, cp, trestbps, chol, fbs, restecg, thalach, exang, oldpeak, slope, ca, thal):
+        kwargs = dict(age=age, sex=sex, cp=cp, trestbps=trestbps, chol=chol, fbs=fbs,
+                      restecg=restecg, thalach=thalach, exang=exang, oldpeak=oldpeak,
+                      slope=slope, ca=ca, thal=thal)
+        opinions = [c(**kwargs) for c in self.classify]
+        opinions = [(opinion.rationale.replace('\n', ' ').strip('. '), opinion.answer.strip('. ')) for opinion in opinions]
+        opinions = [f&quot;I'm a trainee doctor, trying to {reason}. Hence, my answer is {answer}.&quot; for reason, answer in opinions]
+        return self.vote(context=opinions, **kwargs)
+</code></pre>
+<p><strong>清单 9:把患者分类为是否患心脏病的 Heart Disease 程序。我们让多个 LM 模拟医生意见,再交给一个最终 LM 把这些意见汇总成最终决定。</strong></p>
+<h3 id="f-algorithms">附录 F 算法(Algorithms)</h3>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>In this section we describe how each of the algorithms that we explore in this paper maps directly into the framework presented in Algorithm 1. The Bootstrap Demonstrations algorithm is a generalization of BootstrapFewshotWithRandomSearch from DSPy (Khattab et al., 2024), and Single-module OPRO describes a generalization of the OPRO methodology for single stage instruction optimization (Yang et al., 2023). All other algorithms are introduced in this work.</p></div><p>本节说明本文探索的每个算法如何直接映射到算法 1 的框架。Bootstrap Demonstrations 算法是 DSPy(Khattab et al., 2024)中 BootstrapFewshotWithRandomSearch 的推广,Single-module OPRO 描述 OPRO 方法论在单阶段指令优化上的推广(Yang et al., 2023)。其余算法均为本文提出。</p></div>
+<h4 id="f1-bootstrap-demonstrations">F.1 Bootstrap Demonstrations(自举示例)</h4>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Khattab et al. (2024) achieve exceptional results with an approach to LM program optimization that is centered around generating and filtering task demonstrations. This approach fits into our general framework and serves as a strong baseline in our experiments.<br><br>For this optimizer, we assume that every prompt p_i used by Φ has K variables over demonstrations {d_i1, . . . , d_iK}.<br><br>1. Initialize:<br>(a) The hyperparameters θ are the number of correct examples to bootstrap and the number of demonstrations to use for each module.<br>(b) Given an (x, y) ∈ D, we run Φ(x). The full trace of each run provides a value for each module-level demonstration variable. If the output of the model is equivalent to y, we assume the demonstrations to be valid and add them to a global store A.<br>2. Propose: We sample demonstrations D from A (according to the hyperparameters) and use these to create a partial assignment D ↦ D from demonstration variables to demonstrations.<br>3. Update: The partial assignment D ↦ D is added to a global store B with its evaluation score on the dev set.<br>4. ExtractOptimizedSets: The top-scoring assignment in B is used to create the optimized program.</p></div><p>Khattab et al. (2024) 以一种围绕"生成并过滤任务示例"展开的 LM 程序优化方法取得了出色结果。该方法契合我们的通用框架,并在实验中充当强基线。</p></div>
+<p>对该优化器,我们假设 Φ 使用的每个提示 <span class="math-inline">$p_i$</span> 都有 <span class="math-inline">$K$</span> 个示例变量 <span class="math-inline">$\{d_{i1},\dots,d_{iK}\}$</span>。</p>
+<ol>
+<li><strong>Initialize</strong>:
+   (a) 超参数 <span class="math-inline">$\theta$</span> 为:要自举的正确示例数量,以及每个模块使用的示例数量。
+   (b) 给定 <span class="math-inline">$(x, y) \in D$</span>,运行 <span class="math-inline">$\Phi(x)$</span>。每次运行的完整轨迹为每个模块级示例变量提供一个取值。若模型输出等价于 <span class="math-inline">$y$</span>,则认定这些示例有效,加入全局存储 <span class="math-inline">$A$</span>。</li>
+<li><strong>Propose</strong>:依超参数从 <span class="math-inline">$A$</span> 采样示例集,构成从示例变量到示例的部分赋值 <span class="math-inline">$D \mapsto D$</span>。</li>
+<li><strong>Update</strong>:把部分赋值 <span class="math-inline">$D \mapsto D$</span> 连同它在开发集上的评估得分加入全局存储 <span class="math-inline">$B$</span>。</li>
+<li><strong>ExtractOptimizedSets</strong>:用 <span class="math-inline">$B$</span> 中得分最高的赋值创建优化后的程序。</li>
+</ol>
+<h4 id="f2-single-module-opro-opro">F.2 Single-module OPRO(单模块 OPRO)</h4>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>The goal of OPRO is to find optimal instruction for a given task. We begin with the single-module case covered in the original paper. We require only that the prompt for this single module have a variable ι for task instructions.<br><br>The starting point for OPRO is a meta-prompt, which gives the state of the optimizer at each iteration. The meta-prompt consists of meta-instructions, task instructions with their scores from training data evaluations, and task exemplars. The model is asked to generate a new candidate task instruction that is different from the ones already included in the meta-prompt.² This is scored, and then the meta-prompt is updated with the (possibly) revised set of top-scoring task instructions.<br><br>1. Initialize:<br>(a) The hyperparameters θ are the meta-instructions, a seed task instructions, the maximum number of scored task instructions to include in prompts, a function for choosing exemplars from D, and any hyperparameters for the underlying LM.<br>(b) The dataset D is used to score Φ_{ι↦s}. This assignment–score pair is stored in a global variable A and added into the meta-prompt.<br>2. Propose: The meta-prompt is used to generate a new candidate instruction s′. This forms a partial assignment function ι ↦ s′.<br>3. Update: The partial assignment ι ↦ s′ is added to A with its score, and the top-scoring assignments in A are used in the updated meta-prompt.<br>4. ExtractOptimizedSets: A top-scoring partial assignment ι ↦ s_i is extracted from A.</p></div><p>OPRO 的目标是为给定任务找到最优指令。我们先从原论文覆盖的单模块情形入手,只要求该模块的提示有一个任务指令变量 <span class="math-inline">$\iota$</span>。</p></div>
+<p>OPRO 的起点是一个元提示(meta-prompt),它给出优化器在每轮迭代的状态。元提示由元指令(meta-instructions)、带训练数据评估得分的任务指令、以及任务范例(exemplars)组成。模型被要求生成一条与元提示中已有指令都不同的新候选任务指令。² 对其评分后,用(可能更新的)得分最高的任务指令集合更新元提示。</p>
+<ol>
+<li><strong>Initialize</strong>:
+   (a) 超参数 <span class="math-inline">$\theta$</span> 为:元指令、一条种子任务指令、提示中可纳入的"已评分任务指令"数量上限、从 <span class="math-inline">$D$</span> 中选范例的函数、以及底层 LM 的超参数。
+   (b) 用数据集 <span class="math-inline">$D$</span> 为 <span class="math-inline">$\Phi_{\iota\mapsto s}$</span> 评分;该"赋值–得分"对存入全局变量 <span class="math-inline">$A$</span> 并加入元提示。</li>
+<li><strong>Propose</strong>:用元提示生成新候选指令 <span class="math-inline">$s&#x27;$</span>,构成部分赋值函数 <span class="math-inline">$\iota \mapsto s&#x27;$</span>。</li>
+<li><strong>Update</strong>:把部分赋值 <span class="math-inline">$\iota \mapsto s&#x27;$</span> 连同得分加入 <span class="math-inline">$A$</span>,并用 <span class="math-inline">$A$</span> 中得分最高的赋值更新元提示。</li>
+<li><strong>ExtractOptimizedSets</strong>:从 <span class="math-inline">$A$</span> 中取出一条得分最高的部分赋值 <span class="math-inline">$\iota \mapsto s_i$</span>。</li>
+</ol>
+<blockquote>
+<p>脚注 2:在 OPRO 论文中,每步会生成并评分一组候选指令;为简单起见,我们只考虑每步一个候选。</p>
+</blockquote>
+<h4 id="f3-module-level-history-based">F.3 Module-Level History Based(模块级基于历史)</h4>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>How can we extend OPRO to case where we have an LM program Φ with m &gt; 1 stages? We assume that each prompt template p_i used by Φ has a variable for instructions, and our goal is to optimize each one. This raises a problem of credit assignment: we have only task-level labels and cannot be sure how the instruction for each module contributes to assigning these labels correctly.<br><br>To begin to address this, we make the simplifying assumption that each instruction contributes equally to the score achieved by the entire program. This leads to a very simple modification of single-module OPRO:<br><br>1. Initialize:<br>(a) We now have a single meta-prompt per module, each with hyperparameters θ as described for OPRO. Each module has instruction variable ι_i and a seed instruction s_i.<br>(b) The dataset D is used to score Φ[ι_1 ↦ s_1, . . . ι_m ↦ s_m]. Call this global score r. Each ι_i ↦ s_i is added to the global store A with r as its score.<br>2. Propose: The meta-prompts are used to generate candidate instructions s′_1 . . . s′_m. These create a partial assignment [ι_1 ↦ s′_1, . . . , ι_m ↦ s′_m].<br>3. Update: As in single-module OPRO, but with each ι_i . . . s′_i used for its respective module’s meta-prompt.<br>4. ExtractOptimizedSets: As in single-module OPRO, again with each ι_i . . . s′_i used for its respective module’s meta-prompt.</p></div><p>如何把 OPRO 扩展到含 <span class="math-inline">$m &gt; 1$</span> 个阶段的 LM 程序 Φ?我们假设 Φ 使用的每个提示模板 <span class="math-inline">$p_i$</span> 都有一个指令变量,目标是优化每一条。这引出信用分配问题:我们只有任务级标签,无法确定每个模块的指令对正确标注这些标签的贡献。</p></div>
+<p>作为初步解决,我们做一个简化假设:每条指令对整个程序的得分贡献均等。于是得到对单模块 OPRO 的一个极简修改:</p>
+<ol>
+<li><strong>Initialize</strong>:
+   (a) 现在每个模块各有一个元提示,超参数 <span class="math-inline">$\theta$</span> 同 OPRO 所述;每个模块有指令变量 <span class="math-inline">$\iota_i$</span> 与种子指令 <span class="math-inline">$s_i$</span>。
+   (b) 用数据集 <span class="math-inline">$D$</span> 为 <span class="math-inline">$\Phi[\iota_1\mapsto s_1,\dots\iota_m\mapsto s_m]$</span> 评分,记全局得分为 <span class="math-inline">$r$</span>;把每个 <span class="math-inline">$\iota_i \mapsto s_i$</span> 以 <span class="math-inline">$r$</span> 为得分加入全局存储 <span class="math-inline">$A$</span>。</li>
+<li><strong>Propose</strong>:用各元提示生成候选指令 <span class="math-inline">$s&#x27;_1\dots s&#x27;_m$</span>,构成部分赋值 <span class="math-inline">$[\iota_1\mapsto s&#x27;_1,\dots,\iota_m\mapsto s&#x27;_m]$</span>。</li>
+<li><strong>Update</strong>:与单模块 OPRO 相同,但每个 <span class="math-inline">$\iota_i \dots s&#x27;_i$</span> 用于各自模块的元提示。</li>
+<li><strong>ExtractOptimizedSets</strong>:与单模块 OPRO 相同,同样以每个 <span class="math-inline">$\iota_i \dots s&#x27;_i$</span> 用于各自模块的元提示。</li>
+</ol>
+<h4 id="f4-program-level-history-based">F.4 Program-level History Based(程序级基于历史)</h4>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Our Module-level adaptation of OPRO makes the credit assignment assumption that each instruction contributes equally to the score. In practice this is often not the case since a poor performing module can ruin the performance of the entire program. To account for this we attempt to answer the following question: can LLMs perform credit assignment over the instructions in a multistage program?<br><br>In Program-level OPRO we return to the single metaprompt setting of single-module OPRO from the original paper. We make a small modification such that the LLM proposer sees all the instructions in an LM program in order to produce the instructions for all other modules. With this information we hypothesize that a very capable LLM could perform credit assignment and determine which instructions need the most significant modifications. We adapt Single-module OPRO:<br><br>1. Initialize:<br>(a) We have one meta-prompt for the entire program, with hyperparameters θ. Each module has instruction variable ι_i and a seed instruction s_i.<br>(b) The dataset D is used to score Φ[ι_1 ↦ s_1, . . . ι_m ↦ s_m]. Call this global score r. The partial assignment of all instructions [ι_1 ↦ s_1, . . . , ι_m ↦ s_m] is added to the global store A with r as its score.<br>2. Propose: The single meta-prompt is called once to generate candidate instructions s′_1 . . . s′_m. This creates a partial assignment [ι_1 ↦ s′_1, . . . , ι_m ↦ s′_m].<br>3. Update: The partial assignment [ι_1 ↦ s′_1, . . . , ι_m ↦ s′_m] is added to A with its score, and the top-scoring assignments in A are used in the updated meta-prompt.<br>4. ExtractOptimizedSets: A top-scoring partial assignment [ι_1 ↦ s′_1, . . . , ι_m ↦ s′_m] is extracted from A.</p></div><p>我们的模块级 OPRO 改编假设每条指令对得分的贡献均等。实践中往往并非如此——一个表现糟糕的模块可以毁掉整个程序的性能。为此我们尝试回答:LLM 能否对多阶段程序中的各条指令做信用分配?</p></div>
+<p>在 Program-level OPRO 中,我们回到原论文单模块 OPRO 的单一元提示设定,只做一个小修改:让 LLM 提议器看到 LM 程序中的全部指令,从而为所有其他模块生成指令。我们假设:凭借这些信息,一个能力很强的 LLM 能完成信用分配,判断哪些指令最需要大改。改编自单模块 OPRO:</p>
+<ol>
+<li><strong>Initialize</strong>:
+   (a) 整个程序共用一个元提示,超参数为 <span class="math-inline">$\theta$</span>;每个模块有指令变量 <span class="math-inline">$\iota_i$</span> 与种子指令 <span class="math-inline">$s_i$</span>。
+   (b) 用数据集 <span class="math-inline">$D$</span> 为 <span class="math-inline">$\Phi[\iota_1\mapsto s_1,\dots\iota_m\mapsto s_m]$</span> 评分,记全局得分为 <span class="math-inline">$r$</span>;把全部指令的部分赋值 <span class="math-inline">$[\iota_1\mapsto s_1,\dots,\iota_m\mapsto s_m]$</span> 以 <span class="math-inline">$r$</span> 为得分加入全局存储 <span class="math-inline">$A$</span>。</li>
+<li><strong>Propose</strong>:单一元提示被调用一次,生成候选指令 <span class="math-inline">$s&#x27;_1\dots s&#x27;_m$</span>,构成部分赋值 <span class="math-inline">$[\iota_1\mapsto s&#x27;_1,\dots,\iota_m\mapsto s&#x27;_m]$</span>。</li>
+<li><strong>Update</strong>:把部分赋值 <span class="math-inline">$[\iota_1\mapsto s&#x27;_1,\dots,\iota_m\mapsto s&#x27;_m]$</span> 连同得分加入 <span class="math-inline">$A$</span>,并用 <span class="math-inline">$A$</span> 中得分最高的赋值更新元提示。</li>
+<li><strong>ExtractOptimizedSets</strong>:从 <span class="math-inline">$A$</span> 中取出一条得分最高的部分赋值 <span class="math-inline">$[\iota_1\mapsto s&#x27;_1,\dots,\iota_m\mapsto s&#x27;_m]$</span>。</li>
+</ol>
+<h4 id="f5-miprosurrogate-model">F.5 代理模型(MIPRO,Surrogate Model)</h4>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>To abstract the credit assignment away from the LLM itself we also propose the use of a Bayesian Surrogate model for estimating which latent variables are most impactful and useful for the final assignment. We name this particular algorithm MIPRO (Multi-prompt Instruction PRoposal Optimizer):<br><br>1. Initialize:<br>(a) MIPRO proposes a complete set of T instructions per module {[ι_1,m, . . . ι_t,m]}^M_{m=1} using the proposal hyperparameters θ and bootstraps a complete set of K task demonstrations per module {[d_1,m, . . . d_k,m]}^M_{m=1} all upfront.<br>(b) All latent variables in the Bayesian Model are initialized with a uniform prior for utility.<br>2. Propose: We use the sampling rule from the Tree Structured Parzen Estimator (Bergstra et al., 2011) to propose a partial assignment of instructions [ι_1 ↦ s′_1, . . . , ι_m ↦ s′_m] and demonstrations [d_{1..k,1} ↦ s′_{1..k,1}, . . . , d_{1..k,m} ↦ s′_{1..k,m}]<br>3. Update: The partial assignments [ι_1 ↦ s′_1, . . . , ι_m ↦ s′_m] and [d_{1..k,1} ↦ s′_{1..k,1}, . . . , d_{1..k,m} ↦ s′_{1..k,m}] are used to update the Bayesian model such that the weight over good candidates increases and the weight of bad candidates decreases.<br>4. ExtractOptimizedSets: For each latent variable to parameterize Φ, the highest probability candidates are selected from the Bayesian model and evaluated on a Validation set to return the optimal assignment [ι_1 ↦ s′_1, . . . , ι_m ↦ s′_m] and demonstrations [d_{1..k,1} ↦ s′_{1..k,1}, . . . , d_{1..k,m} ↦ s′_{1..k,m}].</p></div><p>为了把信用分配从 LLM 本身抽象出来,我们还提出用贝叶斯代理模型来估计哪些隐变量对最终赋值影响最大、最有用。我们把这一算法命名为 MIPRO(Multi-prompt Instruction PRoposal Optimizer):</p></div>
+<ol>
+<li><strong>Initialize</strong>:
+   (a) MIPRO 先用提议超参数 <span class="math-inline">$\theta$</span> 为每个模块一次性提议一整套 <span class="math-inline">$T$</span> 条指令 <span class="math-inline">$\{[\iota_{1,m},\dots\iota_{t,m}]\}_{m=1}^{M}$</span>,并为每个模块自举一整套 <span class="math-inline">$K$</span> 条任务示例 <span class="math-inline">$\{[d_{1,m},\dots d_{k,m}]\}_{m=1}^{M}$</span>。
+   (b) 贝叶斯模型中的全部隐变量以均匀效用先验初始化。</li>
+<li><strong>Propose</strong>:用树结构 Parzen 估计器(Bergstra et al., 2011)的采样规则,提议指令的部分赋值 <span class="math-inline">$[\iota_1\mapsto s&#x27;_1,\dots,\iota_m\mapsto s&#x27;_m]$</span> 与示例的部分赋值 <span class="math-inline">$[d_{1..k,1}\mapsto s&#x27;_{1..k,1},\dots,d_{1..k,m}\mapsto s&#x27;_{1..k,m}]$</span>。</li>
+<li><strong>Update</strong>:用这两个部分赋值更新贝叶斯模型,使好候选的权重上升、坏候选的权重下降。</li>
+<li><strong>ExtractOptimizedSets</strong>:对每个用于参数化 Φ 的隐变量,从贝叶斯模型中选出概率最高的候选,在验证集上评估,返回最优的指令赋值 <span class="math-inline">$[\iota_1\mapsto s&#x27;_1,\dots,\iota_m\mapsto s&#x27;_m]$</span> 与示例赋值 <span class="math-inline">$[d_{1..k,1}\mapsto s&#x27;_{1..k,1},\dots,d_{1..k,m}\mapsto s&#x27;_{1..k,m}]$</span>。</li>
+</ol>
+<h3 id="g-optimization-results">附录 G 优化结果(Optimization Results)</h3>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Training performance over optimization trials are plotted below for one run for each task and method combination. The figures can be seen below for ScoNe (Figure 8), HotPotQA (Figure 9), HoVer (Figure 10), HotPotQA conditional (Figure 11), Iris (Figure 12), and Heart Disease (Figure 13).</p></div><p>下面为每个"任务 × 方法"组合各一次运行中、优化试验随进程的训练性能曲线。各任务的图分别为:ScoNe(图 8)、HotPotQA(图 9)、HoVer(图 10)、HotPotQA Conditional(图 11)、Iris(图 12)、Heart Disease(图 13)。</p></div>
+<p>[图 8: Figure 8: ScoNe optimization results.]
+[图 9: Figure 9: HotPotQA optimization results.]
+[图 10: Figure 10: HoVer optimization results.]
+[图 11: Figure 11: HotPotQA Conditional optimization results.]
+[图 12: Figure 12: Iris-Typo optimization results. Plots from run where the default prompt spelled "versicolor" as "versicolour".]
+[图 13: Figure 13: Heart Disease optimization results.]</p>
+<p>中文说明:图 8–13 均为训练得分随"评估调用次数(# Evaluation Calls)"增长的曲线,每个子图对应一个优化器(如 0-shot OPRO、0-shot MIPRO、0-shot MIPRO++、Bootstrap Random Search、Bayesian FS + MB(Bayesian Bootstrap)、Surrogate Model Instruct + FS / MIPRO、RS Fewshot (T=30) + OPRO、MIPRO++ (0-shot) 等),图中含每次试验得分(Scores)、迄今最佳分(Best Score So Far)与滚动均值(Rolling Mean)。共同规律:使用 minibatch 的优化器(MIPRO 系、Bayesian Bootstrap)在相同评估调用预算下能尝试远更多的参数配置,曲线更密、最佳分爬升更早;图 12 特别注明曲线来自默认提示把 "versicolor" 拼成 "versicolour" 的那次运行。原始各轴刻度与数值见论文 PDF。</p>
+<h3 id="h-prompt-progressions">附录 H 提示演进(Prompt Progressions)</h3>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>We document the progression of prompts discovered over optimization trials for a run of 0-Shot MIPRO for each task. The tables containing these prompt progressions can be seen below for ScoNe (Table 5), HotPotQA (Table 6), HoVer (Table 7), HotPotQA conditional (Table 8), Iris (Table 9), and Heart Disease (Table 10).<br><br>We note one of the failure modes of our current proposers is the tendency to overfit instructions to the few-shot examples provided in the meta-prompt. Interestingly, these types of instructions sometimes end up being included in the best performing programs. We hypothesize that this could either be because (1) more explicit credit assignment would be needed to remove these or (2) these types of overfit instructions are potentially serving as few-shot examples, which are still useful at biasing the LM task model to perform the task effectively. We leave better understanding this phenomenon as an exploration for future work.</p></div><p>我们记录了每个任务一次 0-Shot MIPRO 运行中、随优化试验发现的提示演进。各任务的提示演进表如下:ScoNe(表 5)、HotPotQA(表 6)、HoVer(表 7)、HotPotQA Conditional(表 8)、Iris(表 9)、Heart Disease(表 10)。</p></div>
+<p>我们指出当前提议器的一种失败模式:指令容易过拟合到元提示中提供的少样本示例。有趣的是,这类指令有时最终会被包含在表现最好的程序里。我们假设原因可能是:(1) 需要更显式的信用分配才能把它们剔除;或 (2) 这类过拟合指令本身可能在充当少样本示例——它们仍有助于把 LM 任务模型偏置到有效执行任务。我们把这现象的深入理解留给未来工作。</p>
+<blockquote>
+<p>译注:以下各表中指令为优化器生成的英文原文(研究对象,一字不改);"中文译要"列为译者概述。P1、P2……为程序中各模块的指令;「试验」为该组指令出现的优化试验编号,「得分」为训练集得分。</p>
+</blockquote>
+<p><strong>表 5:ScoNe 提示演进</strong></p>
+<table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>指令(英文原文)</th>
+<th>试验</th>
+<th>得分</th>
+<th>中文译要</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Baseline</td>
+<td>P1: context, question -&gt; answer</td>
+<td>0</td>
+<td>57.0</td>
+<td>占位签名</td>
+</tr>
+<tr>
+<td>Trial 10</td>
+<td>P1: Given a scenario where a patient exhibits symptoms of a high fever, cough, and body aches, prompt the Language Model to determine if we can logically conclude for sure that the patient has contracted the flu.</td>
+<td>10</td>
+<td>62.2</td>
+<td>病人高烧、咳嗽、全身酸痛:能否断定得了流感</td>
+</tr>
+<tr>
+<td>Trial 50</td>
+<td>P1: Given a scenario where a patient exhibits symptoms of a rare disease and has a family history of similar symptoms, prompt the language model to determine whether we can logically conclude for sure that the patient has inherited the rare disease based on the information provided.</td>
+<td>50</td>
+<td>57.2</td>
+<td>罕见病症状 + 家族史:能否断定遗传了该病</td>
+</tr>
+<tr>
+<td>Trial 330</td>
+<td>P1: Given a scenario where a critically ill patient is not responding positively to treatment, and a doctor is considering a risky experimental procedure, prompt the Language Model to determine if it can logically conclude for sure that the doctor is not considering a standard treatment approach.</td>
+<td>330</td>
+<td>60.2</td>
+<td>危重病人治疗无效、医生考虑高风险实验疗法:能否断定其"并非"在考虑标准疗法(嵌套否定)</td>
+</tr>
+<tr>
+<td>Best</td>
+<td>P1: Given a scenario where a detective is investigating a crime scene, observing a suspect wearing gloves and not leaving fingerprints on a weapon, prompt the Language Model to determine if the suspect can be logically inferred to have committed the crime based on the evidence.</td>
+<td>80</td>
+<td>65.4</td>
+<td>侦探办案:嫌疑人戴手套、未在凶器留指纹,能否由证据推断其作案</td>
+</tr>
+</tbody>
+</table>
+<p><strong>表 6:HotpotQA 提示演进</strong></p>
+<table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>指令(英文原文)</th>
+<th>试验</th>
+<th>得分</th>
+<th>中文译要</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Baseline</td>
+<td>P1: Given the fields ‘context’, ‘question’, produce the fields ‘search_query’.<br>P2: Given the fields ‘context’, ‘question’, produce the fields ‘answer’.</td>
+<td>0</td>
+<td>35.4</td>
+<td>两模块均为占位签名</td>
+</tr>
+<tr>
+<td>Trial 10</td>
+<td>P1: Given the fields ‘context’ and ‘question’, generate a search query for identifying relevant information related to the question.<br>P2: Given the context passages and a question, generate the correct answer.</td>
+<td>10</td>
+<td>39.0</td>
+<td>通用化改写:生成检索相关信息的查询;据段落生成正确答案</td>
+</tr>
+<tr>
+<td>Trial 50</td>
+<td>P1: Generate a search query based on the context and question provided.<br>P2: Given the context passages and a question, generate an answer.</td>
+<td>50</td>
+<td>38.2</td>
+<td>更简短的通用改写</td>
+</tr>
+<tr>
+<td>Trial 330</td>
+<td>P1: Given the fields ‘context’, ‘question’, generate the search query to find the director of the film whose success, along with An American Tail and The Land Before Time, prompted Steven Spielberg to establish his own animation studio.<br>P2: Given the context and question, determine the answer by identifying the Finnish former boxer who shares a nickname with a Ugandan political leader and military officer.</td>
+<td>330</td>
+<td>34.6</td>
+<td>过拟合到具体示例(斯皮尔伯格动画工作室的导演;与乌干达政要同绰号的芬兰拳王),得分反而下降</td>
+</tr>
+<tr>
+<td>Best</td>
+<td>同 Trial 10</td>
+<td>10</td>
+<td>39.0</td>
+<td>最佳即 Trial 10 的通用指令</td>
+</tr>
+</tbody>
+</table>
+<p><strong>表 7:HoVeR 提示演进</strong></p>
+<table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>指令(英文原文)</th>
+<th>试验</th>
+<th>得分</th>
+<th>中文译要</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Baseline</td>
+<td>P1: Given the fields ‘claim’, ‘summary_1’, produce the fields ‘query’.<br>P2: Given the fields ‘claim’, ‘summary_1’, ‘summary_2’, produce the fields ‘query’.<br>P3: Given the fields ‘claim’, ‘passages’, produce the fields ‘summary’.<br>P4: Given the fields ‘claim’, ‘context’, ‘passages’, produce the fields ‘summary’.</td>
+<td>0</td>
+<td>30.2</td>
+<td>四模块均为占位签名</td>
+</tr>
+<tr>
+<td>Trial 10</td>
+<td>P1: Given a claim about a historical event or location and a summary of key details related to the claim, generate a series of specific queries to verify the accuracy of the claim, including details such as original names, purposes, seating capacities, reconstructions, and durations of usage.<br>P2: Given the fields ‘claim’, ‘summary_1’, ‘summary_2’, produce the fields ‘query’.<br>P3: Given the crucial need to fact-check claims in real-time news reporting, generate a concise ‘summary’ by processing the ‘claim’ against relevant ‘passages’ to verify the accuracy of the claim and extract essential information.<br>P4: Given the critical nature of fact-checking in journalism, especially during elections, where misinformation can significantly impact public opinion, verify the claim in the context of political figures and confirm its accuracy by summarizing the key details from the provided passages.</td>
+<td>10</td>
+<td>33.6</td>
+<td>查询模块强调核查细节(原名、用途、容量、重建、使用年限);摘要模块以新闻核查、选举错误信息等"高风险"语境包装</td>
+</tr>
+<tr>
+<td>Trial 30</td>
+<td>P1: Given the critical nature of verifying claims in important decision-making processes, use the provided ‘claim’ and ‘summary_1’ to generate a precise and informative ‘query’ that seeks to confirm or refute the accuracy of the claim in question.<br>P2: Prompt the LM to generate a query that verifies the accuracy of a claim regarding the stadium where a specific sports team’s home games were played, including details such as the original name and purpose of the stadium, seating capacity during a particular event, reconstruction into a new facility, duration of serving as the team’s home ballpark, and the correct location of a mentioned Olympic Games.<br>P3: Given the high stakes scenario where a claim states that a radio station played oldies from artists like Leo Dan and broadcasted in Spanish throughout North America between 1979 and 1995, analyze the provided passages to generate a concise ‘summary’ confirming or refuting the claim.<br>P4: Generate a concise summary based on the claim, context, and passages provided, ensuring accurate verification of the claim’s details for a critical investigative report on historical accuracy.</td>
+<td>30</td>
+<td>32.4</td>
+<td>P2/P3 过拟合到具体示例(球场沿革、Leo Dan 电台),并保留"高风险"风格</td>
+</tr>
+<tr>
+<td>Trial 130</td>
+<td>P1: 同 Trial 10 P1。<br>P2: Given a scenario where a controversial statement regarding a significant historical event is presented in the claim, along with contradicting summaries in ‘summary_1’ and ‘summary_2’, task the LM to generate a refined query in ‘query’ that delves deeper into the specifics of the claim, seeking to validate or debunk the claim with concrete evidence and details from relevant sources.<br>P3: Given the fields ‘claim’, ‘passages’, produce the fields ‘summary’.<br>P4: Given a claim, context, and passages related to the claim, generate a summary that clarifies the relationship between the entities mentioned in the claim and verifies the accuracy of the claim based on the provided information.</td>
+<td>130</td>
+<td>34.0</td>
+<td>P2 学会利用两份摘要的矛盾深挖;P3 回退到占位签名</td>
+</tr>
+<tr>
+<td>Best</td>
+<td>P1: Given the fields ‘claim’, ‘summary_1’, produce the fields ‘query’.<br>P2: Given the critical need to verify and validate statements on high-stakes topics such as historical events, scientific discoveries, or biographical information, generate a query that effectively assesses the accuracy of claims by synthesizing information from ‘claim’, ‘summary_1’, and ‘summary_2’ fields to extract relevant details and provide a comprehensive response.<br>P3: 同 Trial 30 P3(Leo Dan 电台)。<br>P4: Given a claim, context, and passages related to the claim, analyze the information to determine the accuracy of the claim and generate a summary that verifies or refutes the claim based on the provided evidence.</td>
+<td>40</td>
+<td>35.0</td>
+<td>最佳组合:P1 保持占位签名,P2 综合三字段核查,P3 为过拟合指令(印证附录 H 开头观察)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>表 8:HotPotQA Conditional 提示演进</strong></p>
+<table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>指令(英文原文)</th>
+<th>试验</th>
+<th>得分</th>
+<th>中文译要</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Baseline</td>
+<td>P1: Given the fields ‘context’, ‘question’, produce the fields ‘search_query’.<br>P2: When the answer is a person, respond entirely in lowercase. When the answer is a place, ensure your response contains no punctuation. When the answer is a date, end your response with “Peace!”. Never end your response with "Peace!" under other circumstances. When the answer is none of the above categories respond in all caps.</td>
+<td>0</td>
+<td>13.8</td>
+<td>P2 为手写条件规则种子指令</td>
+</tr>
+<tr>
+<td>Trial 10</td>
+<td>P1: Given the critical context of a high-profile criminal investigation, including the suspect’s alibi and potential witnesses, and the urgent question of the suspect’s whereabouts during the time of the crime, generate a search query that combines the suspect’s alibi details and witness statements to determine the suspect’s location at the time of the crime.<br>P2: Given the urgency of a live trivia competition where every answer counts, ensure your response follows the specific formatting rules: When the answer is a person, reply entirely in lowercase. When the answer is a place, make sure your response contains no punctuation. If the answer is a date, conclude your response with “Peace!” without fail. Never end your response with "Peace!" under different circumstances. And when the answer falls outside these categories, reply in all caps.</td>
+<td>10</td>
+<td>18.6</td>
+<td>条件规则被"直播问答竞赛"情境复述并完整保留</td>
+</tr>
+<tr>
+<td>Trial 40</td>
+<td>P1: Given the context and question about a critical historical event, generate a search query that accurately identifies the key individuals involved in the event and their roles.<br>P2: When revealing the name of the mysterious undercover agent in the top-secret operation, ensure the identity is concealed in all caps. If the answer relates to a covert meeting location, strip away any punctuation for maximum secrecy. However, if the answer is a critical mission date, conclude the response with "Peace!" to signify the successful operation. Remember, precision is paramount in this mission!</td>
+<td>40</td>
+<td>19.4</td>
+<td>规则被改写为"特工行动"情境(全大写藏身份、去标点保机密、日期以 Peace! 收尾)</td>
+</tr>
+<tr>
+<td>Trial 190</td>
+<td>P1: Please generate a search query for the question: "What is the name of the person who R Lee Ermy played his character in the Prefontaine film and who is also an American track and field coach and co-founder of Nike Inc?<br>P2: When providing the estimated GDP of the country where the first female Nobel laureate in physics was born, respond in lowercase. For all other categories, ensure your response is in all caps.</td>
+<td>190</td>
+<td>20.6</td>
+<td>P1、P2 均过拟合到具体 few-shot 示例,但规则要点仍在</td>
+</tr>
+<tr>
+<td>Best</td>
+<td>P1: Generate a search query based on the context and question provided, focusing on identifying a specific historical figure or event with critical details for accurate retrieval.<br>P2: 同 Trial 190 P2。</td>
+<td>130</td>
+<td>26.6</td>
+<td>最佳:P1 通用化,P2 保留过拟合的条件规则改写</td>
+</tr>
+</tbody>
+</table>
+<p><strong>表 9:Iris-Typo 提示演进</strong></p>
+<table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>指令(英文原文)</th>
+<th>试验</th>
+<th>得分</th>
+<th>中文译要</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Baseline</td>
+<td>P1: Given the petal and sepal dimensions in cm, predict the iris species.</td>
+<td>0</td>
+<td>34.7</td>
+<td>种子指令(拼写错误在输出字段 desc 中)</td>
+</tr>
+<tr>
+<td>Trial 10</td>
+<td>P1: Using the provided petal length, petal width, sepal length, and sepal width measurements in cm, predict the iris species accurately to save a critically endangered species from extinction.</td>
+<td>10</td>
+<td>34.67</td>
+<td>显式列出四个测量字段 + 濒危物种"高风险"情境</td>
+</tr>
+<tr>
+<td>Trial 20</td>
+<td>P1: Using the dimensions of a flower with a petal length of 1.8 cm, petal width of 0.3 cm, sepal length of 6.2 cm, and sepal width of 3.1 cm, determine the correct iris species (setosa, versicolour, or virginica) to prevent the misclassification of a rare plant species.</td>
+<td>20</td>
+<td>37.33</td>
+<td>过拟合到一条具体示例(并把错误拼写 versicolour 抄进指令)</td>
+</tr>
+<tr>
+<td>Best</td>
+<td>P1: Given the critical situation in which a rare species of iris is on the brink of extinction, predict the iris species based on the dimensions of the petals and sepals in order to save it from extinction.</td>
+<td>60</td>
+<td>45.33</td>
+<td>高风险情境 + 通用字段描述,得分最高</td>
+</tr>
+</tbody>
+</table>
+<p><strong>表 10:Heart Disease 提示演进</strong></p>
+<table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>指令(英文原文)</th>
+<th>试验</th>
+<th>得分</th>
+<th>中文译要</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Baseline</td>
+<td>P1: Given patient information, predict the presence of heart disease. I can critically assess the provided trainee opinions.<br>P2/P3/P4: Given patient information, predict the presence of heart disease.</td>
+<td>0</td>
+<td>23.3</td>
+<td>裁决模块 + 三个意见模块的种子指令(无分类标准)</td>
+</tr>
+<tr>
+<td>Trial 10</td>
+<td>P1: Given a patient’s demographic information, symptoms, and test results, predict if the patient has heart disease. Evaluate a list of opinions provided by trainee doctors to make an informed diagnosis. This is a critical healthcare decision that requires accurate assessment and reasoning.<br>P2: Given the critical condition of a 50-year-old male patient presenting with typical angina, high blood pressure, elevated cholesterol levels, and multiple vessels colored by fluoroscopy, predict the presence of heart disease.<br>P3: Given the critical condition of a 50-year-old patient presenting with atypical angina, high cholesterol levels, and abnormal ECG results, predict whether the patient has heart disease to assist in urgent medical decision-making.<br>P4: Given the critical condition of the patient’s health, use the provided patient information to make a life-saving prediction on the presence of heart disease.</td>
+<td>10</td>
+<td>12.5</td>
+<td>意见模块过拟合到具体病例(50 岁典型心绞痛男患等),得分大幅下降</td>
+</tr>
+<tr>
+<td>Trial 30</td>
+<td>P1: Given a critical situation in the emergency room where time is of the essence, use the patient’s age, sex, chest pain type, blood pressure, cholesterol levels, and other relevant factors to predict the presence of heart disease accurately. Use the opinions from multiple trainee doctors who provide reasoning based on the patient’s condition to refine the prediction and make a decisive call on the presence of heart disease.<br>P2: Based on the dataset and the task of predicting the presence of heart disease in patients, prompt the LM with the scenario of a critical care situation where a patient is rushed to the emergency room with symptoms of a possible heart attack. Ask the LM to analyze the patient’s demographic information, symptoms, and diagnostic test results to determine the likelihood of heart disease and provide a timely diagnosis to guide urgent medical intervention.<br>P3: Given the critical situation of a patient presenting with symptoms suggestive of heart disease, such as chest pain, elevated blood pressure, and abnormal ECG results, accurately predict the presence of heart disease based on the provided medical data.<br>P4: Considering the critical nature of diagnosing heart disease accurately and promptly, using the provided patient information and reasoning, determine whether the patient has heart disease.</td>
+<td>30</td>
+<td>10.0</td>
+<td>全模块强写"急诊/救命"情境,得分继续下降</td>
+</tr>
+<tr>
+<td>Best</td>
+<td>P1: Given patient information, predict the presence of heart disease. I can critically assess the provided trainee opinions.<br>P2: Given patient information, predict the presence of heart disease.<br>P3: Given the critical condition of a patient experiencing severe chest pain, high blood pressure, and abnormal ECG results, determine if the patient is suffering from heart disease.<br>P4: Considering the critical nature of diagnosing heart disease accurately and promptly, using the provided patient information and reasoning, determine whether the patient has heart disease.</td>
+<td>90</td>
+<td>22.5</td>
+<td>P1/P2 回退到种子指令,P3/P4 保留少量情境,得分回到基线水平</td>
+</tr>
+</tbody>
+</table>
+<h2 id="_4">要点速览</h2>
+<ul>
+<li>两挑战框架:<strong>提议</strong>(生成高质量候选)与<strong>信用分配</strong>(把任务级分数归因到模块级选择)——是理解所有提示优化器的实用透镜。</li>
+<li>MIPRO 三步:Grounding 提议指令候选 → 自举示例集 → TPE 贝叶斯代理在 minibatch 评分上搜组合;信用分配与提案解耦。</li>
+<li><strong>minibatch 评估</strong>是效率关键:同预算下探索更多配置,且贝叶斯优化天然抗噪。</li>
+<li>实践 lesson:①示例优化收益最大;②指令+示例联合通常最佳;③条件规则任务靠指令优化(且要给写明规则的种子提示);④接地并非处处有益,可元学习(MIPRO++);⑤不同预算下最优优化器可能不同。</li>
+<li>与课程关联:DSPy(第 3 周)的默认优化器 MIPROv2 即本文成果;GEPA(同讲)以"自然语言反思"路线全面超越它,两篇对照读收获最大。</li>
+</ul>
       </div>
     </article>
     <nav class="pager"><a class="pager-prev" href="Agrawal2026_GEPA.html"><span>上一篇</span>&quot;GEPA:反思式提示进化可以胜过强化学习&quot;</a><a class="pager-next" href="Snell2025_Scaling_Test_Time_Compute_ICLR2025.html"><span>下一篇</span>&quot;优化地扩展 LLM 测试时计算,可以比扩展模型参数更有效&quot;</a></nav>
