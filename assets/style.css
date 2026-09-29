@@ -143,6 +143,10 @@ a:hover { text-decoration: underline; }
 .dates-table tr:last-child td { border-bottom: none; }
 .d-week { color: var(--cardinal); font-weight: 700; white-space: nowrap; }
 .d-date { white-space: nowrap; color: var(--ink-soft); }
+.lecture-note { font-size: 14px; color: var(--ink-soft); margin: -6px 0 14px; line-height: 1.7; }
+.lecture-note b { color: var(--cardinal); }
+.lecture-table td { vertical-align: top; }
+.lecture-links a.slide-dl { font-weight: 700; white-space: nowrap; }
 .footer {
   border-top: 1px solid var(--line); color: var(--ink-soft); font-size: 13px;
   text-align: center; padding: 26px 20px; background: #faf8f6;
