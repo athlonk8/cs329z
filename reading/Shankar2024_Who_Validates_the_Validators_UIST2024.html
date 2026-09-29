@@ -21,7 +21,7 @@
   </div>
 </header>
 <div class="read-layout">
-  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">论文精读</a><ul><li><a href="#abstract">摘要(Abstract)</a></li><li><a href="#1-introduction">1 引言(Introduction)</a></li><li><a href="#2-motivation-and-related-work">2 动机与相关工作(Motivation and Related Work)</a></li><li><a href="#3-evalgen-evalgen-design">3 EvalGen 设计(EvalGen Design)</a></li><li><a href="#4-implementation">4 实现(Implementation)</a></li><li><a href="#5-algorithm-evaluation">5 算法评估(Algorithm Evaluation)</a></li><li><a href="#6-user-study">6 用户研究(User Study)</a></li><li><a href="#7-user-study-findings">7 用户研究发现(User Study Findings)</a></li><li><a href="#8-discussion">8 讨论(Discussion)</a></li><li><a href="#9-conclusion">9 结论(Conclusion)</a></li><li><a href="#_3">附录速览</a></li></ul></li><li><a href="#_4">要点速览</a></li></ul></aside>
+  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">全文对照翻译</a><ul><li><a href="#abstract">摘要(Abstract)</a></li><li><a href="#1-introduction">1 引言(Introduction)</a></li></ul></li></ul></aside>
   <main class="read-main">
       <link rel="stylesheet" href="../assets/katex/katex.min.css">
       <script defer src="../assets/katex/katex.min.js"></script>
@@ -31,139 +31,27 @@
       <h1 class="read-title">&quot;谁来验证验证者?让 LLM 辅助评估与人类偏好对齐&quot;</h1>
       <p class="read-title-en">&quot;Who Validates the Validators? Aligning LLM-Assisted Evaluation of LLM Outputs with Human Preferences&quot;</p>
       <p class="read-meta">&quot;Shreya Shankar et al.&quot; · &quot;UIST 2024 · UC Berkeley&quot;</p>
-      <p class="read-badges"><span class="badge badge-recommended">推荐</span><span class="badge badge-kind">论文精读</span><button class="lang-toggle" id="lang-toggle" type="button">仅看中文</button><a class="orig-link" href="../originals/week07a_data_selection/Shankar2024_Who_Validates_the_Validators_UIST2024.pdf" target="_blank" rel="noopener">查看原文(PDF) ↗</a></p>
+      <p class="read-badges"><span class="badge badge-recommended">推荐</span><span class="badge badge-kind">全译对照</span><button class="lang-toggle" id="lang-toggle" type="button">仅看中文</button><a class="orig-link" href="../originals/week07a_data_selection/Shankar2024_Who_Validates_the_Validators_UIST2024.pdf" target="_blank" rel="noopener">查看原文(PDF) ↗</a></p>
       <div class="markdown-body">
 <h2 id="_1">导读</h2>
 <p>本文位于课程第 7 周「数据选择与质量」单元,回答一个在 LLM 评测实践中尖锐的问题:当人们用 LLM(LLM-as-a-judge)来评估 LLM 输出时,「验证者」本身由谁来验证?作者来自 UC Berkeley(Shreya Shankar、J.D. Zamfirescu-Pereira、Björn Hartmann、Aditya G. Parameswaran)与蒙特利尔大学(Ian Arawjo),发表于 UIST 2024。</p>
 <p>论文贡献有二。其一是系统层面:EvalGen——嵌入开源提示工程工具 ChainForge 的混合主动(mixed-initiative)界面,把「评估标准的提出、候选断言(代码函数或 LLM 评分提示)的生成、人工打分、对齐度报告」整合进一个循环,并用基于断言选择率(selectivity)的采样策略来决定让用户给哪些输出打分。其二、也是更具思想冲击力的发现:<strong>标准漂移(criteria drift)</strong>——用户需要先有标准才能打分,而打分又反过来帮助他们(重新)定义标准;评估标准依赖于所见的具体模型输出,而非可以预先独立写定。这对所有假设「评估标准先于观察输出而存在」的对齐方法(如基于专家预标注的校准流程)提出了根本性质疑。对于构建 AI Agent 评测体系的工程师,本文是「评测本身就是迭代过程」这一世界观的重要实证。</p>
-<h2 id="_2">论文精读</h2>
+<h2 id="_2">全文对照翻译</h2>
+<blockquote>
+<p><strong>译注</strong>:以下为论文全文中英对照,覆盖摘要与第 1–9 节全部正文,并收录附录 A(断言选择率、打分采样策略、对齐度形式化定义与采样策略评估)与附录 B(医疗与商品两条流水线的完整任务提示)。References(参考文献列表)按本站惯例不收录;文内方括号编号(如 [45])为原文的参考文献编号。表 1(EvalGen 与 SPADE 对比)与表 2(参与者评分)转为 Markdown 表格,数据一仍其旧;图 1–4 以「[图 N: 英文图题]」转录并附中文说明。英文原段仅去除了 PDF 提取产生的断行连字符、页眉页码及少量因斜体排版导致的缺空格,内容一字未改;原文本身存在个别笔误(如结论首句的 "mixed-initative"、3.1 节一句明显缺字),均按原样保留,中文按上下文补足语意。术语首现处给出中英对照。</p>
+</blockquote>
 <h3 id="abstract">摘要(Abstract)</h3>
-<p>由于人类评估繁琐、基于代码的评估又有局限,大语言模型(LLM)正被越来越多地用于辅助人类评估 LLM 输出。但 LLM 生成的评估器(evaluator)直接继承了其评估对象 LLM 的所有问题,因此仍需人类进一步验证。本文提出一种「验证验证者」的混合主动方法,使 LLM 生成的评估函数(无论是提示还是代码)与人类需求对齐。我们的界面 EvalGen 为用户提供自动辅助,以生成评估标准(criteria)并实现断言(assertion)。在生成候选实现(Python 函数、LLM 评分提示)的同时,EvalGen 请人类为一部分 LLM 输出打分;这些反馈用于挑选与用户打分更对齐的实现。一项定性研究总体上支持 EvalGen,但凸显了对齐过程的主观性与迭代性。特别地,我们识别出一种称为「标准漂移(criteria drift)」的现象:人们需要标准才能给输出打分,而给输出打分又帮助人们定义标准。更甚者,某些标准依赖于所观察到的具体 LLM 输出(而非可先验定义的独立标准),这对那些假设「评估独立于对模型输出的观察」的方法提出了严肃质疑。我们呈现了界面与实现细节、算法与基线的对比,以及对未来 LLM 评估助手设计的启示。</p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Due to the cumbersome nature of human evaluation and limitations of code-based evaluation, Large Language Models (LLMs) are increasingly being used to assist humans in evaluating LLM outputs. Yet LLM-generated evaluators simply inherit all the problems of the LLMs they evaluate, requiring further human validation. We present a mixed-initiative approach to “validate the validators”—aligning LLM-generated evaluation functions (be it prompts or code) with human requirements. Our interface, EvalGen, provides automated assistance to users in generating evaluation criteria and implementing assertions. While generating candidate implementations (Python functions, LLM grader prompts), EvalGen asks humans to grade a subset of LLM outputs; this feedback is used to select implementations that better align with user grades. A qualitative study finds overall support for EvalGen but underscores the subjectivity and iterative process of alignment. In particular, we identify a phenomenon we dub criteria drift: users need criteria to grade outputs, but grading outputs helps users define criteria. What is more, some criteria appears dependent on the specific LLM outputs observed (rather than independent criteria that can be defined a priori), raising serious questions for approaches that assume the independence of evaluation from observation of model outputs. We present our interface and implementation details, a comparison of our algorithm with a baseline approach, and implications for the design of future LLM evaluation assistants.</p></div><p>由于人类评估的繁琐本性以及基于代码的评估的局限,大语言模型(LLM)正被越来越多地用于辅助人类评估 LLM 输出。然而,LLM 生成的评估器(evaluator)直接继承了其所评估的 LLM 的全部问题,因此仍需人类的进一步验证。我们提出一种「验证验证者(validate the validators)」的混合主动(mixed-initiative)方法——让 LLM 生成的评估函数(无论是提示还是代码)与人类需求对齐。我们的界面 EvalGen 为用户提供自动化辅助,用于生成评估标准(criteria)并实现断言(assertion)。在生成候选实现(Python 函数、LLM 评分提示)的同时,EvalGen 请人类为一部分 LLM 输出打分;这些反馈被用来挑选与用户打分更对齐的实现。一项定性研究总体上支持 EvalGen,但凸显了对齐过程的主观性与迭代性。特别地,我们识别出一种我们称为「标准漂移(criteria drift)」的现象:用户需要先有标准才能给输出打分,而给输出打分又帮助用户定义标准。更有甚者,某些标准看起来依赖于所观察到的具体 LLM 输出(而非可以先验定义的独立标准),这对那些假设「评估独立于对模型输出的观察」的方法提出了严肃质疑。我们呈现了界面与实现细节、我们的算法与基线方法的对比,以及面向未来 LLM 评估助手的设计启示。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>CCS CONCEPTS<br>• Human-centered computing→ Interactive systems and tools; • Computing methodologies→ Natural language processing.<br><br>KEYWORDS<br>language models, auditing, evaluation, interfaces, prompt engineering, active learning</p></div><p>CCS 分类:以人为中心的计算 → 交互系统与工具;计算方法 → 自然语言处理。</p></div>
+<p>关键词:语言模型、审计、评估、界面、提示工程、主动学习</p>
 <h3 id="1-introduction">1 引言(Introduction)</h3>
-<p>LLM 会犯错——产生幻觉、无视指令、生成需要验证的输出。为此,研究者和工业界开发了提示工程(prompt engineering)与审计工具,帮助人们更系统地测试输出。这类方法依赖指标(metric)——一组为 LLM 输出自动打分的函数,通常表现为真假二值的断言(assertion)。这些指标越来越多地调用「评估器 LLM」充当「裁判」,给难以用代码表述的质量(如「简洁性」)打分。</p>
-<p>问题在于:评估用的 LLM 与被评估的 LLM 一样不可信。评分提示(grader prompt)和任何提示一样,对措辞或结构的微小变化有反直觉的敏感性。而许多现有系统并不提供验证 LLM 生成评估质量的支持,只让用户「相信」其输出。作者据此提出核心问题:如何在享受 LLM 辅助评估的效率红利的同时,最小化错位(misalignment)?谁来验证验证者?</p>
-<p>EvalGen 的做法:LLM 基于用户上下文(如被测提示)用自然语言建议标准,用户可修改;LLM 再为每条标准生成一批候选断言——代码或输出真/假的 LLM 评分提示;在用户等待 LLM 生成候选的期间,请其用「好」(赞)/「坏」(踩)二元打分给一部分输出评级;这些打分用于自动选择与用户偏好最对齐的断言;最后以「成绩单(Report Card)」呈现所选断言与用户打分的对齐情况。算法上,EvalGen 改编自 SPADE——一个从提示修订历史全自动生成 Python 断言的算法;与离线求解整数规划的 SPADE 不同,EvalGen 采用在线(流式)架构逐步优化。作者先做了与 SPADE 对比的离线验证,再对 9 位在产业环境使用 LLM 的从业者做了定性用户研究(考虑到 NDA 数据问题,任务改编自真实 LLM 流水线提示;不限制参与者如何使用工具)。</p>
-<p>研究的核心发现是一个「catch-22」:要给输出打分,人们需要先外化并定义评估标准;然而打分的过程恰恰帮助他们定义这些标准。作者将其命名为标准漂移,它意味着<strong>不可能在人类评判 LLM 输出之前完全确定评估标准</strong>。即使先打分的参与者,也会在继续打分时修订标准,甚至回头修改此前的打分。这带来两点启示:(i) 对齐 LLM 辅助评估必须采用拥抱混乱与迭代的混合主动方法;(ii) 引出更宏观的问题——对评估助手而言,「与用户偏好对齐」究竟意味着什么。</p>
-<h3 id="2-motivation-and-related-work">2 动机与相关工作(Motivation and Related Work)</h3>
-<p><strong>提示评估的自动化</strong>。评估 LLM 行为时,用户通常发出成百上千条查询,人工评估很快达到极限,于是搭建自动评估流水线(代码或其他 LLM;后者文献中称 LLM-as-a-judge 或 co-audit)。promptfoo、ChainForge 等工具允许用户编写评估指标,同时支持代码型与 LLM 型评估器(如 promptfoo 中可写规则「回答不得有道歉语气」)。EvalLM、PromptsRoyale 等原型几乎只支持 LLM 评估器。其中只有 EvalLM 提供计算 LLM 评估器与用户期望对齐度的功能,且该功能仅见于设计章节、未进入用户研究。作者指出:多数 PE 工具至多让用户手工抽查 LLM 评估器的输出,至差则完全隐藏单项得分;连「该评哪些指标」本身对从业者也是难题。</p>
-<p><strong>过度信任与过度泛化</strong>。工具缺乏验证评估器的支持尤其令人担忧,因为已有研究表明人类倾向于过度依赖、过度信任 AI 系统。一个高调案例:MIT 研究者发布预印本宣称 GPT-4 能通过 MIT EECS 考试,数小时内即被 Chowdhuri 等人推翻——问题正出过度依赖 GPT-4 给自己评分。其他需警惕的发现:LLM 从一组候选中选最佳回复时会受排列顺序的系统性偏差影响;LLM 对看似无害的格式变化高度敏感。与过度依赖并列的是过度泛化:不熟悉 PE 的用户会因单次失败而抛弃可能不错的提示;即便熟悉 LLM 的开发者也难以扩展评估规模,在搭好自动评估流水线后仍会从少量输出过度概括。</p>
-<p><strong>LLM 对齐方法</strong>。HCI 社区的交互式机器学习(iML)研究表明,在选取训练样例、标注数据、评估模型性能之间支持无缝切换的界面能减少错误、更好匹配用户期望;部分 iML 界面还用 ML 辅助扩大标注规模。ML/NLP 社区则大量依赖人类标注的好/坏输出示例来对齐 LLM 及其评估器(如 AutoCalibrate 用标注输出校准 LLM 评估器)。但这类 LLMOps 优化研究通常在预定义指标的基准数据集上验证,在真实世界的个性化用户任务上的表现仍不清楚。总结:用户需要更多支持来(a)原型化评估、(b)验证 LLM 输出的评估器;SPADE 迈出了一步,本文将其算法嵌入面向评估器原型化的 LLM 辅助界面,并补充标准生成、与人类偏好的对齐度量及结果可视化。</p>
-<h3 id="3-evalgen-evalgen-design">3 EvalGen 设计(EvalGen Design)</h3>
-<p>设计目标:(1) 研究如何辅助开发者创建评估 LLM 输出的评估器;(2) 通过自动辅助与「各评估器与用户期望对齐程度」的透明化,帮助用户验证验证者。用户不必自己想标准、写代码或评分提示,但对指标标准、评估器类型(代码/LLM)、实现函数的生成与选择保有控制权。</p>
-<h4 id="31-evalgen">3.1 EvalGen 工作流</h4>
-<p>EvalGen 实现于开源提示工程系统 ChainForge 之上(该系统负责参数化提示查询多模型、运行代码/LLM 评估器、绘图、链式编排等)。本文的扩展主要是一个帮助用户定义、实现、验证评估函数的弹窗向导,外加一个 Multi-Eval 节点(允许单节点包含多个评估器并对上游输出统一运行)及每标准得分的表格视图改进。流程为:</p>
-<ol>
-<li>在附着于提示节点的 Multi-Eval 节点上启动 EvalGen,向导给出三个选项:<strong>Infer</strong>(LLM 自动生成标准)、<strong>Manual</strong>(手写标准)、<strong>Grade First</strong>(先打分再生成标准,需至少给 5 条输出评级);</li>
-<li>「挑选标准」界面:LLM 已用自然语言生成标准建议(如回复长度、语气),每条可切换代码型或 LLM 型评估器;用户可增删改、切换类型,点击「Implement It」后由第二个 LLM 生成候选实现;</li>
-<li>「打分」界面:在实现生成与执行的同时,用户对单条 LLM 回复给出赞/踩。为降低负担采用整体二元打分——若一条回复被点赞,则视为通过所有标准;若某候选断言在该回复上失败,则该候选在候选池中被降权。界面含一个「I'm Tired」按钮供随时结束(作者刻意不设打分上限,因为调用 LLM 与执行断言是异步操作、耗时不定,预设「终点」会丢失宝贵信息);</li>
-<li>「成绩单」界面:呈现每条标准及整体的对齐度。悬停单项指标可看该标准与人类打分的混淆矩阵;整体指标显示所选断言子集的覆盖率(coverage)与假失败率(false failure rate)。随后用户回到 ChainForge 主界面,所选实现出现在 Multi-Eval 节点中,可继续编辑、检查与可视化。</li>
-</ol>
-<p>设计的核心权衡是开发者投入与人类验证的鲁棒性:完全对齐 LLM 评估器的唯一办法是让用户标注全部输出——这显然违背用 LLM 评估器省力的初衷;让开发者「在本来就要等待的时间里」给部分输出打分,是设计的关键思想。</p>
-<h3 id="4-implementation">4 实现(Implementation)</h3>
-<p>与先前工作一致,评估被分解为<strong>标准</strong>与<strong>断言</strong>(实现标准、对输出求值的布尔函数)。LLM 用于(a)基于提示生成标准、(b)为每条标准生成多个候选实现。系统由三个组件构成:</p>
-<p><strong>标准建议</strong>:用 GPT-4 以自然语言提出若干二元评估标准(如回复长度、语气),开发者可选用或自加,并指定每条标准由纯代码函数还是涉及调用 LLM 的函数评估。</p>
-<p><strong>候选断言合成与执行</strong>:基于所选标准,用 GPT-4 异步生成一个或多个候选断言(代码或评分提示)。对每条标准发起一次 GPT-4 调用,以流式方式在标记(markers)内生成多个候选;每检测到一个标记结束即解析出候选断言并提交执行器在流水线输出上运行。生成多候选可提高「至少有一个实现与开发者期望对齐」的概率;对代码型断言尤其必要,因为 LLM 偶尔会合成错误函数(如幻觉出不存在的 Python 库函数)。</p>
-<p><strong>打分采样器</strong>:采样 LLM 输出请用户二元反馈。用户每打一次分,系统更新各候选断言的对齐度内部估计,并据此采样下一条待打分输出。用户可设置假失败率阈值,系统只选不超过阈值的断言。</p>
-<p>EvalGen 维护三类动态估计:<strong>候选断言的选择率</strong>(断言判定输出通过的概率,随每次执行结果更新);<strong>低质量输出的置信分</strong>(基于选择率估计某输出不佳的似然,无需用户显式评估);<strong>断言对齐度</strong>(覆盖率与假失败率倒数的调和平均,每次用户打分后重算;形式化定义见附录 A.3)。与 SPADE 离线解整数规划不同,这是一套在线(流式)架构:新候选一生成即执行,先剔除明显糟糕者(如运行时报错的 Python 函数)。</p>
-<h3 id="5-algorithm-evaluation">5 算法评估(Algorithm Evaluation)</h3>
-<p><strong>设置</strong>:构建两条基于真实数据的流水线。医疗流水线处理 84 份医患通话的非结构化转写,要求抽取特定信息(症状、用药等)且不得泄露个人身份信息(PII),因此需要合规断言;商品流水线为 100 个 Amazon 商品及评论撰写 SEO 友好描述(即便存在差评,描述中也不得说产品坏话)。两条流水线各用 GPT-3.5-Turbo 生成全部输出。两位作者人工标注全部输出作为真值:医疗与商品流水线分别有 68% 与 51% 的输出为「好」。</p>
-<p><strong>对比结果</strong>(原文 Table 1):</p>
-<table>
-<thead>
-<tr>
-<th>指标</th>
-<th>医疗-EvalGen</th>
-<th>医疗-SPADE</th>
-<th>商品-EvalGen</th>
-<th>商品-SPADE</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>数据集大小</td>
-<td>84</td>
-<td>84</td>
-<td>100</td>
-<td>100</td>
-</tr>
-<tr>
-<td>坏输出数</td>
-<td>27</td>
-<td>27</td>
-<td>49</td>
-<td>49</td>
-</tr>
-<tr>
-<td>断言数</td>
-<td>3</td>
-<td>5</td>
-<td>4</td>
-<td>9</td>
-</tr>
-<tr>
-<td>覆盖率</td>
-<td>0.33</td>
-<td>0.33</td>
-<td>0.73</td>
-<td>0.49</td>
-</tr>
-<tr>
-<td>假失败率 FFR</td>
-<td>0.10</td>
-<td>0.10</td>
-<td>0.39</td>
-<td>0.39</td>
-</tr>
-<tr>
-<td>对齐度(%)</td>
-<td>48.29</td>
-<td>48.29</td>
-<td>66.46</td>
-<td>54.35</td>
-</tr>
-</tbody>
-</table>
-<p>SPADE 初设 10% 假失败率阈值,医疗流水线可达标,商品流水线须放宽到 40% 才能找到可行断言集——这本身就说明了覆盖与假失败之间权衡之难。EvalGen 在两条流水线上以更少断言取得相同或更好的对齐:商品流水线上断言数不到 SPADE 一半,覆盖率从 49% 提到 73%。原因在于 SPADE 全自动生成标准,可能为人类并不关心的标准写断言(如医疗流水线中多余的「语气中性」断言、把关键信息检查拆成过多标准),或生成不现实的实现(如用 Python 函数标记"never order"、"disappointed"等负面短语),而 EvalGen 返回更务实的 LLM 型校验器(确保商品描述全然正面)。值得注意的是,EvalGen 只用了每条流水线 16 条打分输出(而非全部 80–100 条)。</p>
-<h3 id="6-user-study">6 用户研究(User Study)</h3>
-<p>招募 9 位产业从业者(经 Twitter 招募,均有编码与搭建 LLM 流水线经验,含软件工程师、ML 科学家、创业者与独立顾问),通过 Zoom 进行:介绍 ChainForge 流水线——对 100 条推文做命名实体识别(NER),模型 GPT-3.5-Turbo(最多抽 3 个知名实体、Markdown 列表返回、不抽话题标签;允许改任务,1 人改成情感分析);演示后交给参与者远程控制,最多 40 分钟边用边出声思考,后接 10 分钟访谈,并请其对「断言与我的打分对齐」按 7 点李克特量表评分。全程 45–75 分钟,经 IRB 批准;分析用开放编码与轴心编码。</p>
-<p>评分结果(Table 2):P1–P9 分别为 6、5、3、4、5、3、1、2、5——两极分化,「对齐感」高度主观。典型流程:扫看输出 → 启动向导(6 人自动生成标准、1 人先手写、2 人先打分 5–10 条)→ 修订标准(常删几条、自加 1–2 条)→ 边等候选断言边继续打分 → 检查成绩单 → 回主界面跑全部断言看结果表 → 3 人再度迭代。</p>
-<h3 id="7-user-study-findings">7 用户研究发现(User Study Findings)</h3>
-<p><strong>7.1 EvalGen 是好的起点</strong>。参与者认同其作为断言生成的起点,认为施加控制必要且不介意行使(P8:「我希望 AI 做 80%,失败时有逃生口」)。
-- <em>LLM 生成标准缓解写作瓶颈</em>:9 人中 8 人惊喜于建议符合所想(P4:「想断言时我会有写作瓶颈」);P3 指出个别建议(响应延迟、随时间稳定性)对只作用于输入-输出对的断言无意义,但归因于 LLM 不完美、强调控制权。
-- <em>先打分有助于精炼标准</em>:P9 意识到这才是正确起点——「光从提示里提炼不出所有规则,打分时发现了提示里没有的规则」;未先打分者后悔(P2:「你们应该强制大家先看至少 20 个例子」)。
-- <em>等待时打分是好的时间利用</em>:除 P7 外均认可;3 人希望按「每条标准」分别提示打分;多人需要回头改分并乐于系统支持。
-- <em>查看对齐结果需更多控制</em>:喜欢「每标准多实现+挑最对齐(FFR 阈值 20%)」,对无好实现的标准直接删除(P8:「我喜欢它肯尝试」);部分人想按标准细粒度评分、手工替换选中的断言(P5:「这个实体计数的实现很怪」)。
-- <em>核查未打分结果的方式因人而异</em>:人人首见全量断言结果表格都感兴趣(P2:它「赢得信任」),但仅 P1 逐行按覆盖率核查,其余都按列查假失败(对每个断言找它判 False 的行);P6 希望提示一改即可快速可视化覆盖/假失败率变化。</p>
-<p><strong>7.2 对齐是迭代的、依标准与实现而异</strong>。低置信主因是打分时对自身标准尚不确定(常带「我猜」「算吧」的迟疑)。由此观察到 catch-22:需要外化标准才能打分,需要打分反馈(坏输出为何坏)才能外化标准。
-- <em>标准漂移</em>两类:一是见到新「类型」的坏输出时想<strong>新增标准</strong>,但必须等候选断言跑完、过完成绩单才能重开流程;二是随打分<strong>重新解释既有标准</strong>——P2、P8 的「专有名词」标准从「全部实体都是」放宽为「大多数是」;P7 因输出对话题标签处理不一致(#justdoit 保留 vs 写成 Nike)而重思标签标准;P8 两次承认打「坏」只为与自己历史打分一致——好的标注习惯,却不利于对齐。
-- <em>按标准难度调整打分</em>:想优先给最需对齐的标准(尤其 LLM 型断言)打分;P3 希望按标准分别设 FFR 阈值(「失败是一个谱,不是非过即败」);字数这类标准人类评不好而 Python 极易,多人都表示不信任自己对某些标准的打分。
-- <em>「对齐」是主观的</em>:GPT-4 对标准的解释常与预期不符,再多打分也无济于事。典型例:同是「输出不得含带话题标签的实体」,P5 认为出现 #Nike 就连 Nike 也不该抽,P9 却认为该抽 Nike 只是不带 #;两人拿到同一个只检查 # 字符的代码断言——与 P9 对齐、与 P5 错位。错位常源于参与者自己也未明说的隐性标准,「更好的 LLM 就能做好」并不成立。</p>
-<p><strong>7.3 代码与 LLM 评估器的对齐需求不同</strong>。
-- <em>类型控制与适用面</em>:格式检查、计数、短语包含/排除偏好代码;「模糊」标准偏好 LLM(P6、P8);P2 的策略是「想不出 Python 实现就用 LLM」;P8 还偏好 LLM 型对意外格式的宽容。
-- <em>代码实现可(且希望)被直接核验</em>:「多候选+自动选」流程对代码型不受欢迎,专家们想看代码自己挑(P5:「能用 Python 解决的,我心里已有预想实现,直接给我看代码更快」);P7 想用反馈调节正则繁简,但承认超 10 行就只想看结果;两人甚至要求把代码断言导出为单元测试(P4、P6)。
-- <em>打分应反哺生成</em>:希望打分及踩分理由进入候选断言的生成提示,把标注好坏样例作为 few-shot 示例放进 LLM 评估器提示(P3),形成类似 ConstitutionMaker/DSPy、但面向断言生成与验证的回路。
-- <em>LLM 型断言更难信任</em>:代码可改而评分提示难改;对 LLM 校验器能否用于生产普遍怀疑(P8:「我非常怀疑」;P9:「评测怎么随时间维护?难道每次重跑?」)。</p>
-<h3 id="8-discussion">8 讨论(Discussion)</h3>
-<p><strong>标准漂移对评估助手的启示</strong>。ML/NLP 的基准实践预设了一个「标准明确、标签完备」的世界(如 AutoCalibrate 依赖预先敲定标准的大规模专家标注)。但实践中开发者快速迭代标准,且对 LLM 输出的认知参与恰恰帮助他们精炼标准——标准精炼与打分应在交互环境中同步进行。标准依赖具体提示与模型输出意味着流水线任何变化(LLM API 换新模型、提示漂移、上游链路改动)都可能触发标准漂移,未来系统应支持:随打分动态调整标准、按标准粒度打分(保留赞/踩的简单性)、把好坏样例嵌入 LLM 评估器提示、输出变化后提示用户重新打分或重审标准。这一发现与教育场景呼应:教师批改作业越多,越会更新评分细则(rubric)。参与者评分的不一致也提示可引入多数投票等众包方法。至于标准何时「尘埃落定」——有理由相信不会随时间消失,因为参与者精炼标准的方向正是去适应被评 LLM 的行为:这是一种<strong>依赖性</strong>而非独立性的质量评判。作者引用 1964 年美国最高法院大法官关于色情内容的著名判词「我一看便知(I know it when I see it)」及法学学者 Gewirtz 的评论:主观性未必是非理性的标志,「接受法官的不完美是好理由」——并据此抛出更深层的认识论问题:对评估助手而言,「对齐」是否是一个可实现的目标?「存在一组只需我们去获取的地面真值标签」这一通行假设在多大程度上辜负了我们?验证验证者是否永远只是进行中的工作?</p>
-<p><strong>断言的运营化</strong>。参与者希望把断言部署到生产:或置于流水线关键路径(在坏输出到达用户前拦截),或被动部署(如每日把断言集对当日采样输出的执行结果邮件汇报)。关键路径上的断言不能有太多假失败,否则会触发不必要的重提示(reprompt)并推高延迟。研究确认了代码与 LLM 断言的双重必要性及其差异化对待:代码断言适合结构健全性检查、可入关键路径(已有 Guardrails AI、NeMo Guardrails 等 LLMOps 工具);但为一项断言找对实现高度依赖输出分布(如可接受长度要看词数直方图、结合「啰嗦」等其他失败模式判断)。多人希望让产品经理等协作者也来打分,这引入评分者间信度与分歧处理问题(可借鉴众包的个体准确度建模与纠偏);协作者编码经验不同,可能为更适合代码的标准选了 LLM 评估器——可设想类似「拉取请求(PR)+ 同事评审」的断言入库流程与 CI/CD 式的自动上线。</p>
-<p><strong>未来工作与局限</strong>:(i) 超越二元判断,追踪字数分布等细粒度信息以辅助调试;(ii) 支持多 LLM 调用链与含 RAG 的复合 AI 系统的端到端对齐;(iii) 用断言结果反哺提示自动改进,形成提示、断言、评估机制共同演进的循环。局限:离线评估仅两条流水线;定性研究样本小(9 人,均为 LLM 部署经验丰富的专家),会话内迭代次数有限,未覆盖部署阶段。</p>
-<h3 id="9-conclusion">9 结论(Conclusion)</h3>
-<p>本文提出 EvalGen——一种将 LLM 生成的评估函数与人类偏好对齐的混合主动方法,辅助用户制定可接受 LLM 输出的标准并开发检查这些标准的函数,确保评估反映用户自己的评分标准。在 9 位专家用户的定性研究中,观察到「标准漂移」模式:用户随着打分增多不断精炼评估标准。认识到标准对 LLM 输出的依赖性,为设计未来评估助手指出了新方向。</p>
-<h3 id="_3">附录速览</h3>
-<p>附录 A 给出算法细节:A.1 定义断言选择率与输出质量置信分 σ(e) = Σ selectivity(f)×f(e)(被高选择率断言判失败的输出更可能有问题);A.2 比较四种打分采样策略(Random / Highest / Lowest / Alternating,系统采用交替策略以期好坏样本均衡);A.3 形式化对齐度:覆盖率 = 断言集在「用户认为坏」的输出上的真负例率,假失败率(FFR) = 在「用户认为好」的输出上的假负例率,对齐度 = 覆盖率与 (1−FFR) 的调和平均(与 F1 相似,但关注失败方向的精确率/召回率)。A.4 的实验(每策略 10 次试验、每次采样 16 条输出)表明:随机采样导致对齐度方差巨大,可能让用户的打分努力付诸东流;三种按选择率加权的非随机策略在全数据集上均稳定取得更高对齐——任何非随机策略都可能带来满意结果。附录 B 给出医疗与商品流水线的完整任务提示。</p>
-<h2 id="_4">要点速览</h2>
-<ul>
-<li><strong>核心问题</strong>:用 LLM 评估 LLM 输出时,「验证者」自身继承 LLM 的所有缺陷(对措辞敏感、顺序偏差等),而现有 PE 工具几乎不提供验证评估器的支持,用户只能盲信。</li>
-<li><strong>EvalGen 流程</strong>:嵌入 ChainForge 的向导式界面——LLM 建议自然语言标准(可增删改、可切换代码/LLM 评估器)→ GPT-4 流式生成多候选断言并立即执行 → 用户在等待期间对采样输出赞/踩打分 → 系统按对齐度选断言 → 成绩单展示每标准混淆矩阵与整体覆盖/假失败率。</li>
-<li><strong>对齐度定义</strong>:覆盖率(抓住用户认为坏的输出的比例)与假失败率(错杀好输出的比例)的调和平均;用户可设 FFR 阈值(界面默认 20%)。</li>
-<li><strong>离线对比 SPADE</strong>:医疗流水线 3 vs 5 条断言、对齐持平(48.29%);商品流水线 4 vs 9 条断言、覆盖率 0.73 vs 0.49、对齐 66.46% vs 54.35%——人工介入标准选择让断言更少且更贴用户所想;EvalGen 每条流水线仅用 16 条人工打分。</li>
-<li><strong>标准漂移(criteria drift)</strong>:论文最著名的发现——打分需要标准,打分又塑造标准;标准依赖所见的具体 LLM 输出,不可能先验完全敲定,且模型/提示/上游一变就可能再次漂移。</li>
-<li><strong>用户研究(9 位从业者,NER 任务)</strong>:对「断言与我的打分对齐」的 7 分制评分两极分化(1–6 分);先打分再定标准者事后被认为做法正确;看代码断言想直接核代码,LLM 断言则更难信任、对能否用于生产普遍怀疑。</li>
-<li><strong>打分采样的启示</strong>:随机采样导致对齐度方差巨大;按断言选择率加权的非随机采样(如好坏交替)稳定更优——「该让用户标哪些样本」本身就是个主动学习问题。</li>
-<li><strong>对评测方法论的挑战</strong>:对 AutoCalibrate 等「标准预先敲定+专家标签」的校准范式的适用性提出质疑;「对齐」可能永远是进行中的工作,不存在一组只需获取的地面真值标签。</li>
-<li><strong>工程启示</strong>:代码断言适合格式/计数/短语检查、可部署于关键路径;LLM 断言适合模糊质量判断但需持续维护;可设想 PR 评审 + CI/CD 式的断言协作与上线流程。</li>
-<li><strong>课程关联</strong>:与第 7 周评测单元的 LLM-as-a-Judge、tinyBenchmarks 及数据选择单元的 LIMA 互补——三者分别触及「谁当裁判」「评多少才够」「用什么数据教模型」,本文补充了「评估标准本身如何随观察演化」这一维度。</li>
-</ul>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Large Language Models (LLMs) make mistakes—they hallucinate, ignore instructions, and generate outputs that require validation [25]. But validating the behavior of LLMs is challenging. In response, researchers and industry developers have created tools for prompt engineering and auditing that help people with testing outputs more systematically [1, 16, 23, 24, 27, 36, 41, 52]. Such approaches require metrics—a set of functions to automatically score LLM outputs, each typically an assertion with true or false values. These metrics increasingly include calls to “evaluator” LLMs (e.g., [1, 27, 52, 58]) that act as “judges,” grading outputs on qualities hard to articulate in code; for instance, the “conciseness” of an output.</p></div><p>大语言模型(LLM)会犯错——它们产生幻觉、无视指令,并生成需要验证的输出 [25]。但验证 LLM 的行为本身就很困难。作为回应,研究者与工业界开发者打造了提示工程(prompt engineering)与审计(auditing)工具,帮助人们更系统地测试输出 [1, 16, 23, 24, 27, 36, 41, 52]。这类方法需要指标(metric)——一组为 LLM 输出自动打分的函数,每项通常是一个取真/假二值的断言(assertion)。这些指标越来越多地包含对「评估器 LLM(evaluator LLM)」的调用(如 [1, 27, 52, 58]),后者充当「裁判」,为难以用代码表述的质量(例如输出的「简洁性」)打分。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>The problem is that, just like the LLMs they evaluate, LLMs that perform evaluations cannot be trusted. These “grader” prompts suffer from the same problems as any other prompt—they are un intuitively sensitive to seemingly minor changes in wording or structure [43]. Yet many existing systems do not include support for verifying the quality of LLM-generated evaluations, asking users to simply trust these outputs. How can users reap the efficiency benefits of LLM-assisted evaluation of LLM outputs, while minimizing or avoiding misalignment? How can we help users validate the validators?</p></div><p>问题在于,正如被它们评估的 LLM 一样,执行评估的 LLM 同样不可信。这些「评分提示(grader prompt)」与任何其他提示一样问题缠身——它们对措辞或结构上看似微小的变化有着反直觉的敏感性 [43]。然而,许多现有系统并不包含验证 LLM 生成评估质量的支持,而是要求用户单纯相信这些输出。用户如何才能在收获 LLM 辅助评估 LLM 输出之效率红利的同时,最小化或避免错位(misalignment)?我们如何帮助用户验证验证者?</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>In this paper, we propose a mixed-initiative approach, EvalGen, to address this automated-evaluation alignment problem in the context of prompt engineering. Our approach streamlines the selection of metrics under practical constraints of user effort and latency. Specifically, an LLM suggests criteria in natural language, based on user context (e.g., the prompt under test), that the user can modify. An LLM then generates a pool of candidate assertions for each criterion—either code or LLM grader prompts that output “true” or “false.” While the user waits for the LLM to generate candidates, they are asked to grade outputs with a simple “good” (thumbs-up) or “bad” (thumbs-down) voting scheme. These grades then guide the automatic selection of assertions that optimize for alignment with user preferences (Section 4.2). After assertion selection, a final report card reveals the alignment between the chosen assertions and the user’s grades. Our approach generalizes beyond the particulars of our specific design, and could be extended to, for instance, update metric implementations with feedback from human preferences, or query the user for finer-grained individual grades.</p></div><p>本文提出一种混合主动方法 EvalGen,在提示工程的语境下解决这一自动评估对齐问题。我们的方法在用户工作量与延迟的实际约束下简化了指标的选择。具体而言,一个 LLM 基于用户上下文(如被测提示)用自然语言建议标准(criteria),用户可以修改;随后 LLM 为每条标准生成一个候选断言池——要么是代码,要么是输出「真」或「假」的 LLM 评分提示。在用户等待 LLM 生成候选期间,系统请他们用简单的「好」(点赞)/「坏」(点踩)投票方案给输出打分。这些打分随后指导断言的自动选择,以优化与用户偏好的对齐(第 4.2 节)。断言选定后,最终的成绩单(report card)揭示所选断言与用户打分之间的对齐情况。我们的方法可推广到这一具体设计之外,例如可扩展为:用人类偏好反馈更新指标实现,或向用户查询更细粒度的单项打分。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>EvalGen is embedded inside an existing open-source interface for prompt engineering and auditing, ChainForge [1]. Our alignment algorithm adapts SPADE [45], a fully-automated algorithm for generating Python assertions from the revision history of a prompt. We performed an off-line verification of our human-guided alignment algorithm with SPADE as a baseline [45], then ran a qualitative user study with nine (9) industry practitioners that use LLMs in production contexts. Because our participants were industry practitioners and thus possibly dealing with NDA-protected data, we offered a task adapted from a real LLM pipeline prompt. Our study design did not impose restrictions on how participants used EvalGen, and users could choose whether to ask the tool to suggest criteria, enter criteria manually, or grade a few LLM outputs first before proceeding onto the criteria specification screen.</p></div><p>EvalGen 内嵌于一个现有的开源提示工程与审计界面 ChainForge [1] 之中。我们的对齐算法改编自 SPADE [45]——一个从提示修订历史全自动生成 Python 断言的算法。我们先以 SPADE 为基线,对我们的人类引导对齐算法做了离线验证 [45];随后与九(9)位在生产环境中使用 LLM 的产业从业者开展了一项定性用户研究。由于参与者是产业从业者、可能接触受 NDA 保护的数据,我们提供了一个改编自真实 LLM 流水线提示的任务。研究设计不限制参与者如何使用 EvalGen,用户可自行选择:让工具建议标准、手动输入标准、还是先给若干 LLM 输出打分再进入标准指定界面。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Our findings find overall support for EvalGen, with one important caveat. We observed a “catch-22” situation: to grade outputs, people need to externalize and define their evaluation criteria; however, the process of grading outputs helps them to define that very criteria. We dub this phenomenon criteria drift, and it implies that it is impossible to completely determine evaluation criteria prior to human judging of LLM outputs. Even when participants graded first, we observed that they still refined their criteria upon further grading, even going back to change previous grades. Thus, our findings suggest that users need evaluation assistants to support rapid iteration over criteria and implementations simultaneously. Since criteria are dependent upon LLM outputs (and not independent from them), this raises questions about how to contend with criteria drift in the context of other “drifts”—e.g., model drift [4], prompt edits, or upstream changes in a chain. Our findings also (i) underscore the necessity of mixed-initiative approaches to the alignment of LLM-assisted evaluations that also embrace messiness and iteration, and (ii) raise broader questions about what “alignment with user preferences” means for evaluation assistants.</p></div><p>我们的发现总体上支持 EvalGen,但有一个重要警示。我们观察到一个「catch-22(第二十二条军规式的两难)」局面:要给输出打分,人们需要先外化并定义其评估标准;然而,给输出打分的过程恰恰帮助他们定义这套标准。我们将这一现象命名为标准漂移(criteria drift),它意味着:在人类评判 LLM 输出之前完全确定评估标准是不可能的。即使是先打分的参与者,我们仍观察到他们会在继续打分时精炼标准,甚至回头修改此前的打分。因此,我们的发现表明,用户需要评估助手同时支持对标准与实现的快速迭代。既然标准依赖于 LLM 输出(而非独立于它们),这就引出了一个问题:如何在其他各种「漂移」——如模型漂移(model drift)[4]、提示改动或链路上游变化——的背景下应对标准漂移。我们的发现还 (i) 强调了采用混合主动方法来对齐 LLM 辅助评估的必要性——这类方法须同时拥抱混乱与迭代;并 (ii) 提出了更宏观的问题:对评估助手而言,「与用户偏好对齐」究竟意味着什么。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>We first position our work (Section 2) and present EvalGen’s design (Sec. 3) and implementation details (Sec. 4). We then present two evaluations: an off-line evaluation of our approach (Sec. 5), and a qualitative study with developers (Sec. 6 &amp; 7). Finally, we suggest implications for future work (Sec. 8).</p></div><p>我们首先定位我们的工作(第 2 节),然后呈现 EvalGen 的设计(第 3 节)与实现细节(第 4 节)。接着我们呈现两项评估:对我们方法的离线评估(第 5 节),以及与开发者的定性研究(第 6、7 节)。最后,我们给出对未来工作的启示(第 8 节)。</p></div>
+<!-- 待续 -->
       </div>
     </article>
     <nav class="pager"><a class="pager-prev" href="Tan2024_LLMs_for_Data_Annotation_Survey_EMNLP2024.html"><span>上一篇</span>&quot;用于数据标注与合成的 LLM:综述&quot;</a><a class="pager-next" href="Yang2025_SWE-smith_NeurIPSD&B2025.html"><span>下一篇</span>&quot;SWE-smith:为软件工程 Agent 扩展数据规模&quot;</a></nav>
