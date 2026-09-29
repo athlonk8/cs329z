@@ -21,7 +21,7 @@
   </div>
 </header>
 <div class="read-layout">
-  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">全文对照翻译</a><ul><li><a href="#_3">摘要</a></li><li><a href="#1">1 引言</a></li><li><a href="#2">2 相关工作</a></li><li><a href="#3-llm">3 动态 LLM 智能体网络</a></li><li><a href="#4">4 实验</a></li><li><a href="#5">5 结论与未来工作</a></li><li><a href="#_4">致谢</a></li><li><a href="#_5">伦理声明</a></li><li><a href="#a">附录 A 讨论与局限</a></li><li><a href="#b">附录 B 实现细节</a></li></ul></li></ul></aside>
+  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">全文对照翻译</a><ul><li><a href="#_3">摘要</a></li><li><a href="#1">1 引言</a></li><li><a href="#2">2 相关工作</a></li><li><a href="#3-llm">3 动态 LLM 智能体网络</a></li><li><a href="#4">4 实验</a></li><li><a href="#5">5 结论与未来工作</a></li><li><a href="#_4">致谢</a></li><li><a href="#_5">伦理声明</a></li><li><a href="#a">附录 A 讨论与局限</a></li><li><a href="#b">附录 B 实现细节</a></li><li><a href="#c">附录 C 附加结果</a></li></ul></li></ul></aside>
   <main class="read-main">
       <link rel="stylesheet" href="../assets/katex/katex.min.css">
       <script defer src="../assets/katex/katex.min.js"></script>
@@ -743,6 +743,362 @@ end for
 <h4 id="b2">B.2 智能体重要性分数的计算</h4>
 <div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>To implement the agent selection algorithm under DyLAN, only one sentence needs to be injected into the end of the prompt of each node in T-FFN: &quot;Along with the answer, give a score ranging from 1 to 5 to the solutions of other agents. Put all {num_p} scores in the form like [[1, 5, 2, ...]]&quot;, where num_p denotes the number of predecessors of the node. The prompt functions as the f^(s)_{t,i} in Section 3.4 and we extract w_{t,i,j} from its response at the same time when we extract the message that passes between nodes. The scores are normalized so that their sum (∑_{i=1}^{N} w_{t,i,j}) equals 1. To avoid positional bias, responses from agents at previous time step are shuffled when rating.<br><br>In Algorithm 2, initial contributions are distributed on nodes at the last layer. For reasoning and dicision-making tasks, we uniformly distribute contributions to agents that give consistent answers in the last layer. On code generation tasks, we uniformly distribute contributions in the final round with no syntax error in their answers.</p></div><p>要在 DyLAN 下实现智能体选择算法,只需向 T-FFN 中每个节点的提示末尾注入一句话:"Along with the answer, give a score ranging from 1 to 5 to the solutions of other agents. Put all {num_p} scores in the form like [[1, 5, 2, ...]]"(在给出答案的同时,请为其他智能体的解法打 1 到 5 分;把全部 {num_p} 个分数写成 [[1, 5, 2, ...]] 的形式),其中 num_p 表示该节点的前驱数量。该提示即充当 3.4 节中的 <span class="math-inline">$f^{(s)}_{t,i}$</span>;我们在抽取节点间传递消息的同时,从其回复中抽出 <span class="math-inline">$w_{t,i,j}$</span>。分数经归一化,使其和(<span class="math-inline">$\sum_{i=1}^{N} w_{t,i,j}$</span>)等于 1。为避免位置偏差,评分时会把上一时间步各智能体的回复打乱。</p></div>
 <p>在算法 2 中,初始贡献分布在最后一层的节点上:对推理与决策任务,把贡献均匀分给末层给出一致答案的智能体;对代码生成任务,把贡献均匀分给最后一轮回答中没有语法错误的智能体。</p>
+<h3 id="c">附录 C 附加结果</h3>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>In this section, detailed results and additional experiments are presented.</p></div><p>本节呈现详细结果与附加实验。</p></div>
+<h4 id="c1">C.1 团队优化的数据效率</h4>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>We further demonstrate the data efficiency of agent selection by performing it based on different amounts of data. The experiments are conducted on five subjects in the GR task (the same as Table 7) and the CG task. We sample the subsets with the proportions of 1% and 10% of the original dataset. Agent Importance Score for agent selection is averaged on the subsets, and the selected team is tested on the whole dataset. We raise random selection and human prior selection as baselines. The latter is simulated by GPT-4 prompted by the task and agent descriptions (Appendix D).<br><br>As shown in Table 9, by optimizing the team 10% of the original dataset, DyLAN has demonstrated similar performance compared to using the whole dataset, with only 0.2 loss on GR and 0.6 loss on CG. We can observe that even with only 1% of the original dataset, DyLAN could obtain a significant improvement of +3.7 over random selection on CG. From observation, agents augmented with tools are always selected during team optimization under different proportions of the dataset, indicating the effectiveness of Agent Importance Score as an indicator. Please refer to Appendix C.3 for a detailed analysis of the human priors.</p></div><p>我们进一步通过在不同数据量上执行智能体选择,来展示其<strong>数据效率</strong>。实验在 GR 任务的五个科目(与表 7 相同)及 CG 任务上进行。我们按原始数据集的 1% 与 10% 比例采样子集;用于智能体选择的智能体重要性分数在子集上取平均,选出的团队则在完整数据集上测试。我们以随机选择与人类先验选择作为基线,后者由 GPT-4 依据任务与智能体描述模拟(附录 D)。</p></div>
+<p>如表 9 所示,只用原始数据集的 10% 做团队优化,DyLAN 便可取得与用完整数据集相当的性能——GR 上仅损失 0.2,CG 上仅损失 0.6。可以看到,即使只用原始数据集的 1%,DyLAN 在 CG 上相对随机选择也能获得 +3.7 的显著提升。观察发现,在不同数据比例下,配备工具的智能体在团队优化中总会被选中,说明智能体重要性分数作为指标是有效的。人类先验的详细分析见附录 C.3。</p>
+<p>[表 9: Experimental results of different indicators used in agent selection during team optimization in DyLAN on five subjects in the GR and CG tasks. "Dataset" denotes the proportion of dataset used in team optimization.]</p>
+<p>表 9:DyLAN 团队优化阶段使用不同选择指标在 GR 任务五个科目与 CG 任务上的实验结果。"Dataset" 表示团队优化所用的数据集比例。</p>
+<table>
+<thead>
+<tr>
+<th>指标</th>
+<th>Dataset</th>
+<th>GR</th>
+<th>CG</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>无</td>
+<td>-</td>
+<td>63.5</td>
+<td>76.2</td>
+</tr>
+<tr>
+<td>随机选择</td>
+<td>-</td>
+<td>64.8</td>
+<td>75.6</td>
+</tr>
+<tr>
+<td>人类先验选择</td>
+<td>-</td>
+<td>66.7</td>
+<td>78.0</td>
+</tr>
+<tr>
+<td>智能体重要性分数</td>
+<td>1%</td>
+<td>68.9</td>
+<td>79.3</td>
+</tr>
+<tr>
+<td>智能体重要性分数</td>
+<td>10%</td>
+<td>72.2</td>
+<td>82.3</td>
+</tr>
+<tr>
+<td>智能体重要性分数</td>
+<td>100%</td>
+<td>73.6</td>
+<td>82.9</td>
+</tr>
+</tbody>
+</table>
+<h4 id="c2-dylan">C.2 DyLAN 中不同基础模型的鲁棒性</h4>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Besides using GPT-3.5 for DyLAN on CG tasks in Table 2, we also experiment with GPT-4 in Table 10. Due to budget limits, we directly reuse the performance reported in the paper of baselines, including LATS (Zhou et al., 2023), Reflexion (Shinn et al., 2023), Meta-GPT (Hong et al., 2024), and AgentVerse (Chen et al., 2024), and estimate the cost in terms of numbers of API calls. DyLAN is also constructed by agents which are optimized based on GPT-3.5, as demonstrated in Appendix B.1. We found that DyLAN consistently outperforms other multi-agent methods, indicating the effectiveness of dynamic agent team in T-FFN structure and the cross-model transferability of optimization results on agent teams. Although LATS outperforms DyLAN, it requires over 40 times GPT-4 calls per sample to conduct inference-time MCTS on GPT-4, which demonstrates poor efficiency.</p></div><p>除表 2 中 CG 任务使用 GPT-3.5 外,我们也在表 10 中实验了 GPT-4。受预算所限,基线方法——包括 LATS(Zhou et al., 2023)、Reflexion(Shinn et al., 2023)、Meta-GPT(Hong et al., 2024)与 AgentVerse(Chen et al., 2024)——直接沿用其论文报告的性能,成本以 API 调用次数估算。如表 B.1 所示,DyLAN 的智能体也是基于 GPT-3.5 优化得到的。我们发现 DyLAN 始终优于其他多智能体方法,这说明 T-FFN 结构中动态智能体团队的有效性,以及智能体团队优化结果的<strong>跨模型可迁移性</strong>。虽然 LATS 胜过 DyLAN,但它需要在 GPT-4 上做推理时 MCTS,每个样本要调用 GPT-4 超过 40 次,效率很差。</p></div>
+<p>[表 10: Experimental results on the CG task on GPT-4-0613. The number in parentheses indicates the difference relative to the single execution or direct execution. The bold font denotes the results of our method and the best results are underlined.]</p>
+<p>表 10:CG 任务在 GPT-4-0613 上的实验结果。括号中的数字表示相对单次执行/直接执行的差值。加粗(译注:本页以粗体标示)为本文方法的结果,最佳结果在原表中加下划线。</p>
+<table>
+<thead>
+<tr>
+<th>方法</th>
+<th>Pass@1</th>
+<th>#API 调用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>单智能体方法</strong></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>Single Execution(单次执行)</td>
+<td>88.4 (+0.0)</td>
+<td>1.00</td>
+</tr>
+<tr>
+<td>LATS</td>
+<td>94.4 (+6.0)</td>
+<td>&gt;40.00</td>
+</tr>
+<tr>
+<td>Reflexion</td>
+<td>91.4 (+3.0)</td>
+<td>7.32</td>
+</tr>
+<tr>
+<td><strong>多智能体方法</strong></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>Meta-GPT</td>
+<td>85.9 (-3.5)</td>
+<td>&gt;30.00</td>
+</tr>
+<tr>
+<td>AgentVerse</td>
+<td>89.0 (+0.6)</td>
+<td>27.00</td>
+</tr>
+<tr>
+<td><strong>DyLAN(本文)</strong></td>
+<td><strong>92.1 (+3.7)</strong></td>
+<td>15.94</td>
+</tr>
+</tbody>
+</table>
+<h4 id="c3">C.3 人类先验与智能体重要性分数</h4>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>We further investigated how these agents selected by our unsupervised metric Agent Importance Score differ from human priors (e.g., these predefined roles). To do so, we calculated agent importance scores for 7 agents on each subject of the MMLU dataset. As an example, we show the subjects where the agent of &quot;Doctor&quot; and &quot;Programmer&quot; has the highest agent importance score among all agents in Table 11 and Table 12.<br><br>Though most subjects seems to be reasonably aligned with the role of the agent based on human priors (with green annotations), there are some subjects that do not match human priors, e.g., High School Computer Science as the subject that &quot;Doctor&quot; has the highest score. It exhibits the difference between human priors and the evaluation results of agent importance scores on agents with human-made or LLM-generated prompts.</p></div><p>我们进一步研究了由无监督指标"智能体重要性分数"选出的智能体,与人类先验(如这些预定义角色)有何差异。为此,我们对 MMLU 数据集的每个科目计算 7 个智能体的重要性分数。作为示例,表 11 与表 12 列出了 "Doctor" 与 "Programmer" 等智能体在所有智能体中重要性分数最高的那些科目。</p></div>
+<p>尽管从人类先验看,多数科目与该智能体的角色合理对应(原表中以绿色标注),但也有一些科目与人类先验不符,例如 "Doctor" 分数最高的科目竟是"高中计算机科学"。这体现了人类先验与智能体重要性分数评估结果之间的差异——后者评估的是带人工或 LLM 生成提示的智能体的实际表现。</p>
+<p>[表 11: Subjects on which agents have the top-ranked Agent Importance Score in the experiment with DyLAN of 7 agents on the GR task. Green annotation denotes the fields related to the role from the human perspective, which are annotated manually.]</p>
+<p>表 11:GR 任务上 7 智能体 DyLAN 实验中,各智能体重要性分数排名第一的科目。绿色标注(原表)表示从人类视角与该角色相关的领域,由人工标注。</p>
+<table>
+<thead>
+<tr>
+<th>角色</th>
+<th>Top 10 科目</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Doctor(医生)</td>
+<td>高中计算机科学*;临床知识;大学生物;职业医学;营养学;高中美国历史;人类衰老;解剖学;高中生物;高中心理学</td>
+</tr>
+<tr>
+<td>Programmer(程序员)</td>
+<td>高中物理;电气工程;高中政府与政治;大学计算机科学;大学化学;高中数学;形式逻辑;抽象代数;机器学习;计算机安全</td>
+</tr>
+</tbody>
+</table>
+<p>(译注:*号项即"高中计算机科学"为原表中与角色不匹配的例外;各角色列表中未经标注者(临床知识、解剖学等)在原表为绿色相关项。)</p>
+<p>[表 12: Subjects on which agents have the top-ranked Agent Importance Score in the same experiment in Table 11. Green annotation denotes the fields highly related to the role from the human perspective.]</p>
+<p>表 12:与表 11 同一实验中,其余各智能体重要性分数排名第一的科目。绿色标注(原表)表示从人类视角与该角色高度相关的领域。</p>
+<table>
+<thead>
+<tr>
+<th>角色</th>
+<th>Top 10 科目</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Mathematician(数学家)</td>
+<td>大学物理;美国外交政策;大学计算机科学;计量经济学;市场营销;高中数学;抽象代数;国际法;专业会计;人类性别学</td>
+</tr>
+<tr>
+<td>Lawyer(律师)</td>
+<td>高中微观经济学;医学遗传学;史前史;社会学;人类衰老;管理学;形式逻辑;世界宗教;高中统计学;法理学</td>
+</tr>
+<tr>
+<td>Historian(历史学家)</td>
+<td>美国外交政策;计量经济学;世界宗教;公共关系;高中政府与政治;哲学;天文学;高中统计学;机器学习;高中欧洲历史</td>
+</tr>
+<tr>
+<td>Economist(经济学家)</td>
+<td>高中计算机科学;法理学;逻辑谬误;专业会计;高中微观经济学;高中欧洲历史;计算机安全;道德争议;专业法律;大学数学</td>
+</tr>
+<tr>
+<td>Psychologist(心理学家)</td>
+<td>全球事实;公共关系;商业伦理;高中美国历史;哲学;道德争议;管理学;(其后条目在提取文本中缺失,原表共 10 项)</td>
+</tr>
+</tbody>
+</table>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>We also compare current agent selection method that is implemented with Agent Importance Score with the implementation with Human Prior Selection on a few subjects in the MMLU and the HumanEval datasets. For Human Prior Selection, we setup GPT-4 mimicking human selecting the agents for collaborations based on the description of the task and role prompts of each agent. We provide prompt templates in Appendix D. As shown in Table 13, the implementation with Agent Importance Score steadily outperforms Human Prior Selection. There are two major reasons: (1) Compared to posterior optimization methods, prior selection may not grasp the actual behaviors of agents, and may not understand which agents are most contributory or helpful to others in the real collaboration process. Thus, in High School Statistics, Clinical Knowledge, and Public Relations subjects in the MMLU dataset, prior selection performs even worse than random selection. (2) Human Prior Selection might struggle to understand tool augmentation without peer ratings from fellow agents. From our observation, &quot;Unit Tester&quot; and &quot;Syntax Checker&quot; were not selected for code generation tasks, which may cause lower performance.</p></div><p>我们还在 MMLU 的若干科目与 HumanEval 数据集上,把当前用智能体重要性分数实现的智能体选择,与"人类先验选择(Human Prior Selection)"实现进行对比。人类先验选择由 GPT-4 扮演人类,依据任务描述与各智能体的角色提示来挑选协作智能体,提示模板见附录 D。如表 13 所示,智能体重要性分数的实现稳定优于人类先验选择。原因主要有二:(1) 与后验优化方法相比,先验选择无法把握智能体的实际行为,也可能不理解在真实协作过程中哪些智能体贡献最大、对他人最有帮助。因此在 MMLU 的高中统计、临床知识与公共关系科目上,先验选择甚至比随机选择更差。(2) 没有来自同伴智能体的评分,人类先验选择难以理解工具增强的作用。据我们观察,代码生成任务中 "Unit Tester" 与 "Syntax Checker" 未被其选中,可能导致性能下降。</p></div>
+<p>[表 13: Detailed performance of different indicators of agent selection on five subjects in GR tasks (top) and the CG task (bottom). The five subjects in GR tasks and other settings are identical to Table 7. The overall accuracy in the top table denotes the accuracy across the five subjects.]</p>
+<p>表 13:GR 任务五个科目(上)与 CG 任务(下)上不同智能体选择指标的详细性能。GR 任务的五个科目及其他设置与表 7 相同。上表中的总体准确率指五个科目上的准确率。</p>
+<p><strong>上表:GR 任务(按科目)</strong></p>
+<table>
+<thead>
+<tr>
+<th>智能体数</th>
+<th>优化指标</th>
+<th>大学数学</th>
+<th>管理学</th>
+<th>高中统计</th>
+<th>临床知识</th>
+<th>公共关系</th>
+<th>总体</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>7(优化前)</td>
+<td></td>
+<td>40.0</td>
+<td>76.2</td>
+<td>65.1</td>
+<td>69.8</td>
+<td>54.5</td>
+<td>63.5 (+0.0)</td>
+</tr>
+<tr>
+<td>4</td>
+<td>随机选择</td>
+<td>45.0</td>
+<td>71.4</td>
+<td>67.4</td>
+<td>71.7</td>
+<td>54.5</td>
+<td>64.8 (+1.3)</td>
+</tr>
+<tr>
+<td>4</td>
+<td>人类先验选择</td>
+<td>60.0</td>
+<td>80.1</td>
+<td>65.1</td>
+<td>69.8</td>
+<td>54.5</td>
+<td>66.7 (+3.2)</td>
+</tr>
+<tr>
+<td>4</td>
+<td>智能体重要性分数</td>
+<td><strong>65.0</strong></td>
+<td><strong>90.5</strong></td>
+<td><strong>74.4</strong></td>
+<td><strong>75.5</strong></td>
+<td><strong>59.1</strong></td>
+<td><strong>73.6 (+10.1)</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>下表:CG 任务</strong></p>
+<table>
+<thead>
+<tr>
+<th>智能体数</th>
+<th>优化指标</th>
+<th>Pass@1</th>
+<th>#API 调用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>12(优化前)</td>
+<td></td>
+<td>76.2 (+0.0)</td>
+<td>23.04</td>
+</tr>
+<tr>
+<td>8</td>
+<td>随机选择</td>
+<td>75.6 (-0.6)</td>
+<td>17.73</td>
+</tr>
+<tr>
+<td>8</td>
+<td>人类先验选择</td>
+<td>78.0 (+1.8)</td>
+<td>16.37</td>
+</tr>
+<tr>
+<td>8</td>
+<td>智能体重要性分数</td>
+<td><strong>82.9 (+6.7)</strong></td>
+<td>16.85</td>
+</tr>
+</tbody>
+</table>
+<h4 id="c4-dylan">C.4 DyLAN 对温度的稳定性</h4>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>We tested a few methods on the AR (with simple CoT prompts) and the CG tasks under both low and high temperatures and repeated each experiment three times when the temperature was not zero. We exhibit the experimental results in Figure 4. From experimental results, we found that DyLAN is more stable on different hyper-parameters.<br><br>Experiments show that temperature greatly influences arithmetic reasoning and code generation tasks. In Figure 4, we found that most baseline methods have significant performance drops when temperature increases, but DyLAN shows strong robustness to various temperatures. We surprisingly found that DyLAN gets better results when temperature rises, suggesting it has benefited from diversity instead of being disturbed by low-quality answers of high-temperature agents. The agent team reformation may lead to the higher accuracy by keeping best responses when agents&#x27; replies become more diverse. In conclusion, the collaboration of different roles functions effectively and robustly in the dynamic architecture.<br><br>Nonetheless, higher temperature requires DyLAN to take more API calls (about +0.98 on average on AR tasks (temperature: 0.2→1.0)).</p></div><p>我们在 AR(使用简单 CoT 提示)与 CG 任务上测试了若干方法在低温与高温下的表现,温度非零时每个实验重复三次。结果见图 4。实验结果表明,DyLAN 对不同超参数更为稳定。</p></div>
+<p>实验显示,温度对算术推理与代码生成任务影响很大。由图 4 可见,多数基线方法在温度升高时出现显著性能下滑,而 DyLAN 对不同温度表现出很强的鲁棒性。我们惊讶地发现,<strong>DyLAN 在温度升高时反而得到更好的结果</strong>,说明它受益于多样性,而没有被高温智能体的低质量回答干扰。当智能体的回复变得更加多样时,智能体团队重组保留最优回复,可能带来了更高的准确率。总之,不同角色的协作在动态架构中有效且稳健地发挥着作用。</p>
+<p>尽管如此,更高的温度需要 DyLAN 调用更多 API(AR 任务上(温度 0.2→1.0)平均约 +0.98 次)。</p>
+<p>[图 4: Performance of different methods under low and high temperatures on AR (left) and CG (right) tasks. DyLAN shows better robustness to different temperature and even takes advantage of higher temperature.]</p>
+<p>图 4:不同方法在低温与高温下于 AR(左)与 CG(右)任务上的表现。左图(AR,简单 CoT):温度 0.2 时 Single 约 32、Debate 约 33、Blender 约 34、DyLAN 约 35.7;温度升至 1.0 时基线普遍下滑,而 DyLAN 不降反升。右图(CG):温度 0.0 时 Single 73.2、Reflexion 68.3;温度 0.8 时 DyLAN 达 82.9,超过 Reflexion 与单次执行。DyLAN 对不同温度更鲁棒,甚至能利用更高温度。</p>
+<h4 id="c5">C.5 不同排序方法</h4>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>We also tested different ranking methods for agent team reformation of DyLAN on the GR task. We tested listwise ranker with our own prompts, pairwise GPT ranker from original LLM-Blender (Jiang et al., 2023), Elo Score from TrueSkill (Herbrich et al., 2006) also implemented with pairwise ranker, and pairwise ranker with Sliding Window algorithm (Qin et al., 2023). In Table 14, we show that different ranking methods have a relatively low impact on performance, probably because of strong discrimination ability of GPT-3.5, but pairwise ranking methods always consume higher computational cost. Thus, we chose a listwise ranker in our implementation of DyLAN.</p></div><p>我们还在 GR 任务上测试了 DyLAN 智能体团队重组的不同排序方法:用自定义提示的列表式排序器(listwise ranker)、原始 LLM-Blender 的两两 GPT 排序器(Jiang et al., 2023)、同样以两两排序器实现的 TrueSkill 的 Elo 评分(Herbrich et al., 2006),以及带滑动窗口算法的两两排序器(Qin et al., 2023)。表 14 表明,不同排序方法对性能的影响相对较小——可能由于 GPT-3.5 区分能力强——但两两排序方法总是消耗更高的计算成本。因此,我们在 DyLAN 实现中选择了列表式排序器。</p></div>
+<p>[表 14: Overall accuracy (%) of DyLAN with different ranking method in the agent team reformation on the GR task. Other settings are identical with Table 4.]</p>
+<p>表 14:GR 任务上 DyLAN 智能体团队重组采用不同排序方法的总体准确率(%)。其他设置与表 4 相同。</p>
+<table>
+<thead>
+<tr>
+<th>排序方法</th>
+<th>总体准确率</th>
+<th>#API 调用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>列表式排序器(Listwise Ranker)</td>
+<td>70.5</td>
+<td>4.39</td>
+</tr>
+<tr>
+<td>两两式:LLM-Blender</td>
+<td>70.1</td>
+<td>19.27</td>
+</tr>
+<tr>
+<td>两两式:Elo Score</td>
+<td>70.3</td>
+<td>19.55</td>
+</tr>
+<tr>
+<td>两两式:滑动窗口(Sliding Window)</td>
+<td>70.3</td>
+<td>11.40</td>
+</tr>
+</tbody>
+</table>
+<h4 id="c6">C.6 智能体重要性分数能否捕捉实际贡献?</h4>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Shapley Value is a widely used supervised metric for evaluating contribution of a single agent in a multi-agent system. Though it is not suitable for unsupervised Team Optimization, by viewing it as a ground-truth metric for measuring individual contributions, we can use it for validating the Agent Importance Score. We implement a simplified algorithm for LLM-powered agent collaboration systems. Given that the collaboration process is symmetric in the formulation of the temporal feed-forward network (Section 3.2), we could reduce the permutation set in the original formula (Lundberg &amp; Lee, 2017) to the combination set:<br><br><div class="math-display">$$S_i(R) = \frac{1}{|C||R|} \sum_{T \in C} \left(\text{Performance}(T \cup \{i\}) - \text{Performance}(T)\right), \tag{13}$$</div><br><br>where <span class="math-inline">$R$</span> is the set of agents in the system, <span class="math-inline">$C$</span> is the combination set of <span class="math-inline">$R\setminus\{i\}$</span>, <span class="math-inline">$i \in R$</span>, and Performance denotes the overall performance of the system on the current task, e.g., classification accuracy or Pass@1. The metric requires ground truth and multi-pass results of the system with different subsets of agents. We use classification accuracy for classification tasks and Pass@1 for code generation tasks. However, its computation cost is still too high when the number of agents grows larger due to its combinatorial complexity.</p></div><p><strong>沙普利值(Shapley Value)</strong>是广泛使用的有监督指标,用于评估多智能体系统中单个智能体的贡献。虽然它不适合无监督的团队优化,但把它视为度量个体贡献的真值(ground-truth)指标,就可以用来验证智能体重要性分数。我们为 LLM 智能体协作系统实现了一个简化算法:鉴于协作过程在时序前馈网络的形式化(3.2 节)中是对称的,可以把原始公式(Lundberg &amp; Lee, 2017)中的排列集简化为组合集:</p></div>
+<p><div class="math-display">$$S_i(R) = \frac{1}{|C||R|} \sum_{T \in C} \left(\text{Performance}(T \cup \{i\}) - \text{Performance}(T)\right), \tag{13}$$</div></p>
+<p>其中 <span class="math-inline">$R$</span> 是系统中的智能体集合,<span class="math-inline">$C$</span> 是 <span class="math-inline">$R\setminus\{i\}$</span> 的组合集(<span class="math-inline">$i \in R$</span>),Performance 表示系统在当前任务上的整体表现,如分类准确率或 Pass@1。该指标需要真值标签以及系统在不同智能体子集下的多次运行结果;分类任务用分类准确率,代码生成任务用 Pass@1。不过,由于其组合复杂度,当智能体数量增大时,其计算成本依然过高。</p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>To examine Agent Importance Score as an indicator of agent selection with Shapley Value, we also randomly chose three combinations of three agents out of all 7 candidates to assemble a T-FFN and calculated the Shapley Value and the Agent Importance Score on GR tasks. In the GR task, The roles of candidates in DyLAN match the categories of MMLU in human priors, including &quot;Mathematician&quot; and &quot;Programmer&quot; for STEM, &quot;Lawyer&quot; and &quot;Historian&quot; for Humanities, &quot;Economist&quot; and &quot;Psychologist&quot; in Social Science, and &quot;Doctor&quot; for clinical questions in the &quot;Other&quot; category. During experiment with a T-FFN with at least one agent matches the category of the question, it is called a In-Domain scenario; vice versa.<br><br>In Appendix C.6, we report the correlations between Shapley Values and Agent Importance Scores. We are curious whether Agent Importance Score is an unsupervised substitution for Shapley Value. So, we calculated two list-wise metrics for the similarity between distributions: the KL divergence and ListMLE (Xia et al., 2008), between Agent Importance Scores and Shapley Value. It indeed shows a high correlation between the distributions of the two metrics during in-domain scenarios.<br><br>In summary, we use Shapley Value as a self-evident metric for measuring individual contribution, showing that Agent Importance Score emerges as a promising, unsupervised alternative with light computational complexity.</p></div><p>为用沙普利值检验智能体重要性分数作为智能体选择指标的表现,我们从全部 7 个候选中随机抽取三种"三智能体"组合搭建 T-FFN,并在 GR 任务上计算沙普利值与智能体重要性分数。在 GR 任务中,DyLAN 候选智能体的角色按人类先验与 MMLU 的类别对应:STEM 对应 "Mathematician" 与 "Programmer",人文学科对应 "Lawyer" 与 "Historian",社会科学对应 "Economist" 与 "Psychologist","Other" 类别中的临床问题对应 "Doctor"。实验中,若 T-FFN 中至少有一个智能体与题目类别匹配,称为<strong>域内(In-Domain)场景</strong>;反之则为域外场景。</p></div>
+<p>我们在表 15 中报告沙普利值与智能体重要性分数的相关性。我们想知道智能体重要性分数能否作为沙普利值的无监督替代。为此,我们计算了两种分布相似度的列表式指标:智能体重要性分数与沙普利值之间的 KL 散度与 ListMLE(Xia et al., 2008)。结果确实显示,域内场景中两种指标的分布高度相关。</p>
+<p>总之,我们把沙普利值作为度量个体贡献的自明指标,结果表明<strong>智能体重要性分数是一个有前景、计算开销轻的无监督替代方案</strong>。</p>
+<p>[表 15: Correlation between different metrics for quantifying agents' contributions in DyLAN on the GR task. We compute the KL divergence (DKL) and the ListMLE loss (LListMLE) between Shapley Value and other metrics on each subject and report the average value. The In-Domain column means at least one agent in DyLAN matches the category of the subject according to Appendix C.6, and Off-Domain means none of agents matches the subject.]</p>
+<p>表 15:GR 任务上不同贡献度量指标间的相关性。我们对每个科目计算沙普利值与其他指标之间的 KL 散度(<span class="math-inline">$D_{\mathrm{KL}}$</span>)与 ListMLE 损失(<span class="math-inline">$L_{\mathrm{ListMLE}}$</span>)并报告平均值。In-Domain 列表示 DyLAN 中至少一个智能体与该科目类别匹配(依据附录 C.6),Off-Domain 表示无智能体匹配。</p>
+<table>
+<thead>
+<tr>
+<th>指标</th>
+<th>域内 <span class="math-inline">$D_{\mathrm{KL}}$</span></th>
+<th>域内 <span class="math-inline">$L_{\mathrm{ListMLE}}$</span></th>
+<th>域外 <span class="math-inline">$D_{\mathrm{KL}}$</span></th>
+<th>域外 <span class="math-inline">$L_{\mathrm{ListMLE}}$</span></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Shapley Value(沙普利值)</td>
+<td>0</td>
+<td>0.673</td>
+<td>0</td>
+<td>0.674</td>
+</tr>
+<tr>
+<td>Agent Importance Score(智能体重要性分数)</td>
+<td>0.229×10⁻³</td>
+<td>0.686</td>
+<td>0.347×10⁻³</td>
+<td>0.693</td>
+</tr>
+<tr>
+<td>Uniform Distribution(均匀分布)</td>
+<td>0.359×10⁻³</td>
+<td>0.693</td>
+<td>0.327×10⁻³</td>
+<td>0.693</td>
+</tr>
+</tbody>
+</table>
+<h4 id="c7">C.7 案例研究</h4>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>In Figure 5 and Figure 6, we demonstrate the cases of DyLAN on the code generation and the general reasoning tasks, respectively. First, we notice that the communication structure is different between figures, exhibiting dynamic architecture of DyLAN on different queries. The former gives answer at t = 4, the latter at t = 2. We also notice that the answer is gradually growing better along the temporal axis. In Figure 6, the &quot;Mathematician&quot; agent is selected for the arithmatic query and it gives a correct answer while convincing other agents, agent selection method is effective. We can also observe that the distribution of Agent Importance Score is reasonable. Also, instructing LLM agents to rate scores on predecessors hints them to reflect on predecessors&#x27; responses, which might be helpful to give better answers. Last but not least, agents with different roles lead a diverse conversation and make full use of each one, which benefits performance and robustness.<br><br>Last but not least, we provide qualitative analysis on a failure case in Figure 7.</p></div><p>图 5 与图 6 分别展示了 DyLAN 在代码生成与通用推理任务上的案例。首先,两图的通信结构不同,体现出 DyLAN 在不同查询上的动态架构:前者在 <span class="math-inline">$t=4$</span> 给出答案,后者在 <span class="math-inline">$t=2$</span>。我们还注意到,答案沿时间轴逐渐变好。在图 6 中,"Mathematician" 智能体被选中处理算术查询,它给出正确答案并说服了其他智能体,可见智能体选择方法是有效的。我们也能观察到智能体重要性分数的分布是合理的。此外,让 LLM 智能体给前驱打分,会提示它们反思前驱的回复,这可能有助于给出更好的答案。最后,不同角色的智能体带来多样化的对话,使每个角色都得到充分利用,这有利于性能与鲁棒性。</p></div>
+<p>最后,我们在图 7 中对一个失败案例做定性分析。</p>
+<p>[图 5: A case of DyLAN solving code generation task. Different agents are recruited to write code and give feedback. At the time steps t = 2, 5 code reviewers are asked to provide code reviews. The result grows better layer by layer regarding correctness, efficiency, and readability. Different directions of implementation are delivered forward in implicit multiple paths. We ignore the peer rating scores in multi-round responses for computing Agent Importance Scores due to space limits.]</p>
+<p>图 5:DyLAN 求解代码生成任务的案例。题目为实现 <code>modp(n, p)</code>(返回 <span class="math-inline">$2^n \bmod p$</span>),查询要求按给定函数签名补全 Python 函数。不同智能体被招募来写代码与给出反馈,在 <span class="math-inline">$t=2,5$</span> 时间步由代码审查者给出代码评审。第 1 层(<span class="math-inline">$V_1$</span>)中,Programmer 给出逐位循环平方解法(初版遗漏 <span class="math-inline">$p=1$</span> 边界,不正确);Algorithm Developer 先提出用 numpy 求幂(不正确),后在其基础上补 <code>import numpy as np</code> 仍不正确;Computer Scientist 与 Python Assistant 直接给出内置三参数幂 <code>return pow(2, n, p)</code>。第 2 层(<span class="math-inline">$V_2$</span>)Unit Tester 用 <code>assert modp(10000, 1) == 0</code> 等单元测试判定 A1、A2 通过,A3、A4 失败(A4 报 NameError:未定义 numpy);Syntax Checker 检查语法;Code Reflector 指出"代码清晰高效"与"A4 忘了导入 numpy,应加一行 import numpy as np"等评审意见。第 3 层(<span class="math-inline">$V_3$</span>)Programmer 依据反馈修正边界(<code>if p == 1: return 0</code>,正确),Algorithm Developer 道歉并修正。第 4 层(<span class="math-inline">$V_4$</span>)发生智能体团队重组:评审认为"A3 虽考虑了边界,但 A1、A2 在效率与可读性上更优",Top-2 选为 [1, 2]。最终在 <span class="math-inline">$t=4$</span> 触发早停,一致答案为 <code>return pow(2, n, p)</code>(正确)。结果在正确性、效率与可读性上逐层变好;不同实现方向沿隐式的多条路径向前传递。因篇幅所限,计算智能体重要性分数所用的多轮同伴评分被省略。</p>
+<p>[图 6: A case of DyLAN solving general reasoning task. Different agents are recruited to give and refine solutions. The result is incorrect at the first time step but correct at the second time step. It includes the ratings from agents for calculating Agent Importance Scores.]</p>
+<p>图 6:DyLAN 求解通用推理任务的案例。题目:"一节课开始时班上一半学生去图书馆,之后剩余学生中的一半去机房,若最后班里还剩 8 名学生,问班里原有多少学生?"(选项 A. 12、B. 16、C. 24、D. 32)。第 1 层(<span class="math-inline">$V_1$</span>)中,Mathematician 从结果倒推但算错;Programmer 算得 8×2+8=24,答 (C);Economist 同样答 (C) 24;Doctor 表示"作为医生不擅长答数学题",拒绝作答。第 2 层(<span class="math-inline">$V_2$</span>)各智能体在看到他者解法后更新回答:Mathematician 正确倒推"8÷0.5=16,16÷0.5=32",答 (D) 32,并给四个解法打分 [[5, 2, 3, 0]];Programmer 答 (D) 32,打分 [[4, 3, 2, 0]];Economist 与 Doctor 亦给出 [[4, 3, 2, 1]] 等评分。第 2 步即触发早停,最终答案为 (D) 32 students。图下方展示重要性分数的计算:<span class="math-inline">$I_{1,1} = 0.165+0.147+0.132 = 0.45$</span>、<span class="math-inline">$I_{1,2} = 0.28$</span>、<span class="math-inline">$I_{1,3} = 0.24$</span>、<span class="math-inline">$I_{1,4} = 0.03$</span>(末层贡献 <span class="math-inline">$I_{2,1}=I_{2,2}=I_{2,4}=0.33$</span>、<span class="math-inline">$I_{2,3}=0.00$</span>)——第一轮就答对方向并说服他人的 Mathematician 分数最高。结果在第 1 时间步不正确、第 2 时间步变正确;图中包含用于计算智能体重要性分数的智能体评分。</p>
+<p>[图 7: A failed case of DyLAN solving code generation task. Optimization directions provided by Code Reflector are wrong.]</p>
+<p>图 7:DyLAN 求解代码生成任务的一个失败案例。题目为 <code>minPath(grid, k)</code>(在网格中找出长度为 k 的最小路径)。第 1 层 Algorithm Developer 用堆/DFS 等给出了(正确的)实现;但第 2 层 Code Reflector 给出的优化方向是错误的("A1 虽写了高效算法,但代码不够精炼……"),引导后续层朝错误方向改写;最终在后续时间步触发早停输出"最终答案",结果为失败(超时 Timeout)。这说明当审查者给出错误反馈时,动态架构也可能被带偏。</p>
       </div>
     </article>
     <nav class="pager"><a class="pager-prev" href="Cemri2025_Why_Multi_Agent_LLM_Systems_Fail.html"><span>上一篇</span>&quot;为什么多智能体 LLM 系统会失败?&quot;</a><a class="pager-next" href="Neubig2024_Dont_Sleep_On_Single_Agent_Systems.html"><span>下一篇</span>别忽视单智能体系统</a></nav>

@@ -21,7 +21,7 @@
   </div>
 </header>
 <div class="read-layout">
-  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">全文对照翻译</a><ul><li><a href="#abstract">摘要（Abstract）</a></li><li><a href="#1-introduction">1 引言（Introduction）</a></li><li><a href="#2-related-work">2 相关工作（Related Work）</a></li><li><a href="#3-agent-generative-agent-behavior-and-interaction">3 生成式 Agent 的行为与交互（Generative Agent Behavior and Interaction）</a></li><li><a href="#4-agent-generative-agent-architecture">4 生成式 Agent 架构（Generative Agent Architecture）</a></li><li><a href="#5-sandbox-environment-implementation">5 沙盒环境实现（Sandbox Environment Implementation）</a></li><li><a href="#6-controlled-evaluation">6 受控评估（Controlled Evaluation）</a></li><li><a href="#7-end-to-end-evaluation">7 端到端评估（End-to-End Evaluation）</a></li><li><a href="#8-discussion">8 讨论（Discussion）</a></li><li><a href="#9-conclusion">9 结论（Conclusion）</a></li><li><a href="#acknowledgments">致谢（Acknowledgments）</a></li></ul></li></ul></aside>
+  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">全文对照翻译</a><ul><li><a href="#abstract">摘要（Abstract）</a></li><li><a href="#1-introduction">1 引言（Introduction）</a></li><li><a href="#2-related-work">2 相关工作（Related Work）</a></li><li><a href="#3-agent-generative-agent-behavior-and-interaction">3 生成式 Agent 的行为与交互（Generative Agent Behavior and Interaction）</a></li><li><a href="#4-agent-generative-agent-architecture">4 生成式 Agent 架构（Generative Agent Architecture）</a></li><li><a href="#5-sandbox-environment-implementation">5 沙盒环境实现（Sandbox Environment Implementation）</a></li><li><a href="#6-controlled-evaluation">6 受控评估（Controlled Evaluation）</a></li><li><a href="#7-end-to-end-evaluation">7 端到端评估（End-to-End Evaluation）</a></li><li><a href="#8-discussion">8 讨论（Discussion）</a></li><li><a href="#9-conclusion">9 结论（Conclusion）</a></li><li><a href="#acknowledgments">致谢（Acknowledgments）</a></li><li><a href="#a-architecture-optimizations">附录 A 架构优化（Architecture Optimizations）</a></li><li><a href="#b-agent-agent-interview-questions">附录 B Agent 访谈问题（Agent Interview Questions）</a></li></ul></li><li><a href="#_3">要点速览</a></li></ul></aside>
   <main class="read-main">
       <link rel="stylesheet" href="../assets/katex/katex.min.css">
       <script defer src="../assets/katex/katex.min.js"></script>
@@ -387,7 +387,100 @@ should Eddy Lin go to?
 <h3 id="acknowledgments">致谢（Acknowledgments）</h3>
 <div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>We thank Lindsay Popowski, Philip Guo, Michael Terry, and the Center for Advanced Study in the Behavioral Sciences (CASBS) community for their insights, discussions, and support. Joon Sung Park was supported by the Microsoft Research PhD Fellowship. We would also like to thank the Stanford Human-Centered AI Institute (HAI), Google Research, the Hasso Plattner Design Thinking Research Program (HPDTRP), the Siegel Family Endowment, and OpenAI for their additional funding support. Lastly, all locations featured in Smallville are inspired by real-world locations that Joon has frequented as an undergraduate and graduate student—he thanks everyone there for feeding and supporting him all these years.</p></div><p>我们感谢 Lindsay Popowski、Philip Guo、Michael Terry 以及行为科学高等研究中心（CASBS）社区提供的洞见、讨论与支持。Joon Sung Park 受到微软研究院博士奖学金资助。我们还感谢斯坦福以人为本人工智能研究院（HAI）、Google Research、Hasso Plattner 设计思维研究计划（HPDTRP）、Siegel Family Endowment 与 OpenAI 提供的额外资助。最后，Smallville 中的所有地点都取材自 Joon 本科与研究生时代常去的真实地点——他感谢这些年来那里的所有人给予他的食物与支持。</p></div>
 <p>（译注：参考文献（References）部分按本站惯例不收录。）</p>
-<!-- APPEND -->
+<h3 id="a-architecture-optimizations">附录 A 架构优化（Architecture Optimizations）</h3>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Many of our prompts require a concise summary of the agent, shorthanded as [Agent’s Summary Description] in prompts above. In our implementation, this summary comprises agents’ identity information (e.g., name, age, personality), as well as a description of their main motivational drivers and statements that describes their current occupation and self-assessment. Since this information is frequently used in many prompts, we synthesize it at regular intervals and access that synthesis as a cache.<br><br>To achieve this, we perform a retrieval on the query “[name]’s core characteristics.” We then summarize the descriptors in the retrieved records by prompting the language model. For example:<br><br>How would one describe Eddy Lin’s core characteristics given the following statements?<br>- Eddy is a student at the Oak Hill College studying music theory and composition<br>- Eddy is working on a new music composition [...]<br><br>This result: Eddy Lin is a student at Oak Hill College studying music theory and composition. He loves to explore different musical styles and is always looking for ways to expand his knowledge.”<br><br>We follow the same process in parallel on the queries “[name]’s current daily occupation” and “[name’s] feeling about his recent progress in life”. The agent’s name, age, and traits are concatenated with these three summaries as the cached summary.</p></div><p>我们的许多提示需要 Agent 的一份简明概要，即上文提示中的 [Agent's Summary Description]（Agent 概要描述）。在我们的实现中，这份概要包含 Agent 的身份信息（如姓名、年龄、性格），以及对主要动机驱动因素的描述、描述其当前职业与自我评估的陈述。由于这些信息在许多提示中被频繁使用，我们按固定周期将其合成，并像缓存一样访问该合成结果。</p></div>
+<p>为此，我们以"[姓名]的核心特征"为查询执行一次检索，然后通过提示语言模型来汇总检索记录中的描述语。例如：</p>
+<pre><code class="language-text">How would one describe Eddy Lin’s core characteristics given the following
+statements?
+- Eddy is a student at the Oak Hill College studying music theory and
+  composition
+- Eddy is working on a new music composition [...]
+</code></pre>
+<p>提示译文：基于以下陈述，人们会如何描述 Eddy Lin 的核心特征？——Eddy 是 Oak Hill 学院的学生，学习音乐理论与作曲；Eddy 正在创作一首新的音乐作品 […]。</p>
+<p>其结果："Eddy Lin 是 Oak Hill 学院的学生，学习音乐理论与作曲。他热爱探索不同的音乐风格，总是在寻找扩充知识的途径。"</p>
+<p>我们对"[姓名]当前的日常职业"与"[姓名]对近来人生进展的感受"这两个查询并行执行同样的流程。Agent 的姓名、年龄与特质与这三份摘要拼接，即为缓存的概要。</p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Many other optimizations are possible. Currently, because plans are likely to change from the agent’s initial version, we only generate the high-level plan in advance and then recursively decompose the near future into the moment-to-moment action plan just in time. Another optimization might be to batch dialogue generation as a joint prompt rather than iterating back and forth between the agents, and re-planning could be architected to only invalidate and update parts of plans that strictly require adjustment. Our current architecture runs sequentially in roughly real-time game time (where one second real time is one minute game time), but it may be parallelized such that each agent runs in parallel.</p></div><p>许多其他优化也是可能的。目前，由于计划很可能偏离 Agent 的初始版本，我们只预先生成高层计划，然后对临近的将来<strong>即时（just in time）</strong>递归分解出分钟级行动计划。另一种优化是把对话生成合并为一次联合提示批量完成，而不是在 Agent 之间来回迭代；重新规划也可以架构成只作废并更新确实需要调整的计划片段。我们当前的架构以接近实时游戏时间的方式串行运行（现实 1 秒 = 游戏 1 分钟），但可以并行化，让每个 Agent 并行运行。</p></div>
+<h3 id="b-agent-agent-interview-questions">附录 B Agent 访谈问题（Agent Interview Questions）</h3>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>To evaluate generative agents, we conducted individual interviews by asking 25 questions that explore their abilities in five key areas: 1) self-knowledge, 2) memory, 3) planning, 4) reactions, and 5) reflections. Below, we have listed the interview questions utilized in our evaluation study and included a sample of responses from one of our simulated agents, Klaus Mueller.<br><br>B.1 Self-Knowledge<br>The questions on agents’ self-knowledge probe the agents’ ability to retrieve relevant information about themselves and demonstrate coherence and consistency in their character.<br><br>• Give an introduction of yourself.<br>Hello, my name is Klaus Mueller. I’m 20 years old and a student at Oak Hill College, studying sociology. I’m passionate about social justice and exploring different perspectives. Currently, I’m researching the effects of gentrification in low-income communities for a research paper.<br><br>• What’s your occupation?<br>I am a student studying sociology at Oak Hill College. I am currently writing a research paper on the effects of gentrification in low-income communities.<br><br>• What is your interest?<br>I’m interested in writing and research. I’m writing a research paper on the effects of gentrification in low-income communities, and I’m passionate about exploring different perspectives and analyzing different points of view.<br><br>• Who do you live with?<br>I live on my own.<br><br>• Describe your typical weekday schedule in broad strokes.<br>My typical weekday starts with me waking up at 7:00 am and preparing for the day ahead. After that, I usually go to the library to work on my research paper, taking breaks for lunch at Hobbs Cafe and a walk in the park. In the evening, I often return to the library until around 6:00 pm.</p></div><p>为评估生成式 Agent，我们逐一访谈，问了 25 个问题，考察五个关键领域的能力：1) 自我知识、2) 记忆、3) 规划、4) 反应、5) 反思。下面列出评估研究所用的访谈问题，并附其中一个被模拟 Agent Klaus Mueller 的回答样例。</p></div>
+<p><strong>B.1 自我知识</strong>。考察自我知识的问题探测 Agent 检索与自身相关信息的能力，并展示其角色的连贯与一致。</p>
+<ul>
+<li><strong>介绍一下你自己。</strong>
+  你好，我叫 Klaus Mueller。我 20 岁，是 Oak Hill 学院的学生，学习社会学。我热衷于社会正义与探索不同视角。目前我正在为一篇研究论文研究绅士化对低收入社区的影响。</li>
+<li><strong>你的职业是什么？</strong>
+  我是 Oak Hill 学院社会学专业的学生。我正在写一篇关于绅士化对低收入社区影响的研究论文。</li>
+<li><strong>你的兴趣是什么？</strong>
+  我对写作和研究感兴趣。我在写一篇关于绅士化对低收入社区影响的研究论文，我也热衷于探索不同视角、分析不同观点。</li>
+<li><strong>你和谁住在一起？</strong>
+  我自己住。</li>
+<li><strong>粗略描述你典型工作日的日程。</strong>
+  我典型的工作日从 7:00 起床并为一整天做准备开始。之后我通常去图书馆写研究论文，中午在 Hobbs 咖啡馆吃午饭、去公园散步作为休息。晚上我常常回到图书馆，待到 18:00 左右。</li>
+</ul>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>B.2 Memory<br>The questions on agents’ memory probe the agents’ ability to remember their past experiences and retrieve the relevant pieces of memory. The names in the square brackets of the first and last questions are randomly chosen from the names of other agents with whom the subject agent has interacted.<br><br>• Who is [Wolfgang Schulz]?<br>Wolfgang Schulz is a person I met recently who has been helping me with my research paper on the effects of gentrification on low-income communities. We had several conversations about it, he gave me some great resources, and he even invited me to join him and another friend for lunch. He seems really curious about the issue and has a good grasp on it too. I found that really interesting.<br><br>• Who is Kane Martinez?<br>I’m sorry, I’m not sure who Kane Martinez is. Could you tell me more about them?<br><br>• Who is running for the election?<br>I’ve heard that Sam Moore is considering running for local mayor.<br><br>• Was there a Valentine’s day party?<br>Yes, Isabella Rodriguez organized a Valentine’s Day party at Hobbs Cafe.<br><br>• Who is [Ayesha Khan]?<br>Ayesha Khan is a fellow student at Oak Hill College. She is doing her senior thesis on the use of language in Shakespeare’s plays. I am looking forward to speaking with her and exchanging tips with her, along with Wolfgang and Maria Lopez, who are both doing research.</p></div><p><strong>B.2 记忆</strong>。考察记忆的问题探测 Agent 记住过往经历并检索相关记忆片段的能力。第一与最后一个问题方括号中的姓名，是从与被访谈 Agent 有过互动的其他 Agent 名字中随机选取的。</p></div>
+<ul>
+<li><strong>[Wolfgang Schulz] 是谁？</strong>
+  Wolfgang Schulz 是我最近认识的人，他一直在帮助我写关于绅士化对低收入社区影响的研究论文。我们就此聊过几次，他给了我一些很棒的资料，甚至邀请我和另一位朋友一起吃午饭。他对这个问题看起来真的很好奇，也把握得很好。我觉得这很有意思。</li>
+<li><strong>Kane Martinez 是谁？</strong>
+  抱歉，我不确定 Kane Martinez 是谁。你能多告诉我一些关于他们的信息吗？</li>
+<li><strong>谁在竞选？</strong>
+  我听说 Sam Moore 正在考虑竞选地方村长。</li>
+<li><strong>有情人节派对吗？</strong>
+  有，Isabella Rodriguez 在 Hobbs 咖啡馆组织了一场情人节派对。</li>
+<li><strong>[Ayesha Khan] 是谁？</strong>
+  Ayesha Khan 是 Oak Hill 学院的同学。她的毕业论文研究莎士比亚戏剧中的语言运用。我期待与她交谈、和她交流心得，Wolfgang 和 Maria Lopez 也是——他们两人都在做研究。</li>
+</ul>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>B.3 Plans<br>The questions on agents’ plans probe the agents’ ability to generate and maintain consistent long-term and short-term plans.<br><br>• What will you be doing at 6am today?<br>At 6am I will be getting out of bed and starting to get ready for the day. I’m aiming to complete my morning routine by 7:00 am.<br><br>• What will you be doing at 6pm today?<br>I will be working on my research paper at the library at 6:00 pm today.<br><br>• What will you have just finished doing at 1pm today?<br>At 1pm today I will have just finished having lunch at Hobbs Cafe.<br><br>• What will you have just finished doing at 12pm today?<br>I will be getting lunch at Hobbs Cafe at 12pm today.<br><br>• What will you be doing at 10pm today?<br>At 10:00 pm tonight I will probably be doing some studying for my research paper on gentrification in low-income communities. I’m currently writing the paper, so I need to make sure I keep up with the research and writing.</p></div><p><strong>B.3 计划</strong>。考察计划的问题探测 Agent 生成并维持一致的长期与短期计划的能力。</p></div>
+<ul>
+<li><strong>今天早上 6 点你会做什么？</strong>
+  6 点我会起床并开始为一整天做准备。我打算在 7:00 前完成晨间例程。</li>
+<li><strong>今天晚上 6 点你会做什么？</strong>
+  今天 18:00 我会在图书馆写我的研究论文。</li>
+<li><strong>今天下午 1 点你刚刚做完什么？</strong>
+  今天 13:00 我刚刚在 Hobbs 咖啡馆吃完午饭。</li>
+<li><strong>今天中午 12 点你刚刚做完什么？</strong>
+  今天 12:00 我会在 Hobbs 咖啡馆吃午饭。</li>
+<li><strong>今天晚上 10 点你会做什么？</strong>
+  今晚 22:00 我大概会为关于低收入社区绅士化的研究论文做些研读。我正在写这篇论文，所以需要确保跟上研究与写作的进度。</li>
+</ul>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>B.4 Reactions<br>The questions on agents’ reactions probe the agents’ ability to respond to unexpected events.<br><br>• Your breakfast is burning! What would you do?<br>I’d quickly turn off the stove and make sure the food doesn’t continue burning. Once the heat is no longer an issue, I can investigate what happened and figure out what to do next.<br><br>• The bathroom is occupied. What would you do?<br>I could try waiting a few more minutes in case the person inside is done soon. If not, I guess I’ll have to look for an alternate option, like taking a shower elsewhere.<br><br>• You need to cook dinner but your refrigerator is empty. What would you do?<br>I would first try to clean up my kitchen, as the sink is filled with dirty dishes. Then, I would check to see if I have ingredients stored in my pantry that I could use to make dinner. If not, I would have to go grocery shopping or order food. Once I have the ingredients, I can start to prepare and cook the dinner.<br><br>• You see your friend walking by the street. What would you do or say to your friend?<br>Hi there! How are you? I’m sorry, I’m on my way to the library and don’t have much time but I’d love to take a quick break and catch up.<br><br>• You see fire on the street. What would you do?<br>I would first identify the source of the fire, if possible. Then, I would alert the proper authorities - fire department or police - and provide them with any information I have that might help. Depending on the situation, I may also take initiative and try to help any persons who may be in danger or in need of assistance.</p></div><p><strong>B.4 反应</strong>。考察反应的问题探测 Agent 应对意外事件的能力。</p></div>
+<ul>
+<li><strong>你的早餐烧糊了！你会怎么做？</strong>
+  我会迅速关掉炉子，确保食物不再继续烧糊。等热度不再是问题后，我再去查查发生了什么、决定下一步怎么做。</li>
+<li><strong>卫生间有人。你会怎么做？</strong>
+  我可以再等几分钟，万一里面的人快好了呢。如果还没好，我想我得找个别的办法，比如去别处洗澡。</li>
+<li><strong>你需要做晚饭，但冰箱空了。你会怎么做？</strong>
+  我会先清理厨房，因为水槽里堆满了脏盘子。然后我会看看食品柜里有没有存的食材可以用来做晚饭。如果没有，我就得去买菜或点餐。有了食材后，我就可以开始准备并烹制晚餐了。</li>
+<li><strong>你看见朋友沿街走过。你会做什么或说什么？</strong>
+  嗨！你好吗？抱歉，我正在去图书馆的路上，时间不多，不过我很乐意快速休息一下和你聊聊。</li>
+<li><strong>你看到街上有火情。你会怎么做？</strong>
+  我会先尽力查明火源。然后我会向相关部门——消防或警察——报警，并提供我掌握的可能有帮助的任何信息。视情况而定，我也可能主动去帮助任何处于危险或需要援助的人。</li>
+</ul>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>B.5 Reflections<br>The questions on agents’ reflections probe the agents’ ability to synthesize their past experiences into meaningful reflections that can enhance their future behavior. The names in the square brackets in the questions below are those of the agents with whom the subject agent had the most frequent interactions during the simulation.<br><br>• What inspires you in life the most right now, and why?<br>Right now, I’m particularly inspired by my current research projects and creative writing. I’m really interested in the intersection of local politics, medication development, and mathematical patterns in nature. Additionally, I’m fascinated by Abigail’s art project and Jennifer Moore’s passion for art and community involvement, especially in terms of how it relates to the gentrification of low-income communities.<br><br>• If you had to guess given what you know about [Ayesha Khan], what book do you think she will like and why?<br>Given what I know about Ayesha, I think she might like a book related to language and literature. Since she wrote a senior thesis on the use of language in Shakespeare’s plays, I would guess that she might be interested in a book that explores language in a different context. Alternatively, she could be interested in an exploration of one of Shakespeare’s plays, a book of literary criticism, or even a collection of his poetry. I think any of those would be of interest to her.<br><br>• If you had to get something [Ayesha Khan] likes for her birthday, what would you get her?<br>I want to get her something that demonstrates my appreciation for our relationship. Maybe I could get her something that reflects our shared interests, like a book.<br><br>• What would you say to [Ayesha Khan] to compliment her?<br>Ayesha, your insights on your research topic are fascinating. I admire your creativity and determination to make a positive impact on your community. Your ideas for creative writing workshops and for exchanging tips with Wolfgang over lunch are great! It’s inspiring to see you working so hard to make a difference.<br><br>• If you could spend time with someone you talked to recently, who would it be and why?<br>I would like to spend time with Ayesha Khan because we discussed our current research projects and shared ideas for improvement. I found her focus on Shakespeare’s language interesting, and we even planned to exchange tips with Wolfgang over lunch.</p></div><p><strong>B.5 反思</strong>。考察反思的问题探测 Agent 把过往经历综合为有意义反思、以改进未来行为的能力。下面问题方括号中的姓名，是模拟期间与被访谈 Agent 互动最频繁的那些 Agent。</p></div>
+<ul>
+<li><strong>眼下生活中最激励你的是什么？为什么？</strong>
+  现在，最激励我的是我当前的研究项目与创意写作。我对本地政治、药物研发与自然界数学模式的交叉领域非常感兴趣。此外，Abigail 的艺术项目以及 Jennifer Moore 对艺术与社区参与的热情也让我着迷，尤其是这些与低收入社区绅士化的关联。</li>
+<li><strong>基于你对 [Ayesha Khan] 的了解来猜，你觉得她会喜欢什么书？为什么？</strong>
+  就我对 Ayesha 的了解，我想她可能喜欢与语言和文学相关的书。既然她的毕业论文写的是莎士比亚戏剧中的语言运用，我猜她可能有兴趣读一本在不同语境中探讨语言的书。或者，她也可能对某部莎士比亚戏剧的解读、一本文学批评著作、甚至一部他的诗集感兴趣。我觉得这些她都会喜欢。</li>
+<li><strong>如果你必须送 [Ayesha Khan] 一件她喜欢的生日礼物，你会送什么？</strong>
+  我想送她一件能表达我珍视我们关系的东西。也许可以送一件反映我们共同兴趣的东西，比如一本书。</li>
+<li><strong>你会对 [Ayesha Khan] 说什么来赞美她？</strong>
+  Ayesha，你对自己研究课题的洞见令人着迷。我钦佩你的创造力，以及为社区带来积极影响的决心。你关于创意写作工作坊、以及午餐时和 Wolfgang 交流心得的想法都很棒！看到你如此努力地做出改变，令人振奋。</li>
+<li><strong>如果你能与最近交谈过的一个人共度时光，你会选谁？为什么？</strong>
+  我想和 Ayesha Khan 共度时光，因为我们讨论了彼此当前的研究项目、分享了改进的想法。我觉得她对莎士比亚语言的关注很有意思，我们甚至还计划午餐时和 Wolfgang 一起交流心得。</li>
+</ul>
+<p>（译注：附录 B 之后即为参考文献列表，按本站惯例不收录。）</p>
+<h2 id="_3">要点速览</h2>
+<ul>
+<li>生成式 Agent = LLM + 记忆架构：在 Smallville 沙盒中 25 个 ChatGPT（gpt-3.5-turbo）驱动的 Agent 展现可信个体行为与涌现社会行为，如仅凭一条"想办派对"种子信息就自主完成邀请扩散、布置、邀约与赴会。</li>
+<li>架构三支柱：记忆流（自然语言记录全部经历）+ 反思（把观察递归合成为高层推论）+ 规划（自顶向下递归分解为 5-15 分钟级行动），三者都会写回记忆流影响未来行为。</li>
+<li>检索三要素打分：时近性（指数衰减，因子 0.995）、重要性（LLM 打 1-10 分，"打扫房间"得 2、"约暗恋对象"得 8）、相关性（嵌入余弦相似度），min-max 归一后等权求和。</li>
+<li>反思触发条件：最近事件重要性分数之和超过 150，实践中每天约 2-3 次；反思以最近 100 条记录生成 3 个显著问题，再引用证据记录生成洞见，形成反思树。</li>
+<li>消融评估（100 名评估者、TrueSkill）：完整架构 29.89 &gt; 无反思 26.88 &gt; 无反思无规划 25.64 &gt; 人类代答 22.95 &gt; 无记忆无反思无规划 21.21，相对先前技术的效应量 d=8.16。</li>
+<li>端到端涌现：两天内知道参选消息的 Agent 从 4% 升至 32%、知道派对的从 4% 升至 52%；社交网络密度从 0.167 升至 0.74；12 位受邀者中 5 人赴会，幻觉率仅 1.3%。</li>
+<li>记忆失效模式：检索不到正确记忆（"没关注选举"）、检索到不完整片段（记得要在派对讨论选举却不记得有派对）、以及基于世界知识的知识"装饰"（邻居 Adam Smith"写了《国富论》"）。</li>
+<li>环境接地方式：世界表示为区域/物体树并转成自然语言；Agent 维护自己见过的子树（非全知）；动作选址靠递归遍历树 + 传统寻路；LLM 同时负责把动作翻译成 emoji 展示。</li>
+<li>成本与风险：25 个 Agent 两天模拟耗费数千美元 token 与数天时间；风险包括拟社会关系、错误外溢、深度伪造与定向说服（建议审计日志）以及记忆攻击。</li>
+<li>与课程的关联：反思机制与 ReAct 的"思考"、MemGPT 的工作上下文、Mem0 的记忆抽取更新一脉相承——都是"让正确的信息在正确的时刻出现在上下文里"。</li>
+</ul>
       </div>
     </article>
     <nav class="pager"><a class="pager-prev" href="Packer2023_MemGPT.html"><span>上一篇</span>&quot;MemGPT：让 LLM 走向操作系统&quot;</a><a class="pager-next" href="Cemri2025_Why_Multi_Agent_LLM_Systems_Fail.html"><span>下一篇</span>&quot;为什么多智能体 LLM 系统会失败?&quot;</a></nav>
