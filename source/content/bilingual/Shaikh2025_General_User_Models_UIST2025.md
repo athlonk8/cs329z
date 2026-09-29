@@ -1,0 +1,1606 @@
+---
+title: "Creating General User Models from Computer Use"
+title_zh: 从计算机使用中构建通用用户模型
+authors: "Omar Shaikh et al."
+venue: "UIST 2025 · Stanford University & Microsoft Research"
+kind: paper
+importance: must
+tags: "通用用户模型, 主动式智能体, 用户建模, 多模态观察, 隐私, 人机交互"
+summary: 提出 GUM 架构,从任意非结构化计算机交互(如截图)中推断带置信度的自然语言命题来表示用户,并用主动式助手 Gumbo 展示其应用。
+---
+
+## 导读
+
+本文是 CS 329Z 第 11 周"主动式智能体"专题的核心论文。前几周讨论的 Agent 大多在"用户明确发起任务后"才介入,而真正的主动式智能体必须在用户开口之前就理解其处境、预见其需求。要做到这一点,智能体需要的不只是好的推理能力,更是对用户的深度理解——这正是本文要解决的问题。
+
+作者团队(Stanford 的 Omar Shaikh、Michael Bernstein、Diyi Yang 等人与微软研究院的 Eric Horvitz)提出通用用户模型(General User Model, GUM):一种从任意非结构化观察(屏幕截图、文件、通知流)中持续学习用户行为、知识、信念与偏好的计算架构。GUM 的核心表示是带置信度与衰减分数的自然语言命题,围绕 Propose(提出)、Retrieve(检索)、Revise(修订)、Audit(隐私审计)四个模块构建。在应用层面,论文展示了 GUM 如何为 LLM 对话补全上下文、为操作系统过滤通知,并实现了一个能自主发现并执行建议的主动式助手 Gumbo。评价包括 18 人邮件场景的准确率与校准测试,以及 5 人、5 天的真实屏幕使用部署。这篇论文把 HCI 领域数十年的"了解用户的机器"愿景,落到了一个可运行、可评价的系统架构上,是理解"智能体如何获得用户上下文"的必读材料。
+
+## 全文对照翻译
+
+> 译注:以下为中英对照全文翻译,英文部分为论文原文逐段照录(仅还原 PDF 提取时丢失的换行与斜体间距,原文中个别拼写笔误按原样保留),中文部分为对应段落的完整忠实翻译。页眉、版权声明与 ACM 引用格式信息从略;References(参考文献)按站点惯例不收录。
+
+### 标题与作者
+
+::: en
+Creating General User Models from Computer Use
+
+Omar Shaikh — Stanford University, Stanford, USA
+Shardul Sapkota — Stanford University, Stanford, USA
+Shan Rizvi — Independent, New York City, USA
+Eric Horvitz — Microsoft Research, Redmond, USA
+Joon Sung Park — Stanford University, Stanford, USA
+Diyi Yang — Stanford University, Stanford, USA
+Michael S. Bernstein — Stanford University, Stanford, USA
+:::
+
+从计算机使用中构建通用用户模型。作者:Omar Shaikh(斯坦福大学)、Shardul Sapkota(斯坦福大学)、Shan Rizvi(独立研究者)、Eric Horvitz(微软研究院)、Joon Sung Park(斯坦福大学)、Diyi Yang(斯坦福大学)、Michael S. Bernstein(斯坦福大学)。
+
+[图 1: General User Models take as input completely unstructured interaction data (top), transforming these observations into structured propositions about a user (center). Together, these propositions create a general user model (GUM). We instantiate our user model in an assistant (Gumbo) that proactively discovers and executes suggestions on a user's behalf (bottom).]
+
+图 1(中文说明):通用用户模型以完全非结构化的交互数据作为输入(上),将这些观察转换为关于用户的结构化命题(中);这些命题共同构成通用用户模型(GUM)。作者将该用户模型实例化为一个助手(Gumbo),代表用户主动发现并执行建议(下)。此图为全文的概念总览示意图。
+
+### Abstract(摘要)
+
+::: en
+Human-computer interaction has long imagined technology that understands us—from our preferences and habits, to the timing and purpose of our everyday actions. Yet current user models remain fragmented, narrowly tailored to specific applications, and incapable of the flexible, cross-context reasoning required to fulfill these visions. This paper presents an architecture for a general user model (GUM) that learns about you by observing any interaction you have with your computer. The GUM takes as input any unstructured observation of a user (e.g., device screenshots) and constructs confidence-weighted natural language propositions that capture that user's behavior, knowledge, beliefs, and preferences. GUMs can infer that a user is preparing for a wedding they're attending from a message thread with a friend. Or recognize that a user is struggling with a collaborator's feedback on a draft paper by observing multiple stalled edits and a switch to reading related work. GUMs introduce an architecture that infers new propositions about a user from multimodal observations, retrieves related propositions for context, and continuously revises existing propositions. To illustrate the breadth of applications that GUMs enable, we demonstrate how they augment chat-based assistants with contextual understanding, manage OS notifications to surface important information only when needed, and enable interactive agents that adapt to user preferences across applications. We also instantiate a new class of proactive assistants (Gumbos) that discover and execute useful suggestions on a user's behalf based on their GUM. In our evaluations, we find that GUMs make calibrated and accurate inferences about users, and that assistants built on GUMs proactively identify and perform actions of meaningful value that users wouldn't think to request explicitly. Altogether, GUMs introduce new methods that leverage large multimodal models to understand unstructured user context, enabling both long-standing visions of HCI and entirely new interactive systems that anticipate user needs.
+:::
+
+人机交互领域很早就想象过真正"理解我们"的技术——理解我们的偏好与习惯,理解我们日常行为的时机与目的。然而,当今的用户模型仍然是碎片化的:它们只为特定应用做窄化定制,无法完成这些愿景所要求的灵活、跨情境推理。本文提出一种通用用户模型(General User Model, GUM)架构,通过观察你与计算机的任何交互来了解你。GUM 以对用户的任意非结构化观察(如设备截图)为输入,构建带置信度加权的自然语言命题,刻画该用户的行为、知识、信念与偏好。GUM 能从与朋友的消息往来中推断出用户正在为将要参加的一场婚礼做准备;也能通过观察到多次停滞的编辑以及转向阅读相关工作,识别出用户正被合作者对论文草稿的反馈意见卡住。GUM 引入了一个从多模态观察中推断关于用户的新命题、检索相关命题作为上下文、并持续修订已有命题的架构。为了展示 GUM 所启用的应用广度,作者演示了如何用它为聊天式助手补充情境理解、管理操作系统(OS)通知使其只在需要时呈现重要信息,以及实现跨应用适应用户偏好的交互式智能体。论文还实例化了一类新的主动式助手(Gumbo),基于用户的 GUM 代表用户发现并执行有用的建议。在评估中,作者发现 GUM 对用户做出的推断是校准良好且准确的,而基于 GUM 构建的助手能主动识别并执行那些具有实际价值、但用户不会想到要明确请求的操作。总而言之,GUM 引入了利用大型多模态模型理解非结构化用户上下文的新方法,既延续了 HCI 的长期愿景,也开启了能预判用户需求的全新交互系统。
+
+::: en
+CCS Concepts • Computing methodologies → Natural language processing; • Human-centered computing → Interactive systems and tools.
+
+Keywords: User models, natural language processing
+:::
+
+CCS 分类概念:计算方法论 → 自然语言处理;以人为中心的计算 → 交互系统与工具。关键词:用户模型,自然语言处理。
+
+### 1 Introduction(引言)
+
+::: en
+In our most celebrated visions of human-computer interaction, interactive systems deploy a rich understanding of our goals, tasks, and context. Mark Weiser's central scenario in The Computer for the 21st Century opens with an alarm clock that knows when its owner is about to wake, and proactively offers coffee [81]. Likewise, Apple's Knowledge Navigator looks up useful supporting information while its user is puzzling over a question, then blocks an undesired phone call while the user is focused [5]. This notion of technology that knows the user well enough to do the right thing at the right time weaves through visions of both context-aware systems [18], which promise to adapt as the user's situation evolves, and interface agents [51], which take proactive action on the user's behalf.
+:::
+
+在人机交互那些最负盛名的愿景中,交互系统对我们的目标、任务与情境有着丰富的理解。Mark Weiser 在《The Computer for the 21st Century》中的核心场景,以一个知道主人即将醒来并主动奉上咖啡的闹钟开场 [81];同样,Apple 的 Knowledge Navigator 会在用户对着某个问题冥思苦想时查找有用的辅助信息,又在用户专注时拦截一通不合时宜的电话 [5]。"技术对用户的了解足以在正确的时机做正确的事"这一理念,贯穿于两类愿景之中:情境感知系统(context-aware systems)[18] 承诺随用户处境的演变而自适应;界面智能体(interface agents)[51] 则代表用户采取主动行动。
+
+::: en
+Today, however, these visions remain largely out of reach. Despite progress in user modeling, recommender systems, and context-aware systems, computers remain remarkably unaware of who we are, what we are doing, and what would be helpful. At their core, current user models are simply too narrow: they understand our music preferences, our use of tools within a single app, or the TV show we might watch next. Even when user models integrate data across multiple applications, the integration remains surface-level; user models cannot reason or make inferences in new contexts.
+:::
+
+然而今天,这些愿景在很大程度上仍遥不可及。尽管用户建模、推荐系统与情境感知系统都在进步,计算机对"我们是谁、我们在做什么、什么会有帮助"仍然惊人地无知。究其核心,当前的用户模型就是**太窄**了:它们理解我们的音乐偏好、我们在单个应用内的工具使用,或者我们接下来可能看的电视剧。即使用户模型整合了跨多个应用的数据,整合也停留在表层;用户模型无法在新情境中推理或做出推断。
+
+::: en
+Our visions of technology, however, require user models that are broad, able to reason about everything from our general preferences to our immediate information needs; and capable of applying these insights across contexts, from work-related tasks to recreational activities. Applications today stumble because they have pinhole views of users: Weiser's vision of ubiquitous computing requires models that reason about family, friends, and work—not one application, and not just via a one-dimensional signal.
+:::
+
+而我们对技术的愿景,要求用户模型足够宽泛:既能推理从一般偏好到即时信息需求的一切,又能把这些洞察跨情境地应用——从工作任务到娱乐活动。今天的应用之所以磕磕绊绊,是因为它们对用户只有"针孔视图":Weiser 的泛在计算愿景要求模型能对家庭、朋友与工作进行推理——不是单一应用能做到的,也不只是靠单一维度的信号。
+
+::: en
+In this paper, we describe an architecture for general user models: computational models that materialize information and inferences about a user across domains and time scales.¹ The general user model, or GUM, allows a user to construct a private, computational representation of their own behavior, knowledge, beliefs, and preferences by feeding unstructured observations (e.g., screenshares of their computer use) through an inference architecture leveraging large multimodal models (e.g., vision and language models, or VLMs). Our architecture contributes three main elements. A Propose module translates unstructured observations into confidence-weighted propositions about the user's preferences, context, and intent. A Retrieve module indexes and searches these propositions to return the most contextually relevant subset for a given query. Finally, using results from Retrieve, a Revise module reevaluates and refines propositions as new observations arrive. We audit all observations for privacy violations with a contextual integrity [54] Audit module that leverages the GUM itself to estimate and filter out information that the user would not expect to be recorded into the GUM. All data stays securely on the user's device, enabling local inference on capable hardware. (¹ A demo of Gumbo and our open source package for GUM are available at https://generalusermodels.github.io)
+:::
+
+本文描述一种通用用户模型(general user models)的架构:跨领域、跨时间尺度将用户的信息与推断"实体化"的计算模型¹。通用用户模型(GUM)让用户把非结构化观察(如计算机使用的屏幕录像/共享)输入一个借助大型多模态模型(如视觉-语言模型,即 VLM)的推断架构,从而构建关于自身行为、知识、信念与偏好的**私有**计算表示。该架构贡献三个主要元素:**Propose(提出)**模块把非结构化观察翻译为关于用户偏好、情境与意图的带置信度命题;**Retrieve(检索)**模块对这些命题建索引并搜索,为给定查询返回情境上最相关的子集;最后,**Revise(修订)**模块利用 Retrieve 的结果,在新观察到来时重新评估并精炼命题。作者还用基于情境完整性(contextual integrity)[54] 的 **Audit(审计)**模块检查所有观察是否侵犯隐私——该模块利用 GUM 本身来估计并过滤掉用户不希望被记录进 GUM 的信息。所有数据都安全地保存在用户设备上,使硬件允许时可以做本地推断。(¹ Gumbo 的演示与 GUM 的开源包见 https://generalusermodels.github.io )
+
+::: en
+The operating system, applications, or the user themselves can query the GUM in real time to realize a breadth of applications similar to those envisioned in foundational HCI work. As part of the GUM, we introduce an interface that enables applications to query the GUM for underlying propositions. Any unstructured observation that the GUM sees can be marshalled to power interactive applications. Regardless of the interaction, users maintain direct and local control of the GUM's underlying propositions, allowing for edits, deletions, or additions.
+:::
+
+操作系统、应用程序或用户本人都可以实时查询 GUM,实现一批与奠基性 HCI 工作所设想的类似的应用。作为 GUM 的一部分,作者引入了一个让应用程序查询 GUM 底层命题的接口。GUM 看到的任何非结构化观察都可以被调度起来驱动交互式应用。无论何种交互,用户始终对 GUM 的底层命题保有直接的本地控制权,可以对命题进行编辑、删除或添加。
+
+::: en
+At the simplest level, the GUM can insert information to establish common ground between applications and a user: for example, automatically adding relevant context when prompting a language model such as ChatGPT. With a GUM, any LLM can now directly reference the research paper you were reading just minutes earlier when you ask about its methodology, eliminating the need for you to explicitly quote or summarize the paper's content. Beyond prompting LLMs, any application can directly query the GUM to adapt their experiences, realizing long-standing HCI visions. A GUM-enhanced operating system, for example, could prioritize only truly relevant notifications during a meeting—surfacing an imminent conference registration deadline while suppressing recipe emails. Email clients connected to a GUM could automatically sort messages based on observed user priorities, without requiring additional application-specific training.
+:::
+
+在最简单的层面,GUM 可以插入信息,在应用与用户之间建立共同基础(common ground):例如在向 ChatGPT 之类语言模型提问时自动附加上下文。有了 GUM,任何 LLM 都能在你询问方法论时直接引用你几分钟前正在读的那篇研究论文,而无需你显式引用或总结论文内容。除了给 LLM 提示补上下文,任何应用都可以直接查询 GUM 来调整其体验,实现 HCI 的长期愿景。例如,经 GUM 增强的操作系统可以在会议期间只优先呈现真正相关的通知——浮出临近的会议注册截止日期,同时压制菜谱类邮件;接入 GUM 的邮件客户端可以根据观察到的用户优先级自动排序邮件,无需额外的应用特定训练。
+
+::: en
+GUMs also enable the creation of an entirely new class of proactive, interactive systems. We demonstrate this through an assistant, Gumbo, that learns a GUM via continuous private screenshot capture of the user's computer. Using the GUM, Gumbo constantly discovers what suggestions would be helpful to surface conditioned on the user's context. In addition, Gumbo uses the underlying GUM to determine if and when it might be useful to intervene with, and autonomosuly execute on, a suggestion. By marshalling a user's context, Gumbo can proactively discover a range of useful suggestions and filter important ones appropriately.
+:::
+
+GUM 还催生了一类全新的主动式交互系统。作者通过助手 **Gumbo** 演示这一点:它通过对用户计算机的持续、私有截图采集来学习一个 GUM。利用 GUM,Gumbo 不断发现在用户当前情境下**浮现哪些建议**会有帮助;此外,Gumbo 还用底层 GUM 判断**是否、何时**适合介入提出建议并自主执行。通过调度用户上下文,Gumbo 能主动发现一批有用的建议,并对重要的建议做恰当过滤。
+
+::: en
+For the first author of this paper, Gumbo proactively found a location to rent a suit after observing a wedding invite from their friend (constrained by the author's budget, see Fig 1). Gumbo also found and proposed fixes for bugs in the system itself during development; and suggested potential revisions to this paper based on interactions with collaborators. For participants in our evaluation, Gumbo brainstormed ways to integrate a new theoretical framework into ongoing research, created a highly personalized moving plan for a cross-country relocation, and helped organize email archives from scattered correspondence—all proactively, based solely on its observations of users.
+:::
+
+对本文第一作者,Gumbo 在观察到其朋友的婚礼邀请后,主动找到了租西装的地点(受作者预算约束,见图 1)。Gumbo 还在开发期间发现系统**自身**的 bug 并提出修复建议;并根据与合作者的交互建议了本文的潜在修改。在评估中,Gumbo 为参与者头脑风暴了把新理论框架融入在研研究的方法,为一次跨国搬家制定了高度个性化的搬家计划,还帮忙把散落往来的邮件整理成档案——全部是主动完成的,仅基于对用户的观察。
+
+::: en
+In our technical evaluations, we first focus on validating GUM accuracy. We train GUM on recent email interaction, feeding each email—metadata, attachments, links, and replies—sequentially into the GUM. Emails contain diverse and relevant information across modalities, while also being full of irrelevant content. This makes synthesizing important information difficult: GUMs must maintain accuracy despite this challenge. Still, N = 18 participants judged propositions generated by GUMs as overall accurate and well-calibrated: unconfident when incorrect, and confident when correct. Highly confident propositions (confidence = 10) were rated 100% accurate, while all propositions on average—including ones with low confidence—were fairly accurate (76.15%). From ablation studies, we show that all GUM components are critical for accuracy.
+:::
+
+在技术评估中,作者首先验证 GUM 的准确率。作者用近期的邮件交互训练 GUM,把每封邮件——元数据、附件、链接与回复——按顺序喂入 GUM。邮件包含跨模态的多样且相关的信息,同时也充斥无关内容,这使综合重要信息变得困难:GUM 必须在这样的挑战下保持准确。尽管如此,N = 18 名参与者仍判定 GUM 生成的命题总体准确且校准良好:错误时不自信,正确时自信。高置信命题(confidence = 10)被判 100% 准确,而所有命题平均(包括低置信度的)也相当准确(76.15%)。消融研究表明,GUM 的所有组件对准确性都至关重要。
+
+::: en
+We then deploy Gumbo with N = 5 participants for 5 days, with the system observing the participants' screens. This longitudinal evaluation replicated our results with the underlying GUM. Additionally, participants identified a meaningful number of useful and well-executed suggestions completed by Gumbo. Two of the five participants found particularly high value in the system and asked to continue running it on their computer after the study concluded. Our evaluations also highlight limitations and boundary conditions of GUM and Gumbo, including privacy considerations and overly candid propositions.
+:::
+
+随后,作者让 N = 5 名参与者部署 Gumbo 5 天,系统观察参与者的屏幕。这一纵向评估复现了底层 GUM 的结果。此外,参与者认定了相当数量由 Gumbo 完成的、有用且执行良好的建议。五名参与者中有两人从系统中获得了特别高的价值,研究结束后请求继续在其计算机上运行。评估也揭示了 GUM 与 Gumbo 的局限与边界条件,包括隐私考量与过于直白的命题。
+
+::: en
+In sum, we contribute General User Models (GUMs): computational representations of a user's behavior, knowledge, beliefs, and preferences, built from unstructured observations of the user. We demonstrate an implementation of a GUM, an interface allowing applications to query the GUM, an example assistant application called Gumbo, a technical evaluation via unstructured email interactions, a longitudinal evaluation via unstructured screen captures, and a reflection on norms and implications of this class of application.
+:::
+
+总之,作者贡献了通用用户模型(GUM):从对用户的非结构化观察构建的、关于用户行为、知识、信念与偏好的计算表示。作者展示了:GUM 的一个实现、一个允许应用查询 GUM 的接口、一个名为 Gumbo 的示例助手应用、一次基于非结构化邮件交互的技术评估、一次基于非结构化屏幕截图的纵向评估,以及对这类应用的规范与影响的反思。
+
+### 2 Related Work(相关工作)
+
+::: en
+The first major challenge that GUMs must engage with is common ground: the mutual knowledge, beliefs, and assumptions shared between individuals that enables efficient communication [16]. Through dialogue, gestures, facial expressions, and other multimodal cues [14], people continually update shared mental models, iteratively constructing common ground [15]. Common ground acts as a shared context, allowing people to communicate without unnecessary elaboration.
+:::
+
+GUM 必须应对的第一个重大挑战是**共同基础**(common ground):个体之间共享的、使高效沟通成为可能的知识、信念与假设 [16]。人们通过对话、手势、面部表情与其他多模态线索 [14],持续更新共享心智模型,迭代地构建共同基础 [15]。共同基础充当共享上下文,让人们无需不必要的展开即可交流。
+
+::: en
+However, AI systems have little shared context with users and make assumptions about a user's background, producing one-size-fits-all answers that are over-informative [77], overconfident [52], and unable to handle ambiguity [1, 30, 53]. Inability to ground extends beyond question-asking. For example, designing and prototyping AI systems requires collaborative grounding [78]. Otherwise, they might take unfavorable and irreversible action [8, 12, 72].
+:::
+
+然而,AI 系统与用户几乎没有共享上下文,只能对用户背景做假设,给出过度提供信息 [77]、过度自信 [52]、无法处理歧义 [1, 30, 53] 的一刀切回答。无法接地(grounding)的问题不止于"提问"环节。例如,设计与原型化 AI 系统需要协作式接地 [78];否则系统可能采取不利且不可逆的行动 [8, 12, 72]。
+
+::: en
+To bridge the human-AI grounding gap, two general solutions have emerged: asking clarification questions or learning from a user's dialogue history. Clarification-based grounding attempts to simulate the natural back-and-forth dialogue that humans use to establish shared understanding. This interaction can be implemented through prompting [13, 45], finetuning [4, 29, 35, 88], or a combination of both [70]. Keeping a long-term memory of a user's chat interaction history is another solution [44, 50, 60, 69, 89]. Long-context models also allow users to provide lengthy inputs as grounding [75], but models generally forget information as context lengths increase [49]. Meanwhile, retrieval-augmented generation (RAG) [47]—where context is retrieved from a traditional database—has served as an alternative approach. For example, systems like OmniQuery [48] draw from a processed database of multimodal memories from photo albums, contextualizing queries to an LLM. Regardless of the approach, current models are limited to context derived solely from their own prior interactions with the user or from a limited taxonomy of pre-defined applications or sources. All other computer interaction is inaccessible to models.
+:::
+
+为弥合人-AI 接地鸿沟,已出现两类通用方案:提出澄清式问题,或从用户的对话历史中学习。基于澄清的接地试图模拟人类用来建立共同理解的自然往返对话;这种交互可以通过提示 [13, 45]、微调 [4, 29, 35, 88] 或二者结合 [70] 实现。保持用户聊天交互历史的长期记忆是另一种方案 [44, 50, 60, 69, 89]。长上下文模型也允许用户提供冗长的输入作为接地 [75],但随着上下文长度增加,模型通常会遗忘信息 [49]。与此同时,检索增强生成(retrieval-augmented generation, RAG)[47]——从传统数据库中检索上下文——一直是替代方案。例如 OmniQuery [48] 这样的系统从相册多模态记忆的加工数据库中取材,为 LLM 的查询补上情境。无论哪种方案,当前模型都只能限于从自己与用户的既往交互、或从预定义应用/来源的有限分类中获取上下文;所有其他计算机交互对模型都是不可见的。
+
+::: en
+We argue that engaging in grounding only when a user interacts with a model is a constraining interaction paradigm. Piecing together custom grounding interactions for specific domains—and fixing these interactions to dialogue—limits the ubiquity of potential common ground users can build with AI systems. In this work, we propose general user models that proactively build common ground with users through observation.
+:::
+
+作者主张:**只在用户与模型交互时才进行接地是一种受限的交互范式**。为特定领域拼装定制的接地交互、并把这些交互固定在对话形式上,限制了用户能与 AI 系统建立潜在共同基础的普适性。本文提出通用用户模型,通过观察主动与用户构建共同基础。
+
+::: en
+The second major issue that GUMs draw on is that prompting LLMs effectively is difficult [86]. Users often provide models with underspecified prompts [2, 70, 85], requiring repeated iteration to specify constraints for a specific context. A range of interactive systems have enabled users to better specify constraints to LLMs: systems like ChainForge [6] and EvalGen [71] offer users a means to interactively validate and iterate on prompts for specific tasks. Beyond developing prompts, systems like Graphologue [42] and Sensescape [74] allow users to explore the range of possible outputs given a prompt. Across these interactions, the burden of providing explicit input to build shared context lies with the user.
+:::
+
+GUM 借重的第二个重大问题是:有效提示(prompting)LLM 很难 [86]。用户常给模型提供欠规格的提示 [2, 70, 85],需要反复迭代才能为特定情境指定约束。一批交互系统帮助用户更好地向 LLM 指定约束:ChainForge [6] 与 EvalGen [71] 等系统让用户能交互式地验证和迭代特定任务的提示;在开发提示之外,Graphologue [42] 与 Sensescape [74] 等系统让用户探索给定提示下可能的输出范围。在这些交互中,提供显式输入以建立共享上下文的责任都落在用户身上。
+
+::: en
+In contrast, a longstanding goal in HCI is to build systems that proactively assist users without disruption. Early work in mixed-initiative interfaces balanced autonomy with user control, leveraging context to identify the best moments to interact [36]. Classic AI models have already been employed to understand a user's multimodal context. Memory Landmarks and the LifeBrowser system [38], for example, construct an understanding of which events users find important [64] by analyzing their calendar and mailbox. A handful of systems have started using LLMs to selectively process context. PICAN [34], for example, focuses on building context in VR-onboarding settings by focusing on dialogue and actions the user takes in the metaverse. Systems like GPTCoach [43] rely on external health data and qualitative context, augmenting LLMs with selective context to help with behavior change.
+:::
+
+相比之下,HCI 的一个长期目标是构建能主动协助用户而不造成打扰的系统。混合主动(mixed-initiative)界面的早期工作在自主性与用户控制之间取得平衡,利用情境寻找最佳交互时机 [36]。经典 AI 模型早已被用于理解用户的多模态情境。例如 Memory Landmarks 与 LifeBrowser 系统 [38] 通过分析用户的日历与邮箱,构建对"用户认为哪些事件重要"的理解 [64]。少数系统已开始用 LLM 选择性地处理上下文。例如 PICAN [34] 聚焦 VR 新手引导场景,通过关注用户在元宇宙中的对话与动作来构建情境;GPTCoach [43] 等系统依赖外部健康数据与定性上下文,用选择性上下文增强 LLM 以帮助行为改变。
+
+::: en
+Still, our interactions with LLMs are far from visions like Weiser's Sal, where computers unify machine intelligence with context from our daily lives [37]. Instead, LLM-based systems focus on constraining the types of inputs, outputs, and tasks models operate over. In this paper, we embrace what LLMs are good at—unconstrained input—and ground assumptions about the user and their context based on observation. We design what is effectively a multimodal grounding engine.
+:::
+
+尽管如此,我们与 LLM 的交互离 Weiser 笔下的 Sal——计算机将机器智能与日常生活情境融为一体 [37]——那样的愿景还很远。相反,基于 LLM 的系统专注于**约束**模型所操作的输入、输出与任务类型。本文拥抱 LLM 所擅长的——无约束输入——并基于观察对用户及其情境的假设进行接地。我们设计的实际上是一个多模态的"接地引擎"(grounding engine)。
+
+::: en
+Context aware computing has long envisioned such toolkits [18, 20, 67]. Yet these frameworks are typically pinned down to some underlying fixed structure of the input data or the underlying sensors [23]. This inevitably limits how we define context and the types of applications we can support from the outset. GUMs offer an alternative approach—they introduce a flexible structure with very few constraints to build context.
+:::
+
+情境感知计算早就设想过这样的工具包 [18, 20, 67]。但这些框架通常被钉死在输入数据或底层传感器的某种固定**结构**上 [23],这不可避免地从源头上限制了"情境"的定义方式与所能支持的应用类型。GUM 提供了另一种途径——它引入一种约束极少的灵活结构来构建情境。
+
+### 3 General User Models(通用用户模型)
+
+::: en
+We introduce an architecture for learning general user models. GUMs enable learning both stable inferences about the end user and moment-to-moment context, using everyday action as input data. From low-level input (e.g. screenshots), GUMs construct a rich understanding of who we are and what we are doing. Applications can then query the GUM to power a range of interactions, from operating systems that power contextual notifications to assistants that proactively discover and execute useful suggestions based on context.
+:::
+
+作者引入一个学习通用用户模型的架构。GUM 以日常行为作为输入数据,既学习关于最终用户的稳定推断,也学习逐时刻的情境。从低层输入(如截图)出发,GUM 构建对"我们是谁、我们在做什么"的丰富理解。应用随后可以查询 GUM,驱动从提供情境化通知的操作系统到基于情境主动发现并执行有用建议的助手等一系列交互。
+
+::: en
+At its core, GUM is a collection of natural language, confidence-weighted propositions about a user, learned entirely from observation. The following propositions, for example, were constructed by the author's GUM while they wrote this section. Each proposition is also paired with a confidence score (from 0 to 1).
+
+Proposition: Omar is currently writing in the General User Model's section.
+Confidence: 0.8
+
+Proposition: Omar is viewing and resolving comments from their advisors, Diyi and Michael.
+Confidence: 0.7
+
+Proposition: Omar is struggling with the technical evaluation of GUMs.
+Confidence: 0.5
+:::
+
+GUM 的核心是完全从观察中学到的、关于用户的**自然语言、带置信度加权的命题集合**。例如,下面这些命题就是作者的 GUM 在其撰写本节时构建的。每条命题都配有一个置信度分数(从 0 到 1):
+
+命题:Omar 当前正在撰写"通用用户模型"这一节。置信度:0.8
+命题:Omar 正在查看并处理其导师 Diyi 与 Michael 的批注。置信度:0.7
+命题:Omar 在 GUM 的技术评估上遇到困难。置信度:0.5
+
+::: en
+Propositions were generated entirely using a series of screenshots from the author's screen. GUM takes any type of input that an underlying large model can accept (in the case of vision-langauge models, GUM accepts image and text input). Using this unstructured input, GUM composes and refines proposition-confidence pairs. This abstraction—a series of confidence-weighed statements that conjecture some common ground between the user and their computer—enables a flexible representation of a user's context. To be clear: GUMs do not enforce any structure on the types or kinds of propositions that can be generated. Propositions are constrained only by natural language descriptions, and are revised as the GUM continues receiving more input. GUMs aim to continually learn this representation of a user's context from any interaction.
+:::
+
+这些命题完全由作者屏幕的一系列截图生成。GUM 接受底层大模型所能接受的任何类型的输入(在视觉-语言模型的情形下,GUM 接受图像与文本输入)。利用这种非结构化输入,GUM 组合并精炼"命题-置信度"对。这一抽象——一系列猜想用户与其计算机之间存在某种共同基础的带置信度陈述——构成了对用户情境的灵活表示。需要说明:GUM 不对可生成命题的类型或种类施加任何结构;命题只受自然语言描述的约束,并随 GUM 持续接收更多输入而不断修订。GUM 的目标是持续地从任何交互中学习用户情境的这一表示。
+
+::: en
+Here, we detail abstractions (confidence-weighted propositions) that power the GUM (§3.1) and document an interface for using GUMs in other applications (§3.2).
+:::
+
+本节详述驱动 GUM 的抽象(带置信度命题)(§3.1),并记录在其他应用中使用 GUM 的接口(§3.2)。
+
+#### 3.1 命题与置信度:表示通用用户模型的抽象
+
+::: en
+GUM draws inspiration from literature on common ground in human-human interaction [14, 15]. A subset of common ground between participants can be defined by shared assumptions. The human-AI grounding challenge lies in identifying valid assumptions an AI model can make about a user. When constructing a user model, we must include shared assumptions that accurately represent user actions. For example, when a user repeatedly searches for "best hiking trails in Colorado" and visits outdoor equipment websites, the model might form the proposition "User enjoys outdoor activities, and is interested in hiking in Colorado" with high confidence.
+:::
+
+GUM 从人际交互中共同基础的文献汲取灵感 [14, 15]。参与者之间共同基础的一个子集可由**共享假设**定义。人-AI 接地的挑战在于识别 AI 模型能对用户做出的**有效**假设。构建用户模型时,必须纳入能准确表示用户行动的共享假设。例如,当用户反复搜索 "best hiking trails in Colorado"(科罗拉多最佳徒步路线)并访问户外装备网站时,模型可能以高置信度形成命题"用户喜欢户外活动,并且对在科罗拉多徒步感兴趣"。
+
+::: en
+We build abstractions for GUM based on grounding models in human-human communication [10]. Bayesian approaches represent shared knowledge as probabilistic distributions, not deterministic sets of propositions. In these models, interlocutors maintain probability distributions over possible states, refining a shared understanding through communication [31, 61, 62]. This probabilistic view accommodates user uncertainty and grounding over time [39, 46]. To instantiate a probabilistic model of common ground, we leverage the in-context learning capabilities of large langauge models, which can be loosely interpreted as Bayesian updates [83, 87]. We operationalize these approaches through three abstractions: observations, propositions, and confidences.
+:::
+
+作者基于人际交流的接地模型 [10] 为 GUM 构建抽象。贝叶斯方法将共享知识表示为概率分布而非确定性的命题集合;在这些模型中,对话者维护关于可能状态的概率分布,通过交流精炼共享理解 [31, 61, 62]。这种概率化视角容纳了用户不确定性与随时间推移的接地 [39, 46]。为实例化共同基础的概率模型,作者借助大语言模型的上下文学习能力(可松散理解为贝叶斯更新 [83, 87]),并通过三个抽象将其操作化:观察(observations)、命题(propositions)与置信度(confidences)。
+
+::: en
+Observations are raw inputs that the GUM processes. Observations can be anything, so long as they can be tokenized and fed into a large (vision/language/multimodal) model. Screenshot observations provide visual data of what the user is viewing, file system observations reveal document interactions, and notification observations offer communication pattern insights. Observations are the source from which GUM builds user context understanding. Each observation includes metadata: the source, timestamp, and a unique identifier. Unlike propositions, observations are factual records, not inferences.
+:::
+
+**观察(Observations)**是 GUM 处理的原始输入。观察可以是任何东西,只要能被 token 化并喂入大型(视觉/语言/多模态)模型。截图观察提供用户所看内容的视觉数据,文件系统观察揭示文档交互,通知观察提供交流模式的洞察。观察是 GUM 构建用户情境理解的来源。每条观察都包含元数据:来源、时间戳与唯一标识。与命题不同,观察是事实记录,而非推断。
+
+::: en
+Propositions are the assumptions, in text, that GUM constructs through observation. Viewing a friend's wedding invite yields surface inferences like User is invited to friend's wedding. However, GUM may generate more complex inferences requiring speculation, e.g., User needs to buy or rent a suit for the wedding. These propositions might not be correct, making uncertainty inclusion critical. We, therefore, include confidences alongside each proposition.
+:::
+
+**命题(Propositions)**是 GUM 通过观察构建的文本假设。看到朋友的婚礼邀请会产生表层推断,如"用户被邀请参加朋友的婚礼"(User is invited to friend's wedding)。然而,GUM 也可能生成需要猜测的更复杂推断,如"用户需要为婚礼购买或租赁西装"(User needs to buy or rent a suit for the wedding)。这些命题可能不正确,因此纳入不确定性至关重要,故而作者在每条命题旁都附带置信度。
+
+::: en
+Confidences reflect how certain the model is about proposition truth, predicated on the quality and quantity of the available evidence to support the proposition. Confidences enable decision making over uncertainty, representing belief degrees associated with each proposition. This allows prioritizing actions based on reliable information while acknowledging tentative assumptions. User is invited to friend's wedding requires less speculation: the invite appears on-screen, earning high confidence (1.0). Inferences about needing to buy or rent a suit are never explicitly expressed, receiving lower confidence (0.4). In §6, we evaluate how well the GUM's generated confidence scores align with participants' actual accuracy.
+:::
+
+**置信度(Confidences)**反映模型对命题为真的确定程度,取决于支持该命题的可用证据的质量与数量。置信度使决策可以在不确定性下进行,表示与每条命题关联的相信程度,从而基于可靠信息优先安排行动,同时承认尝试性假设。"用户被邀请参加朋友的婚礼"几乎不需要猜测:邀请就出现在屏幕上,因此获得高置信度(1.0);关于需要购买或租赁西装的推断从未被明说,得到较低的置信度(0.4)。§6 将评估 GUM 生成的置信度分数与参与者实际判定的准确率吻合到什么程度。
+
+::: en
+Additionally, propositions include metadata for downstream applications. Inspired by cognitive agent architectures [3, 63], we introduce generated decay scores (0-1), indicating proposition staleness rates. Author is a Ph.D. student decays slowly (score = 1.0). Conversely, Author is debugging a memory leak is transient (score = 0.6). Each proposition includes grounding: observations supporting the inference, plus generated reasoning explaining the proposition's construction:
+
+Screenshots show the author using XCode's memory profiler, examining increasing memory consumption graphs, inspecting code functions with memory allocation annotations, and adding debugging statements around object creation - all indicating active memory leak troubleshooting.
+:::
+
+此外,命题带有面向下游应用的**元数据**。受认知智能体架构启发 [3, 63],作者引入生成的**衰减分数**(decay score,0-1),表示命题的过时速率:"作者是博士生"(Author is a Ph.D. student)衰减缓慢(分数 = 1.0);相反,"作者正在调试内存泄漏"(Author is debugging a memory leak)是转瞬即逝的(分数 = 0.6)。每条命题还包含**接地**(grounding,支持该推断的观察),以及解释命题如何构建的生成**推理**(reasoning):
+
+截图显示作者在使用 XCode 的内存分析器,查看内存消耗上升的图表,检查带内存分配注释的代码函数,并在对象创建处添加调试语句——这一切都表明其在主动排查内存泄漏。
+
+#### 3.2 与 GUM 交互的接口
+
+::: en
+Here, we outline core functions to interface with the GUM, highlighting how applications and users can interact with the underlying abstractions. GUMs are implemented in Python can be pip-installed as a package. Later in §5, we revisit how GUM implements each of these functionalities.
+:::
+
+本节概述与 GUM 交互的核心函数,说明应用与用户如何与底层抽象交互。GUM 以 Python 实现,可作为一个包 pip 安装。§5 将回顾 GUM 如何实现这些功能。
+
+::: en
+Instantiating a GUM. Instantiating a GUM requires access to an instruction-following (V)LM (e.g., GPT, Claude, Llama). We use Llama 3.3 70B running on secure servers to maintain privacy, though any model supporting the OpenAI ChatCompletions API is compatible. All propositions and associated metadata are located under the private GUM._propositions variable, accessible only to the user. Applications cannot directly manipulate the private propositions variable attached to the GUM, unless explicitly granted permission by the user.
+:::
+
+**实例化 GUM。**实例化 GUM 需要访问一个指令跟随型(V)LM(如 GPT、Claude、Llama)。为保持隐私,论文使用运行在安全服务器上的 Llama 3.3 70B,不过任何支持 OpenAI ChatCompletions API 的模型都兼容。所有命题及相关元数据都存放在私有的 `GUM._propositions` 变量中,只有用户可以访问。应用不能直接操纵 GUM 上挂载的这一私有 propositions 变量,除非用户显式授权。
+
+::: en
+Subscribing to observations. The GUM can subscribe to various information streams with user permission. Like traditional context-aware systems that require operating system hooks [24], GUM also exposes a handful of default hooks, which we call Observers. These Observers listen for new observations related to screen content, notifications, and manual input. For example, when a user saves a file or moves their mouse, the Filesystem and Screen Observers pass new observations to the GUM, which converts these observations into propositions.
+:::
+
+**订阅观察。**经用户许可,GUM 可以订阅多种信息流。与需要操作系统钩子的传统情境感知系统一样 [24],GUM 也提供若干默认钩子,作者称之为 Observer(观察器)。这些 Observer 监听与屏幕内容、通知及手动输入有关的新观察。例如,当用户保存文件或移动鼠标时,文件系统与屏幕 Observer 会把新观察传给 GUM,由 GUM 把这些观察转换为命题。
+
+::: en
+Querying the GUM. Users and applications alike can search for propositions (and underlying observations) using natural language queries. The query function supports parameters for search terms, response diversity, and time filtering. For example, searching for "HCI conference" will return relevant propositions about the user's HCI-related activities. The query function also supports options to control a handful of parameters: the balance between the relevance and diversity of responses (0 = maximize relevance, 1 = maximize diversity), the timestamp cutoff from which the query should start its search (looking back), and whether or not a decay should be applied based on the proposition's timestamp.
+:::
+
+**查询 GUM。**用户与应用都可以用自然语言查询来搜索命题(及底层观察)。查询函数支持搜索词、响应多样性与时间过滤等参数。例如,搜索 "HCI conference" 会返回与用户 HCI 相关活动有关的命题。查询函数还支持若干选项:响应相关性与多样性的平衡(0 = 最大化相关性,1 = 最大化多样性)、查询回溯搜索的时间戳起点(looking back),以及是否根据命题时间戳施加衰减。
+
+### 4 Applications of General User Models(通用用户模型的应用)
+
+::: en
+To illustrate the breadth of applications for a GUM, we outline a range of downstream use cases. These span from simple applications, such as augmenting powering chat-based LLM clients with context from GUM, to introducing a new class of proactive systems that discover helpful suggestions for users. We also reflect on how GUMs empower classic HCI visions, including ubiquitous computing, interface agents, and context-aware computing.
+:::
+
+为说明 GUM 的应用广度,作者列出一批下游用例:从简单的应用(如用来自 GUM 的上下文增强聊天式 LLM 客户端),到引入一类新的、为用户发现有助建议的主动式系统。作者还反思 GUM 如何赋能经典 HCI 愿景,包括泛在计算、界面智能体与情境感知计算。
+
+#### 4.1 提示模型(Prompting Models)
+
+::: en
+Before we get distracted by visions, let's return to something slightly more humble: prompting. A fundamental problem with prompting is a lack of shared grounding [70] with a model. Unless explicitly instructed, LLMs have no idea what project you're working on, who you're working with, or why the prompted task was important to you. This grounding gap results in models that often incorrectly assume aspects of our context.
+:::
+
+在被愿景带走之前,先回到一件更朴素的事:提示(prompting)。提示的一个根本问题在于与模型缺乏**共享接地** [70]。除非显式说明,LLM 根本不知道你在做什么项目、与谁合作、被提示的任务为何对你重要。这一**接地差距**(grounding gap)导致模型常常错误地假设我们情境的各个方面。
+
+::: en
+Prompting LLMs is inherently underspecified: we're forced to turn our rich context into a decontextualized natural language query. Here, we show how GUM can help close the grounding gap [68] in how we interact with chat-based LLMs.
+:::
+
+给 LLM 写提示天生是欠规格的:我们被迫把丰富的情境压缩成一段去情境化的自然语言查询。这里,作者展示 GUM 如何帮助弥合我们与聊天式 LLM 交互中的接地差距 [68]。
+
+::: en
+Consider the following prompt alongside the author's own GUM at this point in the paper (see Fig. 2).
+
+User: help me with this section.
+
+Today's frontier LLM models are lost, returning a clarification question ("Sure, I can help! Could you share the section you're referring to?"), even though there's a rich amount of context to be constructed from observation. The author's GUM has access to interactions between the authors, papers the author has recently been reading, the state of the current paper, prior HCI work the author likes, etc. In contrast, with a standard LLM users must (at worst) painfully rebuild this context turn by turn, correcting the model when it incorrectly makes assumptions. At best, LLMs rely on context from past chat interaction (using a sliver of the user's true context) or ask clarification questions.
+:::
+
+考虑下面这个提示,以及论文写到此处作者自己的 GUM(见图 2):
+
+用户:help me with this section.(帮我看看这一节。)
+
+今天的前沿 LLM 一脸茫然,只会返回澄清式问题("当然可以帮你!能分享一下你指的是哪一节吗?")——尽管明明可以从观察中构建大量上下文。作者的 GUM 掌握作者们之间的交互、作者最近在读的论文、当前论文的状态、作者喜欢的既往 HCI 工作等。相比之下,使用标准 LLM 时,用户(在最坏情况下)必须逐轮痛苦地重建这些上下文,并在模型做出错误假设时纠正它;在最好的情况下,LLM 依赖过往**聊天**交互的上下文(只用到了用户真实情境的一小片)或提出澄清问题。
+
+[图 2: General User Models can ground user queries in a broader context. In this example, the user is writing an Applications section for this paper. Given a severely underspecified query, the General User Model marshalls relevant context—the draft the user has been working on, the section the user is referring to, the applications the user has already considered—and generates a highly contextualized response.]
+
+图 2(中文说明):通用用户模型可以把用户查询接地到更宽的情境中。本例中,用户正在为本文撰写"应用"一节;面对一条严重欠规格的查询,GUM 调度出相关情境——用户一直在改的草稿、用户所指的小节、用户已经考虑过的应用——并生成高度情境化的回复。(界面截图:左侧为对话输入,右侧展示检索到的命题与生成的个性化回答,以文字概述。)
+
+::: en
+Here, the GUM bridges this grounding gap by querying for additional propositions and their underlying observations. In our example, the GUM returns papers the author was looking at earlier, feedback from the coauthors, and the section the author was revising.
+
+Proposition: Omar is currently focusing on the Applications section.
+Confidence: 0.8
+
+Proposition: Omar recently read Weiser's Calm Computing.
+Confidence: 0.6
+
+Proposition: Omar's advisor mentions looking into Interface Agents.
+Confidence: 0.5
+
+Conditioned on the GUM, LLMs generate responses that are far more personalized to the specific user.
+
+Since you're revising the Applications section and have been thinking about Weiser's Calm Computing and Interface Agents, it might be helpful to emphasize how your system extends calm computing principles through contextual awareness. You could also contrast Gumbo's general assistance with the more fixed approach seen in traditional interface agents. Here's a paragraph I drafted...
+:::
+
+这里,GUM 通过查询附加命题及其底层观察来弥合接地差距。在本例中,GUM 返回了作者早前在看的论文、共同作者们的反馈、以及作者正在修订的小节:
+
+命题:Omar 当前专注于 Applications 一节。置信度:0.8
+命题:Omar 最近读了 Weiser 的《宁静计算》。置信度:0.6
+命题:Omar 的导师提到可以关注 Interface Agents。置信度:0.5
+
+在 GUM 的条件下,LLM 生成的回复对具体用户而言个性化得多:
+
+"既然你正在修订 Applications 一节,并且一直在思考 Weiser 的《宁静计算》与 Interface Agents,不妨强调你的系统如何通过情境感知扩展宁静计算原则;也可以把 Gumbo 的通用辅助与传统界面智能体较为固定的做法相对比。这是我起草的一段……"
+
+#### 4.2 任何应用都可以查询 GUM
+
+::: en
+Beyond prompting, any application can connect to a GUM, using context from all other applications and the user. Across a range of HCI systems, having access to context and being able to process it is a key single enabling layer of the application. To outline this, we revisit Weiser [81]'s calm technology, Maes and Kozierok [51]'s interface agents, and, in a slightly "meta" sense, Dey et al. [20]'s context protocols.
+:::
+
+在提示之外,任何应用都可以连接 GUM,使用来自**所有其他**应用与用户的上下文。在一系列 HCI 系统中,"能获取情境并能处理它"是应用的关键单一使能层。为说明这一点,作者重访 Weiser [81] 的宁静技术、Maes 与 Kozierok [51] 的界面智能体,以及——带点"元"意味——Dey 等 [20] 的情境协议。
+
+::: en
+Calm Technology (Weiser and Brown [82]). Weiser's ubiquitous computing vision launched a raft of work realizing systems that slide to and from the user's periphery. People have typically built such systems based on custom sensors [27, 40] such as cameras and microphones, where each application has to build a custom ML pipeline to make decisions [28, 39]. The GUM enables all of these applications with no such instrumentation or training set, in a way that is sensitive to the user's task. Weiser's calm technology engages both the center and periphery of a user's attention, moving seamlessly between the two. A key design consideration for calm technologies [82] is recognizing that what resides in the periphery can shift from moment to moment.
+:::
+
+**宁静技术(Calm Technology,Weiser 与 Brown [82])。**Weiser 的泛在计算愿景催生了一大批实现"在用户注意力外围滑入滑出"的系统的工作。人们通常基于相机、麦克风等定制传感器 [27, 40] 构建这类系统,每个应用都得搭建自定义机器学习流水线来做决策 [28, 39]。GUM 无需此类仪器化或训练集即可实现所有这些应用,而且对用户的任务敏感。Weiser 的宁静技术同时占据用户注意力的中心与外围,并在两者之间无缝移动;宁静技术的一个关键设计考量 [82] 是认识到:处于外围的内容会随时刻变化。
+
+::: en
+For example, operating systems that use GUMs can surface important information when it's truly needed. For example, the first author of this paper was swamped with writing this paper, and the CHI early bird registration deadline came and went. By default, their operating system shows notifications for every email they gets in their primary inbox—causing them to generally ignore the notification, as they also received emails in the same period about "firebase-noreply-billing" and "Job Opportunity at Startup". When prompting Llama 3.3 with "Filter out notifications that are important to me.", it suggests passing all of these notifications through to the author, leading to attention overload. However, the same prompt, augmented with GUM's propositions and confidence, provides context that the author (1) "is quite happy as a Ph.D. student", (2) "has a major impending deadline", and (3) "regularly ignores billing notifications" As a result, the LLM now allows only the CHI registration notification through.
+:::
+
+例如,使用 GUM 的操作系统可以在真正需要时才浮出重要信息。举个实例:本文第一作者埋首撰写本文时,CHI 早鸟注册截止日期悄悄溜走了。默认情况下,其操作系统对主收件箱收到的每封邮件都显示通知——这导致他总体上忽略通知,因为同期他还收到 "firebase-noreply-billing"(Firebase 账单)与 "Job Opportunity at Startup"(创业公司的工作机会)之类邮件。直接给 Llama 3.3 提示 "Filter out notifications that are important to me."(过滤出对我重要的通知),它建议把这些通知**全部**放行给作者,导致注意力过载。而同一提示在用 GUM 的命题与置信度增强后,提供了这样的上下文:作者(1)"对博士生身份相当满意";(2)"有一个重大的临近截止日期";(3)"经常忽略账单通知"。于是,LLM 现在只放行 CHI 注册通知。
+
+::: en
+Interface Agents (Maes and Kozierok [51]). Interface agents introduced personalized and proactive assistance for human-computer interaction. Instead of placing the burden of initiative on the user, interface agents are applications that aim to anticipate user needs and automate tasks. This requires both domain knowledge and personalized user models, but an implementation has remained challenging without a continuously learned model of individual preferences. Each new agent requires specialized datasets and hand-crafted learning objectives to capture evolving user preferences [51].
+:::
+
+**界面智能体(Interface Agents,Maes 与 Kozierok [51])。**界面智能体为人机交互引入了个性化与主动式辅助。界面智能体不把发起的负担压在用户身上,而是以预判用户需求、自动执行任务为目标的应用。这既需要领域知识也需要个性化用户模型,但若没有一个持续学习的个体偏好模型,实现始终困难:每个新智能体都需要专门的数据集与手工设计的学习目标来捕捉演化的用户偏好 [51]。
+
+::: en
+GUMs enable interface agents more broadly. They supply both the user model and reflect the user's preferences across time. Consider Maes' Firefly agent [73]: a movie recommendation agent that proactively surfaces interesting new movies based on the user's preferences. For the author, now would be a horrible time—they are scrambling to finish their paper. But when the author prompted a standard LLM (Llama 3.3 70B) and asked if now was a good time for a movie, it agreed and proceeded to recommend a list of movies that were completely unrelated to the author's interests (psychological thrillers). In contrast, with the same prompt, the GUM-augmented LLM recognizes that the author (1) has "many comments unresolved on his draft" and (2) has only "a few hours until the paper deadline". As a demonstration, when we ablate everything deadline-related from the GUM, the GUM-augmented LLM correctly agrees and recommendes a relevant list of movies. With GUMs, we can instantiate a range of proactive personalized interface-agents, with minimal domain-specific engineering and a handful of simple prompts (e.g. Should I watch a movie?).
+:::
+
+GUM 让界面智能体更广泛地成为可能:它既提供用户模型,又反映用户跨时间的偏好。考虑 Maes 的 Firefly 智能体 [73]:一个根据用户偏好主动浮出有趣新电影的电影推荐智能体。对作者而言,现在看电影糟透了——他正手忙脚乱地赶论文。但当作者询问一个标准 LLM(Llama 3.3 70B)"现在是不是看电影的好时机"时,它**表示同意**,还推荐了一列与作者兴趣(心理惊悚片)完全无关的电影。相反,同一提示下,经 GUM 增强的 LLM 认识到作者(1)草稿上"还有大量未解决的批注",(2)"距论文截止只剩几个小时"。作为演示,当把 GUM 中一切与截止日期相关的命题消融后,经 GUM 增强的 LLM 又正确地表示同意并推荐了相关的电影列表。有了 GUM,只需极少的领域特定工程和几句简单提示(如 "Should I watch a movie?"「现在该看电影吗?」),就能实例化一大批主动式个性化界面智能体。
+
+::: en
+Context-Aware Computing. Unifying context across applications is a long-standing vision of context-aware computing, but creating effective context protocols [20] has remained evasive. If this were achieved, a common API could then be queried by any application to adapt based on relevant user context. Applications built using context toolkits—from context-aware reminder systems [19] to assistants for conference attendees [21]—relied on infrastructure for specialized sensors. Supporting a new specialized sensor is a challenge: for each new sensor, an entirely new data processing pipeline must be manually engineered.
+:::
+
+**情境感知计算(Context-Aware Computing)。**跨应用统一情境是情境感知计算的长期愿景,但构建有效的情境协议 [20] 一直难以实现。若能实现,任何应用都可以查询一个公共 API,基于相关用户情境进行自适应。用情境工具包构建的应用——从情境感知提醒系统 [19] 到会议与会者助手 [21]——都依赖为专门传感器准备的基础设施;支持一种**新的**专门传感器是一项挑战:每支持一种新传感器,都必须手工搭建一条全新的数据处理流水线。
+
+::: en
+GUMs promise to solve exactly this! Any input data type—a screenshot, sensor data, videos, etc.—can, in principle, be embedded in the GUM. As an example, the first author exported their self-reported physical exercise logs from a weight training app on their phone and serialized the day-level logs into text files. In addition, they exported step counts from their Apple Health app. With no data preprocessing (beyond initial .txt translation), the first author fed these observations directly into their GUM. The result:
+
+Proposition: Omar is prioritizing their paper deadline over routine physical exercise.
+Confidence: 0.6
+:::
+
+GUM 恰好有望解决这一问题!任何输入数据类型——截图、传感器数据、视频等——原则上都可以嵌入 GUM。例如,第一作者从手机上的力量训练应用导出了自我报告的体育锻炼日志,把按天级别的日志序列化为文本文件;此外还从其 Apple Health 应用导出了步数。除了最初的 .txt 转换,未做任何数据预处理,第一作者就把这些观察直接喂入了其 GUM。结果是:
+
+命题:Omar 正把论文截止日期置于日常体育锻炼之上。置信度:0.6
+
+#### 4.3 Gumbo:一个构建在 GUM 之上的助手
+
+::: en
+To more concretely ground the examples above, we now describe how GUMs enable a class of applications that can proactively discover suggestions based on user context. We introduce Gumbo (Fig. 3), an assistant that ingests screenshots from a user's screen. Using screenshots, Gumbo builds an internal GUM. With the GUM, Gumbo discovers helpful suggestions, determines if a suggestion is worth showing to a user and executing, and then executes the (sandboxed) suggestion to the best of its ability—sharing preliminary results with the user.
+:::
+
+为把上述例子落得更具体,作者现在描述 GUM 如何启用一类能基于用户情境主动发现建议的应用。作者引入 **Gumbo**(图 3):一个摄取用户屏幕截图的助手。利用截图,Gumbo 构建一个内部 GUM。借助 GUM,Gumbo 发现有用的建议,判断某建议是否值得展示给用户并执行,然后(在沙盒中)尽其所能执行该建议——并与用户分享初步结果。
+
+::: en
+Gumbo demonstrates how to construct a system that utilizes GUM in many different capacities simultaneously: (1) generating rapid, relevant suggestions that the system can do on behalf of the user or help the user complete; (2) estimating how much utility each suggestion will provide to the user if completed, enabling Horvitz's mixed initiative interaction framework [36]; (3) revising the model with explicit user feedback.
+:::
+
+Gumbo 展示了如何构建一个同时以多种方式利用 GUM 的系统:(1)生成系统可代用户完成、或可帮助用户完成的快速、相关建议;(2)估计每条建议完成后将给用户带来多少效用,实现 Horvitz 的混合主动交互(mixed initiative interaction)框架 [36];(3)用显式用户反馈修订模型。
+
+[图 3: GUMBO is an assistant designed to proactively surface and execute helpful suggestions for users. We built GUM into a custom desktop app. (A) The Suggestions page displays suggestions to the user, each of which the system has attempted to complete as much as possible on its own. In this figure, GUMBO suggested that the author recruit participants for the GUM user study and put together a detailed strategy plan in the background. Users can hit "Start Chat" to talk to GUMBO in more detail. (B) The Memory page allows users to view the raw propositions in their GUM, and edit, delete, or add propositions.]
+
+图 3(中文说明):GUMBO 是一个为用户主动浮出并执行有用建议而设计的助手,作者将其构建为一个定制桌面应用(界面截图,以文字概述)。(A)"建议"页向用户展示各条建议,系统已尽可能在后台自行完成每条建议——图中 GUMBO 建议作者为 GUM 用户研究招募参与者,并在后台拟出了一份详细的策略计划;用户可点击 "Start Chat" 与 GUMBO 进一步细聊。(B)"记忆"页允许用户查看其 GUM 中的原始命题,并对命题进行编辑、删除或添加。
+
+::: en
+4.3.1 Discovering Suggestions. Before suggesting anything to a user, we must generate a candidate set to evaluate. Gumbo retrieves the latest propositions from GUM and uses them to generate candidate suggestions. It then employs GUM to rank and filter these suggestions, presenting only a curated subset to the user.
+
+When a new proposition is constructed, e.g., User is likely going to friend's wedding in Chicago, Gumbo retrieves related propositions G using the query function provided by GUM (User doesn't own any suitable formal wear from recently browsing clothing sites, User needs to budget based on recent bank account checks, etc.). These propositions are pulled based on semantic relevance to "wedding travel" and the recency of related observations (e.g. pulling up a bank statement or starting a search for buying formal wear online).
+
+Using the set of related propositions G, along with all the underlying observations attached to each proposition, we generate a set of candidate suggestions τi ∼ P_LM(*|G) (e.g. Search for cheap suit rentals in Chicago). To generate candidates, we prompt the underlying LLM, Llama 3.3 70B, with all the propositions and underlying metadata. An abridged prompt is below:
+
+{raw observations omitted}
+Proposition: Omar is likely going to friend's wedding in Chicago.
+Confidence: 0.8
+Proposition: Omar doesn't own any suitable formal wear.
+Confidence: 0.6
+Proposition: Omar needs to budget as a Ph.D. student.
+Confidence: 0.5
+What concrete suggestions do you have for the user based on the provided context?
+
+For each suggestion, our full prompt also elicits additional confidence in the generated suggestion being something the user would find any value in. This can be interpreted as an aggregate suggestion confidence (P(τi|G)), which will come in handy when we decide if it's worth showing a user τi. For each new proposition, we use the prompt above to generate five suggestions together.
+:::
+
+**4.3.1 发现建议。**在向用户提出任何建议之前,必须先生成一个候选集来评估。Gumbo 从 GUM 检索最新命题并用其生成候选建议,然后借助 GUM 对这些建议排序与过滤,只把精选子集呈现给用户。
+
+当一条新命题构建完成,如"用户很可能要去芝加哥参加朋友的婚礼"(User is likely going to friend's wedding in Chicago),Gumbo 用 GUM 提供的查询函数检索相关命题集 G(如"从近期浏览服装网站看,用户没有合适的正装""根据近期查银行账户,用户需要做预算"等)。这些命题基于与"婚礼出行"的语义相关性及相关观察的新近度被拉出(如调出一张银行对账单,或开始在线搜索购买正装)。
+
+利用相关命题集 G、以及挂在每条命题上的全部底层观察,作者生成候选建议集 τᵢ ∼ P_LM(*|G)(如"搜索芝加哥便宜的西装租赁")。为生成候选,作者把全部命题及底层元数据输入底层 LLM——Llama 3.3 70B。提示(节选)如下:
+
+{原始观察略}
+命题:Omar 很可能要去芝加哥参加朋友的婚礼。置信度:0.8
+命题:Omar 没有合适的正装。置信度:0.6
+命题:Omar 作为博士生需要做预算。置信度:0.5
+基于所提供的上下文,你对用户有什么具体建议?
+
+对每条建议,完整提示还会额外引出"该建议是用户会觉得有价值之物"的置信度,可理解为聚合的建议置信度(P(τᵢ|G)),在决定是否值得向用户展示 τᵢ 时会派上用场。对每条新命题,作者用上述提示一次共同生成五条建议。
+
+::: en
+4.3.2 Determining if suggestions are worth showing. Gumbo can generate and suggest a slew of suggestions that are relevant to the user's context. In many cases, suggestions are repeats—we simply filter using lexical overlap heuristics. The real challenge arises when we have many different, potentially useful, suggestions.
+
+We apply mixed-initiative interaction [36] principles to balance helpfulness against intrusiveness. This approach requires estimating both the probability of a suggestion being useful and its utility to the user. By calculating the expected utility of interruption versus non-interruption, we can make informed decisions about when to surface suggestions. We weigh the probability the user would find some value in the suggestion P(τi|G) against the benefits of suggestion completion B and the costs of false positives C_FP and false negatives C_FN.
+
+Mixed initiative interaction assumes some model that produces costs and benefits for a specific suggestion—a major cold start hurdle for the practical implementation of mixed-initiative systems to date. In our case, we turn again to the GUM, which can estimate these quantities with no further training. Conditioned on the propositions from the GUM, we elicit costs and benefits using a prompt (Appendix B.2.1)—similar to how we generated suggestions. With the costs, benefits, and probabilities, we can compute the expected utility of (not) interrupting (E[U]) the user with the suggestion:
+
+E[U_interrupt] = P(τi|G) · B + (1 − P(τi|G)) · (−C_FP)  (1)
+
+E[U_¬interrupt] = P(τi|G) · (−C_FN) + (1 − P(τi|G)) · 0,  (2)
+= P(τi|G) · (−C_FN).  (3)
+
+To determine a decision threshold, we can simply test if the expected utility of interrupting is greater than not interrupting.
+
+E[U_interrupt] > E[U_¬interrupt]  (4)
+
+Occasionally, we found that suggestions would still pour through the decision boundary. The issue arises because Horvitz [36]'s mixed-initiative framework treats actions as independent—here though, the utility of adding an additional suggestion depends on how many other suggestions are being presented to the user in the same time period. To address this, we implement an additional token-bucketing algorithim [17], rate-limiting suggested suggestions to a maximum of 1 per minute. Altogether, we can re-use GUM to determine when to interrupt in the first place, operationalizing principles from mixed initiative interaction.
+:::
+
+**4.3.2 判断建议是否值得展示。**Gumbo 能生成并抛出一大批与用户情境相关的建议。很多时候建议是重复的——直接用词汇重叠启发式过滤。真正的挑战在于存在许多不同的、潜在有用的建议。
+
+作者应用混合主动交互 [36] 原则来平衡有用性与打扰性。该方法需要估计"建议有用"的概率及其对用户的效用。通过计算"打断"与"不打断"的期望效用,就能对何时浮出建议做出有依据的决策。作者把用户能从建议 τᵢ 中获得些许价值的概率 P(τᵢ|G),与建议完成的收益 B、误报代价 C_FP 与漏报代价 C_FN 相权衡。
+
+混合主动交互假设存在某个能为具体建议产生成本与收益的模型——这是迄今为止混合主动系统实用化的重大冷启动障碍。在本例中,作者再次求助于 GUM:它无需进一步训练即可估计这些量。在 GUM 命题的条件下,作者用一段提示(附录 B.2.1)引出成本与收益——与生成建议的方式类似。有了成本、收益与概率,就能计算用建议(不)打断用户 (E[U]) 的期望效用:
+
+E[U_interrupt] = P(τᵢ|G) · B + (1 − P(τᵢ|G)) · (−C_FP)  (1)
+E[U_¬interrupt] = P(τᵢ|G) · (−C_FN) + (1 − P(τᵢ|G)) · 0,  (2)
+　　　　　　　 = P(τᵢ|G) · (−C_FN)。  (3)
+
+要确定决策阈值,只需检验打断的期望效用是否大于不打断:
+
+E[U_interrupt] > E[U_¬interrupt]  (4)
+
+偶尔作者仍发现建议会穿过决策边界涌出。问题在于 Horvitz [36] 的混合主动框架把各行动视为相互独立——而这里,增加一条附加建议的效用取决于同一时段呈现给用户的建议总数。为此,作者实现了额外的令牌桶(token-bucketing)算法 [17],把建议的速率限制为每分钟至多 1 条。总而言之,作者可以复用 GUM 来决定"何时该打断",将混合主动交互的原则操作化。
+
+::: en
+4.3.3 Ideas are cheap. Execution is everything. Instead of solely suggesting that the user Find a suitable place to rent a suit in Chicago, Gumbo should go a step further and search for rental locations on its own and report its findings. In other words, if Gumbo is capable of completing the suggestion—and doing so does not cause irreversible side effects (such as actually ordering a suit)—it should execute the suggestion itself and present the results to the user.
+
+When necessary, suggestions generated by Gumbo can be delegated to a set of tools or agents. We use an additional zero-shot prompt to determine if a suggestion requires a tool (see Appendix B.2.2). We implement a handful of external tools which can be toggled by the user (and are by default disabled) to preserve privacy. Gumbo delegates calls to Gemini 2.0 Flash only if search with Google or code execution is required. In addition, Gumbo implements file system search and retrieval through the local MacOS spotlight search, and computer use via the Operator API.² (² We leave Computer Use disabled in Gumbo's evaluation, both to reduce external dependencies and since we found computer use too slow / buggy. We expect advancements in computer use to greatly benefit from implementing GUMs.)
+:::
+
+**4.3.3 点子廉价,执行至上。**与其只建议用户"在芝加哥找一个合适的租西装地点"(Find a suitable place to rent a suit in Chicago),Gumbo 应更进一步,自己去搜索租赁地点并报告结果。换言之,如果 Gumbo 有能力完成该建议——且完成不会造成不可逆的副作用(比如真的下单订购一套西装)——它就应自己执行建议并把结果呈现给用户。
+
+必要时,Gumbo 生成的建议可以委托给一组工具或智能体。作者用一段额外的零样本提示判断某建议是否需要工具(见附录 B.2.2)。作者实现了少数几个可由用户开关(默认关闭)的外部工具以保护隐私。只有在需要用 Google 搜索或执行代码时,Gumbo 才把调用委托给 Gemini 2.0 Flash;此外,Gumbo 通过本地 MacOS 聚焦搜索(spotlight)实现文件系统搜索与检索,并通过 Operator API 实现计算机使用²。(² 作者在 Gumbo 的评估中让 Computer Use 保持禁用,一是减少外部依赖,二是发现计算机使用太慢、bug 太多。作者预计计算机使用的进步将极大地受益于 GUM 的实现。)
+
+::: en
+4.3.4 Feedback. Finally, Gumbo allows users to leave thumbs up / down or natural language feedback on any suggestion. Gumbo simply converts the feedback into a text representation (User disliked the following suggestion: [suggestion]) and feeds it back into GUM. We treat feedback the same as any other unstructured observation, placing the onus on the GUM to convert feedback into appropriately weighted propositions.
+:::
+
+**4.3.4 反馈。**最后,Gumbo 允许用户对任何建议给出点赞/点踩或自然语言反馈。Gumbo 只是把反馈转换为文本表示("用户不喜欢以下建议:[建议]",User disliked the following suggestion: [suggestion])并喂回 GUM。作者把反馈与任何其他非结构化观察同等对待,把"将反馈转换为恰当加权命题"的责任交回给 GUM。
+
+### 5 Constructing a General User Model(构建通用用户模型)
+
+::: en
+To continuously learn a user model, GUMs construct, retrieve and revise propositions about a user by ingesting completely unstructured observations. In this section, we describe the architecture behind these components, and explain how they produce the GUM API.
+:::
+
+为持续学习用户模型,GUM 通过摄取完全非结构化的观察,来**构建**、**检索**并**修订**关于用户的命题。本节描述这些组件背后的架构,并说明它们如何构成 GUM API。
+
+::: en
+Our general engineering principle here is to rely primarily on open-source models. While closed-source models are more performant [9], we expect GUMs to be owned by individual users and eventually distilled to be run on their local devices. By focusing on open-source models, we demonstrate and advocate for the core GUMs to operate without sending private user data to third party AI platforms. As gaps between closed and open sourced models close and as models become cheaper for inference, GUMs will become more performant and feasible on commodity hardware.
+:::
+
+这里的总体工程原则是**主要依赖开源模型**。虽然闭源模型性能更强 [9],但作者期望 GUM 归个体用户所有,并最终被蒸馏到本地设备上运行。聚焦开源模型,作者展示并倡导 GUM 的核心部分可以在**不把私有用户数据发给第三方 AI 平台**的情况下运行。随着闭源与开源模型的差距缩小、模型推理成本下降,GUM 将在商用硬件上更加高性能、更加可行。
+
+::: en
+Powering the GUM in this paper are two models. To observe screen interactions, we use Qwen 2.5 VL [7]—a vision-language model with a vision encoder. For proposing/revising propositions, we use Llama 3.3 70B [32], a language-only decoder model.
+:::
+
+驱动本文 GUM 的是两个模型:观察屏幕交互使用 Qwen 2.5 VL [7]——一个带视觉编码器的视觉-语言模型;提出/修订命题使用 Llama 3.3 70B [32]——一个纯语言解码器模型。
+
+#### 5.1 观察交互(Observing Interaction)
+
+::: en
+The basic substrate of the GUM is user behavior. Where prior user models were often built off narrow, manually-logged observations (e.g., Fischer [25], Jameson [41], Horvitz et al. [39]), the inference abilities of modern VLMs open up opportunities for unstructured, unobtrusive inputs such as screenshots, files, or streams of open-ended text as the GUM's raw observations. The GUM Python package (introduced in §3.2) provides a handful of hooks that return raw observations. These hooks—Observers—are generic by design. For example, an audio Observer might connect to the device's microphone, transcribe the user's speech, and return that speech as a text string to the GUM—nothing else.
+:::
+
+GUM 的基本基底是用户行为。以往用户模型往往建立在狭窄的、手工记录的观察之上(如 Fischer [25]、Jameson [41]、Horvitz 等 [39]),而现代 VLM 的推断能力为截图、文件或开放式文本流等**非结构化、无侵扰**的输入成为 GUM 的原始观察开辟了机会。GUM Python 包(见 §3.2)提供若干返回原始观察的钩子。这些钩子——Observer——在设计上是通用组件。例如,音频 Observer 可以连接设备麦克风、转写用户语音、并把该语音作为文本字符串返回给 GUM——仅此而已。
+
+::: en
+We implement a handful of Observer instantiations in Python for MacOS. The Screen Observer listens to I/O activity (keyboard, mouse clicks), captures a screenshot of the screen on I/O input, and transcribes the contents of the changes into a text update for the GUM. It relies on a VLM (Qwen 2.5 VL 72B) to convert screenshots into a transcript. Beyond the content, Screen also generates a description of actions the user takes across up to 10 unique frames (example outputs in Appendix E). A Notification Observer watches for updates on the operating system's underlying notification database and returns updates that contain the notification text and contents. Our provided Observers—Screen and Notification—are just examples; one could implement new Observers for any modality, e.g. audio input, health sensor data, videos.
+:::
+
+作者用 Python 为 MacOS 实现了若干 Observer 实例。**屏幕 Observer** 监听 I/O 活动(键盘、鼠标点击),在 I/O 输入时截取屏幕,并把变化的内容转写为文本更新交给 GUM;它依靠 VLM(Qwen 2.5 VL 72B)把截图转换为转写文本。除内容外,屏幕 Observer 还会生成对用户在至多 10 个不同帧上所做动作的描述(示例输出见附录 E)。**通知 Observer** 监视操作系统底层通知数据库的更新,返回包含通知文本与内容的更新。作者提供的 Observer——屏幕与通知——只是示例;可以为任何模态实现新的 Observer,如音频输入、健康传感器数据、视频。
+
+#### 5.2 审计观察(Auditing Observations)
+
+::: en
+Even though GUM uses open-source vision-language models deployable locally, users may accidentally expose private information they never intended for processing. To prevent this, we implement an Audit module that filters listener updates before they reach the final collection of propositions.
+:::
+
+尽管 GUM 使用的开源视觉-语言模型可以本地部署,用户仍可能意外暴露其从未打算交由处理的隐私信息。为防止这一点,作者实现了 **Audit 模块**,在监听更新到达最终命题集合之前进行过滤。
+
+::: en
+GUMs learn a user's privacy expectations by observing data-sharing norms, using itself to infer user-specific models of contextual integrity. Consider two updates: (1) a user writing a work email about a conference versus (2) entering bank credentials on a financial website. The Audit module would allow the first as typical professional communication while blocking the second as sensitive financial data. In developing the Audit module, we instantiate Nissenbaum [54]'s contextual integrity theory, which preserves privacy when information flows match social context norms, focusing on appropriate sharing rather than binary data control.
+:::
+
+GUM 通过观察数据共享规范来学习用户的隐私期望,用自身推断用户特定的**情境完整性**(contextual integrity)模型。考虑两个更新:(1)用户写一封关于某个会议的工作邮件;(2)用户在金融网站上输入银行凭证。Audit 模块会把第一个作为典型职业沟通放行,而把第二个作为敏感金融数据拦截。在开发 Audit 模块时,作者实例化了 Nissenbaum [54] 的情境完整性理论:当信息流符合社会情境规范时,隐私得以保持;该理论关注"恰当共享"而非二值的数据管控。
+
+::: en
+Imagine a computer science professor's GUM. The GUM has already observed the user discussing course materials with colleagues via email and sharing research papers. However, it has never observed the user sharing login credentials or financial information with anyone. When the user enters their banking password on a financial website, the Audit module uses GUM to retrieve past propositions related to the current observation. These include:
+
+Michael is careful about sharing access credentials
+Michael has discussed privacy concerns with students in the past
+Michael only discusses financial matters with his spouse
+
+Using these retrieved propositions, the Audit module then generates answers to Nissenbaum [54]'s contextual integrity questions:
+
+1. Is the user disclosing any new information? Yes
+2. What type of data is the user disclosing? Banking credentials and financial account information.
+3. Who is the primary subject of the data? [User's name]
+4. Who is the recipient? An AI model that ... [description of GUM]
+5. Should this data be transmitted to the model? No
+
+The Audit module determines this observation contains sensitive financial information that the user would not want shared, and blocks the update from progressing to the remaining pipeline.
+:::
+
+想象一位计算机科学教授的 GUM。该 GUM 已经观察到用户通过邮件与同事讨论课程材料、分享研究论文,但从未观察到用户与**任何人**共享登录凭证或金融信息。当用户在金融网站上输入其银行密码时,Audit 模块用 GUM 检索与当前观察相关的过往命题,包括:
+
+- Michael 对共享访问凭证很谨慎
+- Michael 过去与学生讨论过隐私问题
+- Michael 只与其配偶讨论财务事项
+
+利用这些检索到的命题,Audit 模块随后生成对 Nissenbaum [54] 情境完整性五问的回答:
+
+1. 用户是否正在披露任何新信息?**是**
+2. 用户披露的是什么类型的数据?**银行凭证与金融账户信息。**
+3. 数据的主体是谁?**[用户姓名]**
+4. 接收者是谁?**一个 AI 模型,……[对 GUM 的描述]**
+5. 这些数据应被传输给该模型吗?**否**
+
+Audit 模块判定该观察包含用户不希望共享的敏感金融信息,并拦截该更新,不让它进入流水线的其余部分。
+
+#### 5.3 构建命题(Constructing Propositions)
+
+::: en
+We now turn to making inferences about the user from observation. The Propose module converts observations into a set of propositions. During this process, Propose generates a reasoning trace that ties observations to a proposition and produces a confidence score associated with each proposition.
+:::
+
+现在转向"从观察中对用户做推断"。Propose 模块把观察转换为一组命题。在此过程中,Propose 生成把观察与命题联系起来的推理轨迹,并为每条命题产生一个置信度分数。
+
+::: en
+Reasoning About and Generating Propositions. Before generating a proposition, we want to ensure that the model reasons over how the observations are connected to the proposition. This rationale serves two purposes: it gives users some explanation for why an inference was made and it generally improves model performance [59, 79]. In this initial reasoning step, we first instruct the model to generate an explanation related to the observation's relationship to the user.
+
+observation: [screenshots of the user switching between Overleaf and YouTube]
+
+With this observation, the Propose step generates the bolded rationale, explaining the user's behavior.
+
+proposition_reasoning: "The user appears distracted, switching focus between an ice cream recipe video and typing intermittently in an Overleaf window."
+
+Once the rationale is generated, both the observation and rationale are jointly used to generate a final proposition, e.g. proposition ∼ P_LM(·|reasoning, obs)
+
+proposition: "User periodically views ice cream recipes while writing."
+
+This is true—the first author is an ice cream afficionado, and their preferred writing distraction is browsing ice cream recipes.
+:::
+
+**推理并生成命题。**在生成命题之前,作者希望确保模型对"观察**如何**与命题相联系"进行了推理。这段理由说明(rationale)有两个作用:给用户一些"为何做出该推断"的解释,并且普遍能提升模型表现 [59, 79]。在这个初始推理步骤中,作者先指示模型生成与"观察同用户的关系"相关的解释:
+
+observation:[用户在 Overleaf 与 YouTube 之间切换的截图]
+
+有了这条观察,Propose 步骤生成加粗的 rationale,解释用户的行为:
+
+proposition_reasoning:"用户看起来分心了,在一个冰淇淋配方视频与间断地在 Overleaf 窗口中输入之间来回切换注意力。"
+
+rationale 生成后,观察与 rationale 一起被用于生成最终命题,例如 proposition ∼ P_LM(·|reasoning, obs):
+
+proposition:"用户写作时会周期性地看冰淇淋配方。"
+
+这是真的——第一作者是个冰淇淋行家(afficionado),其最偏爱的写作消遣就是浏览冰淇淋配方。
+
+::: en
+Producing Confidence Scores Over Propositions. Once the proposition and rationale are generated, we use GUM's underlying LLM to produce a confidence score in the proposition. Confidence scores support future revisions of uncertain propositions and help applications make decisions under uncertainty. While we could, in theory, use the LLM's own log probabilities by looking directly at the logit scores on the completion, out of the box model predictions are often overly confident. Like Tian et al. [76], we observe that simply prompting the model to generate confidence scores yields more calibrated outputs instead of looking at underlying logits.³ We prompt the model to generate a confidence score on a 1-10 scale, then normalize between 0-1. Our full prompt is in Appendix B.1.1. (³ Our setting is slightly different: we're looking at confidence in a user's beliefs, instead of confidence in the model's own response—but Tian et al. [76] generalizes.)
+:::
+
+**为命题生成置信度分数。**命题与 rationale 生成后,作者用 GUM 的底层 LLM 为命题产生置信度分数。置信度分数支持对不确定命题的未来修订,并帮助应用在不确定性下决策。理论上,可以直接看补全(completion)上 logits 分数来使用 LLM 自身的对数概率,但开箱即用的模型预测往往过度自信。与 Tian 等 [76] 一致,作者观察到:相比查看底层 logits,**直接提示模型生成置信度分数**能得到更校准的输出³。作者提示模型在 1-10 尺度上生成置信度分数,再归一化到 0-1 之间。完整提示见附录 B.1.1。(³ 作者的设定略有不同:他们考察的是对"用户信念"的置信度,而非对模型自身回答的置信度——但 Tian 等 [76] 的结论可以推广。)
+
+[图 4: The GUM pipeline observes user behavior via unstructured inputs (e.g., screenshots), audits updates for privacy violations using contextual integrity, constructs propositions with associated confidence scores, retrieves contextually similar propositions, and revises the model. Each step iteratively refines GUM's understanding of the user.]
+
+图 4(中文说明):GUM 流水线经由非结构化输入(如截图)观察用户行为,用情境完整性审计更新是否侵犯隐私,构建带置信度分数的命题,检索情境相似的命题,并修订模型。每一步都迭代地精炼 GUM 对用户的理解。(此为系统架构图:观察 → Audit → Propose → Retrieve → Revise 的循环。)
+
+::: en
+Proposition-specific decay. Some propositions remain more relevant over time compared to others. Unfortunately for the first author, a proposition like "User is eating ice cream." decays faster than "User is Ph.D. student." (Such is the nature of life. But, a proposition such as "User enjoys eating ice cream more than their Ph.D."⁴—that's timeless.) To account for this, we take inspiration from cognitive architectures [3, 63] and introduce a decay score. Instead of applying a global decay to all propositions universally, we use the underlying LLM to generate a proposition-specific decay. We include all information about the proposition in-context (reasoning and confidence) and generate a decay score from 1-10, e.g. decay ∼ P_LM(·|confidence, proposition, reasoning, obs). (⁴ Yes, a real proposition generated by our system.)
+:::
+
+**命题级衰减。**有些命题随时间保持的相关性高于其他。令第一作者遗憾的是,"用户正在吃冰淇淋"这样的命题比"用户是博士生"衰减得更快(生活的本质如此。不过,"用户喜欢吃冰淇淋胜过喜欢读博"⁴这样的命题——那是永恒的)。为此,作者受认知架构 [3, 63] 启发引入**衰减分数**:不是对所有命题统一施加全局衰减,而是用底层 LLM 生成每条命题专属的衰减。作者把命题的全部信息(推理与置信度)放入上下文,生成 1-10 的衰减分,例如 decay ∼ P_LM(·|confidence, proposition, reasoning, obs)。(⁴ 是的,这是本系统生成的一条真实命题。)
+
+#### 5.4 检索情境敏感的命题(Retrieving Context-Sensitive Propositions)
+
+::: en
+The process so far produces propositions and confidence scores (from Propose, §5.3), but we need to compare these with what GUM already knows. To enable comparison and retrieval over GUMs, we implement a Retrieve module. Speed is critical: each observation generates multiple propositions that require hundreds of queries. We use a two-stage retrieve and rerank approach [57]. First, we retrieve propositions and underlying observations (our "document") using BM25, which considers term frequency, inverse document frequency, and document length.⁵ Then, we use an LLM-based reranker to improve precision. Our setup optimizes for speed but can accommodate other retrieval/reranking methods. (⁵ While we use lexical similarity, one can easily replace our approach with neural embeddings)
+:::
+
+到目前为止的流程(来自 §5.3 的 Propose)产出了命题与置信度分数,但还需要把它们与 GUM 已知的内容比较。为在 GUM 上实现比较与检索,作者实现了 **Retrieve 模块**。速度至关重要:每条观察产生多条命题,需要成百次查询。作者采用两阶段的"**检索+重排**"方法 [57]:先用 BM25 检索命题及底层观察(即"文档"),BM25 考虑词频、逆文档频率与文档长度⁵;然后用基于 LLM 的重排器提高精度。该设置面向速度优化,但可以容纳其他检索/重排方法。(⁵ 作者使用词汇相似度,也可以很容易地换成神经嵌入。)
+
+::: en
+Recency-Adjusted Relevance. BM25 computes relevance scores, but recent propositions should be prioritized. Each proposition di includes a decay score αi (§5.3). We define the decay score as γi = exp −αi · k · age(di), where k = 2 and age(di) is a continuous value measured in days. The adjusted relevance score is: r̃i = ri · γi.
+:::
+
+**新近度调整的相关性。**BM25 计算相关性分数,但应当优先新近的命题。每条命题 dᵢ 带有衰减分数 αᵢ(§5.3)。作者定义衰减系数 γᵢ = exp −αᵢ·k·age(dᵢ),其中 k = 2,age(dᵢ) 是以天计的连续值。调整后的相关性分数为:r̃ᵢ = rᵢ · γᵢ。
+
+::: en
+Incorporating Diversity via Document Similarity. Retrieved propositions should be diverse. We use Maximum Marginal Relevance (MMR) to balance relevance and diversity [11]. Using TF-IDF vectors for document representation, we compute cosine similarity between documents. Given a set S of selected propositions, the diversity term for a candidate document di is: δi = max_{dj∈S} sim(di, dj) if S ≠ ∅. The MMR score combines relevance and diversity: MMR(di, S) = λ r̃i − (1−λ) δi, where λ = 0.5 balances the trade-off. We iteratively select documents maximizing MMR until reaching N documents.
+:::
+
+**通过文档相似度纳入多样性。**检索出的命题应当多样。作者用最大边际相关性(Maximum Marginal Relevance, MMR)平衡相关性与多样性 [11]:用 TF-IDF 向量表示文档,计算文档间的余弦相似度。给定已选命题集合 S,候选文档 dᵢ 的多样性项为:δᵢ = max_{dⱼ∈S} sim(dᵢ, dⱼ)(若 S ≠ ∅)。MMR 分数组合相关性与多样性:MMR(dᵢ, S) = λ r̃ᵢ − (1−λ) δᵢ,其中 λ = 0.5 平衡折中。作者迭代选择使 MMR 最大的文档,直到达到 N 个文档。
+
+::: en
+Reranking and Filtering. We pass retrieved propositions through an LLM re-ranker that classifies them as identical, similar, or unrelated (the reranker prompt is in the Appendix B.1.2). For example, when querying with User is periodically distracted by ice cream recipes, a proposition like User is a CS Ph.D. student would be labeled as unrelated. On the other hand, User might have a sweet tooth would be related, while User appears distracted by ice cream recipes would be identical. Successive identical propositions might signal that a revision is necessary, which we address next in §5.5.
+:::
+
+**重排与过滤。**作者把检索到的命题送入 LLM 重排器,将其分类为 identical(相同)、similar(相似)或 unrelated(无关)(重排器提示见附录 B.1.2)。例如,用"用户周期性地被冰淇淋配方分心"(User is periodically distracted by ice cream recipes)查询时,"用户是 CS 博士生"(User is a CS Ph.D. student)这样的命题会被标为**无关**;而"用户可能爱吃甜食"(User might have a sweet tooth)是**相关**;"用户看起来被冰淇淋配方分心了"(User appears distracted by ice cream recipes)则是**相同**。连续的相同命题可能预示需要修订——这正是 §5.5 的主题。
+
+#### 5.5 修订命题(Revising Propositions)
+
+::: en
+As the breadth and quantity of propositions in the GUM grows, revision becomes critical. The retrieve module simply surfaces similar propositions. However, newly generated propositions in GUM—flagged as similar by our retrieval module—can contradict or reinforce prior propositions. The final GUM should reflect these differences. We introduce a Revision module that takes newly generated propositions and appropriately revises prior ones. Over time, the revise step refines the GUM, yielding a collection of propositions that reflect a richer understanding of the user.
+:::
+
+随着 GUM 中命题广度与数量的增长,修订变得关键。检索模块只是把相似命题浮出;但 GUM 中新生成的命题——被检索模块标记为 similar——可能与旧命题**矛盾**或**印证**,最终的 GUM 应反映这些差异。作者引入 **Revision 模块**:接收新生成的命题并恰当修订既有命题。随着时间推移,修订步骤不断精炼 GUM,产出一组反映对用户更丰富理解的命题。
+
+::: en
+To implement revision, we construct a prompt that takes as input retrieved propositions and the newly generated propositions, along with the underlying observations for each proposition. The revision process can operate over multiple input/output propositions, revising multiple propositions at once. Using the newly generated propositions, the revision module rewrites the proposition, regenerates confidence, and then revises associated metadata. We encode both the past proposition(s) and the new proposition(s) in a prompt. We additionally include all metadata associated with both the old and new propositions—the underlying grounding, reasoning traces, and decay scores.
+
+**## Past Proposition**
+Proposition: User periodically views ice cream recipes while writing.
+Confidence: 6
+Decay: 4
+[additional metadata (grounding, reasoning)]
+
+**## New Proposition**
+Proposition: User messaged ice cream recipes to colleague during a meeting.
+Confidence: 6
+Decay: 2
+[additional metadata (grounding, reasoning)]
+
+Conditioned on both the past and current proposition, we also generate a revised proposition: revision ∼ P_LM(·|prop_new, prop_old). Generated portions are bolded.
+
+**## Revised Proposition**
+[regenerated reasoning]
+Proposition: User is regularly distracted by ice cream recipes
+Confidence: 10
+Decay: 1
+:::
+
+为实现修订,作者构建一段提示,输入为检索到的命题与新生成的命题,以及每条命题的底层观察。修订过程可对多条输入/输出命题操作,**一次修订多条**。利用新生成的命题,修订模块重写命题、重新生成置信度,然后修订相关元数据。作者把旧命题与新命题编码进同一提示,并额外附上新旧命题的全部元数据——底层接地、推理轨迹与衰减分数:
+
+**## 旧命题(Past Proposition)**
+命题:用户写作时会周期性地看冰淇淋配方。
+置信度:6
+衰减:4
+[其余元数据(接地、推理)]
+
+**## 新命题(New Proposition)**
+命题:用户在会议期间给同事发了冰淇淋配方。
+置信度:6
+衰减:2
+[其余元数据(接地、推理)]
+
+在旧命题与当前命题的共同条件下,作者还生成修订后的命题:revision ∼ P_LM(·|prop_new, prop_old)。生成部分以加粗显示:
+
+**## 修订后命题(Revised Proposition)**
+[重新生成的推理]
+**命题:用户经常被冰淇淋配方分心**
+**置信度:10**
+**衰减:1**
+
+::: en
+In the example above, our revised confidence increased. However, revision can also yield propositions with reduced confidence, especially when contradictory propositions are compared. We never completely evict propositions that are revised to zero confidence: they remain in the GUM for transparency. However, queries to the GUM will—by default—not surface confidence = 0 propositions.
+:::
+
+在上例中,修订后的置信度上升了。但修订也可能**降低**命题置信度,尤其是比较相互矛盾的命题时。对于被修订到零置信的命题,作者从不彻底驱逐:为了透明,它们保留在 GUM 中;但对 GUM 的查询**默认**不会浮出置信度 = 0 的命题。
+
+### 6 Evaluating General User Models: Accuracy and Calibration(评估 GUM:准确率与校准)
+
+::: en
+GUMs aim to accurately capture a user's context from unstructured observation. To first evaluate whether GUMs can effectively synthesize context into accurate inferences about users, we conduct an evaluation in a controlled setting using email data. We assess GUM's accuracy compared to ablations and evaluate GUM calibration—whether confidence levels appropriately reflect uncertainty.
+
+We chose email as our evaluation domain because inboxes contain diverse and relevant information across modalities, while also being full of irrelevant content. Email overload makes synthesizing important information difficult: GUMs must maintain accuracy despite this challenge. Though email represents only a subset of user interactions, its controlled, semantically rich nature provides a suitable testbed for annotation.
+:::
+
+GUM 旨在从非结构化观察中准确捕捉用户情境。为首先评估 GUM 能否把情境有效综合为对用户的准确推断,作者用邮件数据在受控环境中进行评估:考察 GUM 相对消融版本的**准确率**,并评估 GUM 的**校准**——置信度水平是否恰当反映不确定性。
+
+作者选择**邮件**作为评估领域,是因为收件箱跨模态地包含多样且相关的信息,同时也充斥无关内容。邮件过载使综合重要信息变得困难:GUM 必须在此挑战下保持准确。尽管邮件只代表用户交互的一个子集,但其受控、语义丰富的性质为标注提供了合适的测试床。
+
+#### 6.1 GUM 消融
+
+::: en
+For a controlled evaluation, our hypotheses require baselines for evaluation. Generating an accurate proposition can be trivial—GUMs could generate obvious and uninteresting facts about the user (e.g. [ANON] is using their computer). We therefore evaluate relative quality between generated propositions, using the following ablations as conditions:
+
+• Ablation: No {Retrieve, Revise}. In this ablation, we test a version of GUM that only creates propositions with no confidence. The GUM is unable to retrieve past context—propositions are constructed given only the current email.
+
+• Ablation: No {Retrieve}. Here, we enable just the Revision model, revising old propositions based on current emails using a sliding window of past propositions (that fit into the model's context window) without the full retrieval engine.
+
+• Full: The full GUM architecture uses both the Revise and Retrieve modules. enabling retrieval over longer timespans and appropriate proposition revision.
+:::
+
+为做受控评估,假设需要评估基线。生成一条准确的命题可能很容易——GUM 完全可以生成关于用户的显而易见、无趣的事实(如"[ANON] 在用电脑")。因此作者评估生成命题之间的**相对质量**,采用以下消融作为条件:
+
+- **消融:No {Retrieve, Revise}(无检索、无修订)。**该消融测试一个**只创建**命题、不带置信度的 GUM 版本;GUM 无法检索过往上下文——命题仅基于当前邮件构建。
+- **消融:No {Retrieve}(无检索)。**此处只启用修订模型,基于当前邮件、用过往命题的滑动窗口(能装进模型上下文窗口的部分)修订旧命题,没有完整检索引擎。
+- **Full(完整)。**完整 GUM 架构同时使用 Revise 与 Retrieve 模块,支持更长时间跨度的检索与恰当的命题修订。
+
+#### 6.2 流程(Procedure)
+
+::: en
+Our procedure involves a data loading process, where the participant exports the last 200 emails (threads, attachments, links, etc.) onto their personal computer. Then, participants train their own GUM, sequentially feeding inputs in the same order they appear in the inbox. Finally, we ask participants to label and rank outputs from the GUM and its ablations for quantitative evaluation, and share open-ended feedback on aspects of the study.
+:::
+
+流程包含一个数据加载过程:参与者把最近 200 封邮件(会话串、附件、链接等)导出到个人电脑;随后参与者训练**自己的** GUM,按邮件在收件箱中出现的顺序依次喂入输入;最后,请参与者对 GUM 及其消融版本的输出进行标注与排序以做量化评估,并就研究的各个方面给出开放式反馈。
+
+::: en
+6.2.1 Participants and Infrastructure.
+
+Participants. We recruited N = 18 participants through a mix of snowball sampling, word-of-mouth, and workplace channels at our institution. We required participants to be over 18 years old, be fluent in English, and have an active Gmail account. The median age was 26, with 8 identifying as male and 10 as female. 39% identified as Caucasian, 50% identified as Asian, and 5.5% as Hispanic, and 5.5% as other. Most of our participants were recruited from an academic institution: 14 of our participants have a bachelor's degree, 3 have a master's degree, and 1 has a GED.
+
+Infrastructure. In serving GUM, we only use open-source models, relying on Llama 3.3 (70B parameters) for proposition and revision steps. We used quantized versions for inference speed and memory efficiency on 80GB NVIDIA H100 GPUs (which were provisioned by us directly and only accessible to the research team), using the Skypilot [84] library for autoscaling and load-balancing.
+:::
+
+**6.2.1 参与者与基础设施。**
+
+**参与者。**作者通过滚雪球抽样、口碑与所在机构的工作渠道混合招募了 N = 18 名参与者,要求年满 18 岁、英语流利并有活跃的 Gmail 账户。年龄中位数 26;8 名自认为男性、10 名自认为女性;39% 自认为白人,50% 亚裔,5.5% 西班牙裔,5.5% 其他。多数参与者来自学术机构:14 人有学士学位、3 人有硕士学位、1 人有 GED(普通教育发展证书)。
+
+**基础设施。**在为 GUM 提供服务时,作者**只**使用开源模型,命题与修订步骤依赖 Llama 3.3(70B 参数)。为在 80GB NVIDIA H100 GPU(由作者直接开通、仅研究团队可访问)上兼顾推理速度与内存效率,使用了量化版本,并用 Skypilot [84] 库做自动扩缩容与负载均衡。
+
+::: en
+6.2.2 Procedure Details. Participants first exported 200 emails from their Gmail "Primary Inbox" (excluding Promotions and Social emails) via an export script that preserved read/unread states and replies. They then executed a training script that sequentially fed these emails into GUM in chronological order, with processing occurring on our private infrastructure while propositions and metadata were saved locally. Following training, each participant evaluated 30 stratified propositions across both time and confidence (ten from each condition) by providing binary accuracy judgments and ranking sets in pairwise comparisons with allowance for ties. Finally, participants completed a survey with open-ended questions (in Appendix C) about the strengths and weaknesses of the generated propositions, providing qualitative insights to complement the quantitative evaluations.
+:::
+
+**6.2.2 流程细节。**参与者首先通过导出脚本从 Gmail"主要收件箱"导出 200 封邮件(不含"推广"与"社交"类邮件),脚本保留了已读/未读状态与回复。随后执行训练脚本,按时间顺序把这些邮件依次喂入 GUM;处理在作者的私有基础设施上进行,而命题与元数据保存在本地。训练之后,每位参与者评估 30 条按时间与置信度**分层抽样**的命题(每个条件 10 条):给出二元准确性判断,并在允许平局的成对比较中对命题集排序。最后,参与者完成一份含开放式问题的调查(见附录 C),谈生成命题的优点与不足,为量化评估补充定性洞察。
+
+#### 6.3 评估方法(Evaluation Methods)
+
+::: en
+To evaluate GUM, we assessed accuracy, calibration, and relative performance across ablations. We computed accuracy across the labeled propositions and compared results via t-tests. For relative rankings, we converted participant comparisons into pairwise win rates with confidence intervals, and applied significance testing using Holm-corrected binomial tests. To measure calibration, we calculated Brier scores (mean squared difference between predicted probabilities and actual outcomes), with lower scores indicating better calibration.
+
+Brier = (1/n) Σᵢ₌₁ⁿ (pᵢ − yᵢ)²  (5)
+
+Because GUM generates confidence scores on a 1−10 scale, we normalize these scores to the [0,1] range before computing the Brier score. Finally, we conducted t-tests for Brier across GUM ablations.
+:::
+
+为评估 GUM,作者考察准确率、校准与消融间的相对表现。对被标注命题计算准确率并用 t 检验比较结果;相对排序被转换为带置信区间的成对**胜率**,并用 Holm 校正的二项检验做显著性检验;校准用 **Brier 分数**(预测概率与实际结果的均方差)度量,分数越低校准越好:
+
+Brier = (1/n) Σᵢ₌₁ⁿ (pᵢ − yᵢ)²  (5)
+
+由于 GUM 在 1-10 尺度上生成置信度分数,计算 Brier 分数前先把这些分数归一化到 [0,1] 区间。最后,作者对各 GUM 消融的 Brier 分数做了 t 检验。
+
+[图 5: Relative to ablations, propositions from the full GUM architecture are preferred by users. Additionally, retrieval and revision depend heavily on each other. Without retrieving relevant propositions, the revise module is unable to correctly adjust propositions. Ablating retrieval causes win rates to fall significantly.]
+
+图 5(中文说明):相对消融版本,用户更偏好来自完整 GUM 架构的命题;且检索与修订高度相互依赖——若不检索相关命题,修订模块无法正确调整命题;消融检索会使胜率显著下降。(图为各条件下命题排序胜率及置信区间的柱状图。)
+
+**表 1(Table 1):单独看时,GUM 及其消融的准确率大致相同——模型总体都能构建关于用户的正确推断;但完整 GUM 架构产生的命题校准显著更好。**
+
+| 变体(Variants) | 准确率(Accuracy) | 校准 / Brier(Calibration) |
+| --- | --- | --- |
+| No {Retrieve, Revise} | 74.41±7.81 | – |
+| No {Retrieve} | 73.28±4.42 | 0.36±0.07 |
+| Full | 76.15±5.85 | 0.17±0.03 |
+
+[图 6: GUMs are generally well calibrated. When errors occur, GUMs are underconfident in their propositions—the actual model's predictions lie above perfect calibration. In the user modeling setting, this is ideal. We should underestimate propositions to avoid eroding user trust.]
+
+图 6(中文说明):GUM 总体校准良好。出现误差时,GUM 对命题**欠自信**——模型的实际预测位于完美校准线之上。在用户建模场景下这是理想的:我们应当低估命题,以避免侵蚀用户信任。(图为置信度与实际准确率的校准曲线。)
+
+#### 6.4 结果(Results)
+
+::: en
+We outline a sample of anonymized and correctly annotated propositions from our evaluation below to illustrate the breadth of inferences constructed from email alone.
+
+[ANON] values their privacy and is interested in how their personal information is used.
+[ANON] is likely a frequent traveler, given their engagement with emails about airline transfer bonuses and credit card rewards.
+[ANON] is annoyed by notifications from Academia.edu.
+[ANON] is proactive about managing their notifications and email subscriptions.
+[ANON] is aware of the risks associated with investing, including the possible loss of money.
+:::
+
+下面列出评估中一批匿名且被正确标注的命题示例,以说明仅凭邮件就能构建的推断广度:
+
+- [ANON] 重视自己的隐私,并关心个人信息如何被使用。
+- [ANON] 很可能是频繁出行者,从其与航空里程转点奖金、信用卡权益类邮件的互动可见。
+- [ANON] 对 Academia.edu 的通知感到厌烦。
+- [ANON] 在主动管理自己的通知与邮件订阅。
+- [ANON] 意识到投资的风险,包括可能损失金钱。
+
+::: en
+The full architecture bests GUM ablations. To differentiate between ablations and to identify relative performance of the full GUM, we asked participants to rank output propositions from each ablation. In the ranked setting, the difference between the full GUM and the ablations are clear (Fig 5). Win rates for the full model are higher than the ablations (μ, 95% conf; Full = 0.618 ± 0.07, No {Retrieve} = 0.463 ± 0.07, No {Retrieve, Revise} = 0.420 ± 0.07). This difference is also validated by a bootstrapped significance test following the Holm-Beniforri correction (p < 0.05). Between the No {Retrieve, Revise} and No {Revise} ablations, however, we see no significant difference. We suspect that relevant email is often spaced apart, and that revision without retrieval (e.g. the sliding window approach) fails to capture long-range dependencies between emails. Without this, Revision falls apart entirely.
+:::
+
+**完整架构优于 GUM 消融。**为区分各消融并确定完整 GUM 的相对表现,作者请参与者对各消融的输出命题排序。在排序设定下,完整 GUM 与消融之间的差异很明显(图 5):完整模型的胜率高于消融版本(均值,95% 置信;Full = 0.618 ± 0.07,No {Retrieve} = 0.463 ± 0.07,No {Retrieve, Revise} = 0.420 ± 0.07)。该差异也经 Holm-Beniforri 校正的自助法(bootstrapped)显著性检验验证(p < 0.05)。但在 No {Retrieve, Revise} 与 No {Revise} 两个消融之间没有显著差异。作者怀疑相关邮件往往在时间上相隔很远,**没有检索的修订**(即滑动窗口方法)捕捉不到邮件之间的长程依赖——没有检索,修订就彻底失效。
+
+::: en
+Propositions generated by the user model are both calibrated and accurate. Highly confident (confidence > 0.8) propositions were labeled as correct 88.2% of the time by participants. When confidence = 1.0, propositions are completely correct (100% accuracy). Even when we include all propositions, regardless of confidence score, participants rank GUM propositions as correct 76.15 ± 5.85 of the time—lower, but still fairly accurate. Participants were also fairly positive on the general accuracy of propositions.
+
+"People should use this instead of asking for zodiac signs or MBTIs."
+
+On average, participants also rated propositions from email alone as accurate to very accurate (μ = 6.47 on a 1-7 Likert scale). In addition, we find that GUMs are well calibrated, with a Brier score of 0.17 ± 0.03. Almost all of GUMs' calibration error comes from being underconfident (see Fig 6). In our setting, we'd prefer that GUMs are underconfident rather than overconfident: an overconfident user model might wrongly assume it knows a user's preferences, while underconfidence allows GUM to adapt more cautiously. However, generating an accurate proposition alone is too trivial a task. All GUM ablations, for example, generate equally accurate propositions (μ, 95% conf.; Full = 76.15±5.85, No {Retrieve} = 73.28±4.42, No {Retrieve, Revise} = 74.41±7.81)). No condition was significantly stronger than another (see Table 1).
+:::
+
+**用户模型生成的命题既校准又准确。**高置信(confidence > 0.8)命题有 88.2% 的比例被参与者标为正确;置信度 = 1.0 时,命题完全正确(100% 准确)。即使把所有命题不论置信度全部计入,参与者也判定 GUM 命题 76.15 ± 5.85 的比例为正确——低一些,但仍相当准确。参与者对命题的总体准确性也相当正面:
+
+"大家应该用这个来代替问星座或 MBTI。"
+
+平均而言,参与者对仅凭邮件生成的命题给出"准确到非常准确"的评分(1-7 Likert 尺度上 μ = 6.47)。此外,GUM 校准良好,Brier 分数为 0.17 ± 0.03;GUM 几乎所有的校准误差都来自**欠自信**(见图 6)。在本设定中,作者宁愿 GUM 欠自信而非过自信:过自信的用户模型可能错误假定它了解用户偏好,而欠自信让 GUM 能更谨慎地适应。然而,仅"生成准确命题"本身是太容易的任务:所有 GUM 消融都生成同等准确的命题(均值,95% 置信;Full = 76.15±5.85,No {Retrieve} = 73.28±4.42,No {Retrieve, Revise} = 74.41±7.81),没有哪个条件显著强于其他(见表 1)。
+
+::: en
+"It feels kind of weird to see this in writing." Propositions generated by the GUM are somewhat blunt. One participant occasionally used delivery services to order food. From the sequence of emails delivered to the participant's inbox, GUM concluded that the participant valued convenience and was willing to pay for it. For another participant, GUM correctly inferred that the user may not always have the time to read all their emails immediately. Propositions that reveal uncomfortably accurate insights often have lower confidence scores. Still:
+
+"It is not wrong per se, but it feels kind of weird seeing this in writing."
+:::
+
+**"写成文字看着有点怪。"**GUM 生成的命题相当直白。一位参与者偶尔用外卖服务点餐;从投递到其收件箱的邮件序列,GUM 得出结论:该参与者**重视便利并愿意为此付费**。对另一位参与者,GUM 正确推断出**用户可能不总有时间立即读完所有邮件**。揭示"准得让人不适"的洞察的命题往往置信度较低。尽管如此:
+
+"它本身谈不上错,但写成文字看着确实有点怪。"
+
+::: en
+Emails are one-dimensional proxy for true user context. Despite the overall accuracy of GUM's propositions, a few participants noted that emails were still a highly constrained representation of their context:
+
+"The emails I get on this account are not representative of my life."
+
+Errors in propositions often emerged from this fact. Some GUMs would over-index on a particular facet of a participant's life, focusing mostly on financial decisions, a particular hobby, or a recent purchase. In our end-to-end evaluation to come (§8), we expand the GUM's viewpoint substantially, feeding it screenshots from participants' computers over the course of 5 days.
+:::
+
+**邮件只是真实用户情境的一维代理。**尽管 GUM 命题总体准确,仍有几位参与者指出,邮件对其情境的表示仍然高度受限:
+
+"这个账户收到的邮件并不能代表我的生活。"
+
+命题中的错误常源于这一事实:一些 GUM 会过度聚焦参与者生活的某个侧面——主要关注财务决策、某个特定爱好或近期购物。在接下来的端到端评估(§8)中,作者大幅扩展 GUM 的视野,连续 5 天喂入参与者计算机的截图。
+
+### 7 Evaluating General User Models: Privacy Audit Module(评估 GUM:隐私审计模块)
+
+::: en
+As we expand context for GUM, auditing observations for privacy becomes increasingly critical (§5.2). During an Audit, the GUM uses itself to make inferences about an individual's contextual privacy preferences when processing interaction data. We explicitly test this, hypothesizing that GUM helps when making inferences related to a user's privacy preferences. We evaluate the Audit module using the same email setting from our Accuracy and Calibration eval (§6), with the same set of N = 18 participants (§6.2.1).
+:::
+
+随着为 GUM 扩展情境,对观察进行隐私审计变得越来越关键(§5.2)。审计期间,GUM 在处理交互数据时**用自身**对个体的情境化隐私偏好做推断。作者显式检验这一点,假设 GUM 有助于做出与用户隐私偏好相关的推断。作者使用与"准确率与校准"评估(§6)相同的邮件场景、同一批 N = 18 名参与者(§6.2.1)来评估 Audit 模块。
+
+#### 7.1 流程(Procedure)
+
+::: en
+We asked participants to skip annotating any propositions that violated their personal privacy preferences, effectively flagging them in the process. Using this signal, we computed the number of flagged propositions overall. Participants were also presented with the GUM's responses to Nissenbaum [54]'s contextual integrity questions—these questions were used to power the Audit module in §5.2. Participants were asked to select the best generation across GUM ablations and score the accuracy of the best Audit response using a 1-7 Likert score. As reference, the author's anonymized contextual integrity generation is below:
+
+Based on the emails, you have shared your:
+1. Email address with Calendly, Nextdoor, OpenAI, Instacart, and GitHub.
+2. GitHub account with [ANON], who has invited you to collaborate on a repository...
+You have shared this data in the following contexts:
+1. Scheduling events and meetings (Calendly)
+2. Receiving recommendations and updates from your community (Nextdoor) ...
+You have not responded to or engaged with the Nextdoor email, which could suggest that you are not interested in sharing data or interacting with that platform.
+:::
+
+作者请参与者**跳过**标注任何违反其个人隐私偏好的命题——实际上就是把它们标记出来。利用这一信号,作者计算了总体被标记命题的数量。参与者还会看到 GUM 对 Nissenbaum [54] 情境完整性问题的回答——这些问题正是 §5.2 中驱动 Audit 模块的问题。参与者被要求在各 GUM 消融中选出最佳生成,并用 1-7 Likert 分给最佳 Audit 回答的准确性打分。作为参考,下面是作者的匿名情境完整性生成示例:
+
+根据这些邮件,你曾共享过你的:
+1. 电子邮件地址,给了 Calendly、Nextdoor、OpenAI、Instacart 与 GitHub。
+2. GitHub 账户,给了 [ANON],对方邀请你协作一个仓库……
+你在以下情境中共享过这些数据:
+1. 安排活动与会议(Calendly)
+2. 接收来自你所在社区的推荐与动态(Nextdoor)……
+你没有回复或参与过 Nextdoor 的邮件,这可能表明你不感兴趣与该平台共享数据或互动。
+
+#### 7.2 结果(Results)
+
+::: en
+GUMs generally respect contextual integrity. From the 180 propositions annotated by participants for the full GUM, we found only 7 propositions that were flagged as contextual integrity violations. On average, participants agreed or strongly agreed with responses to contextual integrity generations (μ = 6.06 on a 1-7 Likert scale). Furthermore, a majority of participants 61.1% selected the full GUM as generating the best contextual integrity response, compared to ablations without retrieval (22.2%) and revision (16.6%). As a sanity check, we confirmed that no propositions included verbatim references to credit card numbers, phone numbers, or addresses.
+:::
+
+**GUM 总体上尊重情境完整性。**在参与者为完整 GUM 标注的 180 条命题中,只有 7 条被标记为情境完整性违规。平均而言,参与者对情境完整性生成表示同意或强烈同意(1-7 Likert 尺度上 μ = 6.06)。此外,61.1% 的多数参与者选择**完整 GUM** 生成了最佳情境完整性回答,高于无检索消融(22.2%)与无修订消融(16.6%)。作为健全性检查,作者确认没有任何命题逐字包含信用卡号、电话号码或地址。
+
+::: en
+But when they don't, it's bad. Seven observations still bypassed the Audit step—a non-negligible number. We looked into each participant's open-ended responses for insight. One participant (two violations) mentioned some surprise at the GUM being able to recall specific names from their email:
+
+"The ones which brought up messages or social media with other people and then explicitly named some of my friends were a little surprising, though I can imagine where all that information is sourced from within my emails."
+
+The broader conclusion: GUMs are able to extract a surprising number of inferences from just 200 emails. For some users, we suspect that making explicit social inferences about others is a boundary for GUM. In principle, the user can explicitly dictate their desired contextual privacy norms to their GUM, but there is a delicate trust balance to walk. We revisit this in our discussion.
+:::
+
+**但一旦失守,后果不小。**仍有**七条观察**绕过了 Audit 步骤——这不是可忽略的数目。作者深入查看每位参与者的开放式反馈以寻找解释。一位参与者(两条违规)对 GUM 能从其邮件中点名具体的人感到有些惊讶:
+
+"那些提到与他人邮件或社交媒体、然后明确点出我某些朋友名字的命题有点让人意外,不过我也能想象这些信息都是从我邮件里的哪些地方来的。"
+
+更宏观的结论是:GUM 仅从 200 封邮件就能提取数量惊人的推断。对某些用户,作者怀疑"对他人做出显式社交推断"是 GUM 的一条边界。原则上,用户可以向其 GUM 显式口述想要的情境隐私规范,但这需要走一条微妙的信任钢丝。作者在讨论中再谈此事。
+
+::: en
+Another participant (with 3 violations) left the following response:
+
+"[The proposition was] based on a phishing email I received rather than my actual email, and it had a decently high confidence rating, but it wasn't accurate at all, and so the model thought it was me and my interest rather than just a phishing attempt."
+
+GUMs can be maliciously re-written by advertisements and spam, opening them up to attackers. Prompt-injection attacks are a well-known VLM vulnerability [90]; however, GUM exposes a larger surface area to exploit this attack. Just like prompt injection attacks can be mitigated by red-teaming a model, we believe that GUM injection attacks can be mitigated—though not entirely erased without further research.
+:::
+
+另一位参与者(3 条违规)留下如下反馈:
+
+"[那条命题]基于我收到的一封钓鱼邮件,而不是我真实的邮件;它还带着相当高的置信度,但根本不准确——于是模型把它当成了我和我的兴趣,而不是一次钓鱼企图。"
+
+**广告与垃圾邮件可以恶意改写 GUM**,使其暴露给攻击者。提示注入(prompt-injection)攻击是 VLM 的已知漏洞 [90];而 GUM 暴露了更大的攻击面可供利用此种攻击。正如提示注入攻击可以通过对模型做红队测试来缓解,作者相信 GUM 注入攻击同样可以被缓解——不过没有进一步研究就无法完全消除。
+
+### 8 Evaluating General User Models: End-to-End via Gumbo(评估 GUM:通过 Gumbo 的端到端研究)
+
+::: en
+In our final evaluation, we assess the overall effectiveness of GUM through a formative study with Gumbo, a system that constructs a GUM through screenshots of the user's screen and marshalls it to generate suggestions.
+:::
+
+在最终评估中,作者通过一项使用 Gumbo 的形成性(formative)研究评估 GUM 的整体有效性——该系统通过用户屏幕的截图构建 GUM,并调度其生成建议。
+
+#### 8.1 流程(Procedure)
+
+::: en
+Our study consists of two main parts: a burn in, where participants configure Gumbo on their computer and have it silently learn and construct their GUM; and active use, where participants interact with Gumbo suggestions. In this section, we outline the infrastructure for serving GUM and detail each evaluation stage. Our study procedure and participant recruitment was approved by our institution's IRB (up to 5 participants to mitigate any risks associated with Gumbo errors in a larger sample).
+:::
+
+研究由两个主要部分组成:**burn-in(烧机/预热)阶段**,参与者在其计算机上配置 Gumbo,让它静默学习并构建其 GUM;以及 **active use(主动使用)阶段**,参与者与 Gumbo 的建议互动。本节概述 GUM 服务的基础设施并详述各评估阶段。研究流程与参与者招募经所在机构 IRB 批准(上限 5 名参与者,以缓解 Gumbo 出错在更大样本中带来的风险)。
+
+::: en
+8.1.1 Recruitment and Infrastructure. We use the same infrastructure in our technical evaluation, except that we deploy a vision model (Qwen 2.5 VL 72B [7]) for the Screen Observer, transcribing observations from the screen. Participants were recruited using a mix of snowball sampling and word-of-mouth. Given the level of trust required to use a system like Gumbo, participants were either acquaintances of the authors or acquaintances of acquaintances. Participation required about an hour for synchronous onboarding and offboarding; compensation was $75 USD.
+:::
+
+**8.1.1 招募与基础设施。**基础设施与技术评估相同,只是为屏幕 Observer 额外部署了视觉模型(Qwen 2.5 VL 72B [7])来转写屏幕观察。参与者经滚雪球抽样与口碑混合招募。鉴于使用 Gumbo 这类系统所需的信任水平,参与者要么是作者的熟人、要么是熟人的熟人。参与需要约一小时的同步入组与出组;报酬为 75 美元。
+
+::: en
+8.1.2 Participant Details. No participants had any knowledge of the system before the study. Participants were located in the United States and were over 18 years of age. 2 participant identified as White, 2 as Asian, and 1 as African American, and all had bachelor's degrees. All participants reported what they primarily used their computers for (work or personal) along with a high level list of activities (see Table 2).
+:::
+
+**8.1.2 参与者详情。**没有参与者在研究前对该系统有任何了解。参与者均位于美国、年满 18 岁;2 名自认为白人、2 名亚裔、1 名非裔美国人,均有学士学位。所有参与者报告了其主要计算机用途(工作或个人)以及一份高层活动清单(见表 2)。
+
+**表 2(Table 2):参与者角色与计算机活动概览**
+
+| ID | 用途(Context) | 角色 / 项目(Role / Program) | 典型计算机活动(Representative Computer Activities) |
+| --- | --- | --- | --- |
+| P1 | 工作 & 个人 | HCI 研究生 | 阅读新闻;撰写论文;与亲友通信 |
+| P2 | 工作 & 个人 | HCI 研究生 | 头脑风暴;个人通信 |
+| P3 | 工作 | 土木工程研究生 | 头脑风暴;资格考准备;阅读相关工作 |
+| P4 | 个人 | 数据科学家 | 看 NCAA 比赛;筹备婚礼;找新工作 |
+| P5 | 工作 & 个人 | NLP 研究生 | 数据处理;看游戏直播(Twitch) |
+
+::: en
+8.1.3 Procedure Details. Participants began the study with onboarding, installing Gumbo, optionally providing personal details, and completing a features tutorial. The subsequent burn in phase lasted 24 hours, during which Gumbo collected data without showing suggestions, addressing the cold-start problem. The active use phase then spanned four days, with participants actively engaging with suggestions. During offboarding, we collected annotations and feedback on suggestions. We additionally conducted semi-structured interviews discussing participants' propositions, experiences, and privacy concerns.
+:::
+
+**8.1.3 流程细节。**参与者从入组开始研究:安装 Gumbo、可选地提供个人信息、完成功能教程。随后的 burn-in 阶段持续 24 小时,期间 Gumbo 收集数据但**不显示建议**,以解决冷启动问题。active use 阶段为期四天,参与者积极与建议互动。出组时,作者收集对建议的标注与反馈,并另行进行了半结构化访谈,讨论参与者的命题、体验与隐私顾虑。
+
+#### 8.2 分析(Analysis)
+
+::: en
+We first compute calibration and accuracy across all participants' labeled propositions, just like in our initial technical evaluation. In addition, the first author then conducted two rounds of qualitative open-coding across the transcripts. In the first round, the author labeled low-level themes across transcripts. In the second round, common themes were aggregated.
+:::
+
+作者首先像初始技术评估那样,对全部参与者的被标注命题计算校准与准确率。此外,第一作者随后对访谈逐字稿进行了两轮定性开放编码:第一轮在逐字稿中标注低层主题;第二轮聚合出共同主题。
+
+#### 8.3 结果(Results)
+
+::: en
+GUMs remain accurate and calibrated in our end-to-end evaluation. Mirroring results from our email evaluation, participants found sampled propositions to be accurate (0.79 ± 0.07) and calibrated (Brier = 0.28 ± 0.04), with error coming from underconfident predictions. Propositions that reflected factual statements about the user were often annotated or discussed with very little hesitation.
+
+P1 is conducting research on health and behavior interventions.
+P3 works on research related to civil and environmental engineering.
+P4 is an employee at [ANON] company.
+
+Participants also generally observed that these propositions were of higher confidence. For these propositions, participants expressed little surprise.
+
+"What's so special about this? It's just me." - P4
+
+In interviews, participants were quick to rationalize why these propositions were true, citing concrete websites, files, or messaging exchanges that explained how these propositions were generated.
+:::
+
+**GUM 在端到端评估中依旧准确且校准。**与邮件评估的结果相呼应,参与者发现抽样命题准确(0.79 ± 0.07)且校准(Brier = 0.28 ± 0.04),误差同样来自欠自信的预测。反映用户**事实性陈述**的命题,往往几乎不假思索地就被标注或讨论:
+
+- P1 正在做健康与行为干预方面的研究。
+- P3 从事土木与环境工程相关研究。
+- P4 是 [ANON] 公司的员工。
+
+参与者还普遍观察到这些命题置信度更高;对这些命题,参与者几乎不感到意外:
+
+"这有什么特别的?这就是我。"——P4
+
+访谈中,参与者能很快说清这些命题**为何**为真,援引具体的网站、文件或消息往来,解释这些命题是如何被生成的。
+
+::: en
+Maybe too accurate... When reviewing propositions, participants were conflicted about generations that passed a judgement on values, skills, or norms. Consider the following propositions (all labeled correct by participants):
+
+P1 is struggling with fixing bugs in their research project.
+P2 may be experiencing stress or pressure due to a large number of unread emails and notifications.
+P3 prioritizes communicating with their advisor over other people.
+P4 is unhappy with their job.
+
+Here, participants expressed a range of different opinions. P4 and P5 found these propositions both unserious and entertaining, ascribing little weight to them. P1, on the other hand, found them judgmental. In contrast, P2 immediately began self-reflecting:
+
+"I felt so validated by that [proposition on stress]. I totally feel pressure when I get another email or notification. It's validating to see it notice this." - P2
+
+While P3 reflected on why they prioritized communication with their advisor,⁶ they mentioned that only a subset of propositions were useful for reflection—propositions related to their abilities were not particularly constructive for them.
+
+"I'd hide [propositions on ability], honestly. Even if they were true! Just show me the suggestions." - P3
+
+It was also trickier for participants to rationalize why their GUM was making these inferences. For participants who enjoyed the self-reflection parts of GUM, coming to their own conclusion was a boon; for others, this lack of transparency was annoying. We revisit self-reflection in the discussion (§9.1). (⁶ The author of this paper also reflected on this.)
+:::
+
+**也许过于准确……**审视命题时,参与者对那些对**价值观、能力或规范**下判断的生成物心情矛盾。考虑以下命题(全部被参与者标为正确):
+
+- P1 在修复其研究项目的 bug 上遇到困难。
+- P2 可能因大量未读邮件与通知而感到压力。
+- P3 把与导师的沟通置于其他人之上。
+- P4 对自己的工作不满意。
+
+对此,参与者表达了各种不同意见。P4 与 P5 觉得这些命题既不严肃又有趣,没太当回事;P1 则觉得**受到评判**。相反,P2 立刻开始了自我反思:
+
+"那条(关于压力的)命题让我感到被认可。每收到一封新邮件或通知,我确实都会感到压力。看到它注意到了这一点,很治愈。"——P2
+
+P3 则反思了为何把与导师的沟通放在优先位置⁶,并提到只有一部分命题对反思有用——与**能力**相关的命题对其并不特别有建设性:
+
+"(关于能力的命题)说真的我会隐藏,哪怕它们是真的!只给我看建议就好。"——P3
+
+参与者也更难说清自己的 GUM **为何**做出这些推断。对喜欢 GUM 自我反思部分的参与者来说,自己得出结论是一种馈赠;对另一些人来说,这种缺乏透明度令人恼火。自我反思在讨论(§9.1)中再谈。(⁶ 本文作者对此也有所反思。)
+
+::: en
+Gumbo provides strong-to-excellent suggestions for all participants. All participants came to interviews especially excited about a suggestion generated by Gumbo. On our 7 point Likert scale, 25% of suggestions were ranked as strong (6) or excellent (7). P2 and P3 wanted to keep the system running on their computer after the study concluded (with some modifications to proposition visibility), while P2 and P5 took screenshots of a handful of suggestions to keep before offboarding. Suggestions that were rated highly often made extensive use of the underlying GUM.
+
+"It knew who my roommate was; what our budget was; where we were moving; that I was worried about this move. It worked backward from our move-in date, planned a schedule, and identified moving services. And half of my conversation with my roommate wasn't in English." - P1
+
+Overall, we found that useful suggestions generally fell into two main categories: immediate, low-level assistance, and opportunities where participants hadn't realized an AI model could be helpful.
+:::
+
+**Gumbo 为所有参与者提供了"强"到"优秀"的建议。**所有参与者来访谈时,都对 Gumbo 生成的某条建议格外兴奋。在 7 分 Likert 尺度上,25% 的建议被评为"强"(6)或"优秀"(7)。P2 与 P3 希望研究结束后继续在其计算机上运行该系统(对命题可见性做一些修改);P2 与 P5 在出组前还截图保存了一批建议。评分高的建议往往**深度使用了底层 GUM**:
+
+"它知道我室友是谁、我们的预算、要搬去哪、我担心这次搬家。它从入住日期倒推、安排了时间表、找好了搬家服务。而我和室友一半的对话都不是用英语进行的。"——P1
+
+总体上,作者发现有用的建议主要分为两类:**当下的低层辅助**,以及**参与者没想到 AI 模型能帮上忙的机会**。
+
+::: en
+In the moment help. A subset of helpful suggestions were low-level, helping the user with what they were currently doing. P5, for example, was in the process of transferring email inboxes from their institution's email to Gmail, and never figured out how to enable notification on Gmail. Gumbo generated a step-by-step guide—P5 was thrilled. In a similar flavor, P3 was designing a presentation for an upcoming quals exam. Gumbo provided tips on slide transitions which P3 first tried and then adopted.
+:::
+
+**当下的即时帮助。**一部分有用的建议是低层的,帮助用户做当时正在做的事。例如 P5 正把收件箱从机构邮箱迁移到 Gmail,一直没搞明白怎么在 Gmail 上开启通知;Gumbo 生成了分步指南——P5 喜出望外。类似地,P3 在为即将到来的资格考(quals)设计演示文稿,Gumbo 给了幻灯片转场方面的建议,P3 先试了试,然后采纳了。
+
+::: en
+"I didn't even think about that!" A more exciting class of suggestions generated by Gumbo addresses needs that aren't explicitly signaled by the user. Gumbo proactively generated a brainstorming outline for a framework P3 was considering using in their research, using tools P3 was comfortable with:
+
+"What I typically like to do when I run into a new idea is create a barebones Overleaf document and outline [how the idea is] related to my work. I did not even tell this system anything, but it identified that I have this habit. And it created this entire outline—in LateX—of how I could write my paper in the context of this new framework I was checking out. I was like, wow." - P3
+
+P5 spent some time watching Twitch streams of games. For P5, Gumbo identified specific characters of interest based on where and how long they paused the stream; and how often they replayed specific portions. Using this information, Gumbo identified and surfaced new streamers that also played with the same character. P5 ended up exploring and watching content from Gumbo's recommended streamers.
+:::
+
+**"我根本没想到!"**Gumbo 生成的更令人兴奋的一类建议,针对的是用户**没有显式信号化**的需求。Gumbo 主动为 P3 正考虑用于研究的框架生成了头脑风暴大纲,用的还是 P3 顺手的工具:
+
+"我遇到新想法时的习惯做法,是建一个裸的 Overleaf 文档,把(这个想法)与我工作的关系列成大纲。我根本没告诉这个系统任何东西,但它识别出了我有这个习惯,还直接用 LaTeX 给我生成了整份大纲——告诉我在我正研究的这个新框架下可以怎么写论文。我当时想,哇。"——P3
+
+P5 花了些时间看游戏直播。对 P5,Gumbo 根据其在**何处**暂停直播、暂停**多久**、以及多频繁地**回放**特定片段,识别出其感兴趣的具体角色;利用这些信息,Gumbo 找到并浮出了同样玩这些角色的新主播。P5 最终真的去探索并观看了 Gumbo 推荐的主播的内容。
+
+::: en
+Contextual agency. Participants raised agency as a concern when interacting with GUM, in terms of being able to control which contexts observations were turned into propositions or suggestions. P3 suggested that the system clarify with users when generating low-confidence propositions from observation, but acknowledged that the assumed propositions eventually did lead to useful suggestions.
+
+"Maybe I wasn't familiar with PowerPoint, but if it asked and then used that to give me a suggestion I think I would've been happier with it." - P3
+
+For suggestions, Gumbo did not replace what the user liked. P4, for example, really enjoys travel planning themselves, and their underlying GUM included this fact. When generating suggestions, Gumbo generated only ideas for travel instead of generating a full travel plan (something the system was capable of doing):
+
+"I like that it gave me some ideas for adjusting my honeymoon schedule. It didn't try to redo the whole thing or make one from scratch." - P4
+:::
+
+**情境化能动性。**参与者在与 GUM 交互时把**能动性**(agency)列为关切:希望能控制哪些情境的观察被转化为命题或建议。P3 建议系统在从观察生成低置信命题时先向用户确认,但也承认这些被假定的命题最终确实引出了有用的建议:
+
+"可能是我对 PowerPoint 不熟,但如果它先问一句、再用那个信息给我建议,我想我会更满意。"——P3
+
+在建议方面,Gumbo 不会取代用户喜欢亲自做的事。例如 P4 非常喜欢亲自做旅行规划,其底层 GUM 也包含这一事实。生成建议时,Gumbo 只给了调整蜜月行程的**想法**,而没有生成完整的旅行计划(尽管系统有能力做):
+
+"我喜欢它只给了我一些调整蜜月日程的想法,没有试图重做整份计划或从零做一份。"——P4
+
+#### 8.4 错误与边界(Errors and Boundaries)
+
+::: en
+Privacy, Privacy, and Privacy. Privacy guarantees were critical from the start. The two participants that were acquainted with the author explicitly mentioned this bias (which we revisit in the limitations). Recruitment alone required trust in the designer and that participants' GUMs ran on self-hosted models.
+
+"If I didn't know you and trust you, I would never install this thing." - P4
+
+Still, some participants (P1, P2) habituated and occasionally forgot that Gumbo was even processing interaction data.
+
+"It was intimidating at first. And I was also like shit like, do I need to be careful what I say? And then after a day I was like, whatever F it." - P2
+
+Others were keenly aware of the Gumbo's presence during the entire duration of the study (P3).
+
+"It was just identifying things about me and understanding how I work, my work in general, and that was actually kind of scary." - P3
+
+Only after returning to the list of propositions would participants realize that Gumbo was still active. On the other hand, P5 expressed no reservations during the entire study.
+:::
+
+**隐私、隐私,还是隐私。**隐私保障从一开始就至关重要。与作者相识的两名参与者明确提到了这一(招募)偏置(局限性中再谈)。仅招募本身就需要对设计者的信任,以及"参与者的 GUM 运行在自托管模型上"这一事实:
+
+"如果我不认识你、不信任你,我绝不会装这个东西。"——P4
+
+尽管如此,一些参与者(P1、P2)逐渐习惯,偶尔忘了 Gumbo 还在处理交互数据:
+
+"一开始挺吓人的。我心里还想,完了,我说的话是不是都得小心?过了一天我就想,管它呢。"——P2
+
+另一些人(P3)在整个研究期间对 Gumbo 的存在保持高度警觉:
+
+"它一直在识别关于我的事情、理解我的工作方式、我的工作本身,这其实有点可怕。"——P3
+
+只有回到命题列表时,参与者才会意识到 Gumbo 仍在运行。另一方面,P5 在整个研究期间没有表达任何保留意见。
+
+::: en
+From General User Models to General Clippy Models? All participants felt like Gumbo often tried to recommend and execute on suggestions it was incapable of doing, a practical limit with agentic AI execution given today's models [8, 72]. A good subset of suggestions (20.69%) were labeled as on-track, but failed during execution. Still, some participants exacted joy from watching Gumbo try and fail to execute.
+
+"So my advisor's been asking me to listen to this Claude Steele podcast—it's been stuck at the top of my to-do list forever. I just never got around to it. Then this system gave me a nudge. It looked into the podcast and said it drew connections to my work. The outline was decent, but the connections were total garbage. Still, it got me to finally listen, and I ended up totally locked in, working on it for hours after. I almost prefer this, because it didn't take away any cognitive burden." - P2
+
+Still, this failure mode with Gumbo reflects capability or tool-use limitations of the underlying LLM: Gumbo did not explore the internet and ingest the podcast. Even simpler suggestions, such as scheduling reminders, also fail. Gumbo claimed to have "scheduled reminders" for P5, allowing him to discreetly watch an NCAA game during his work hours. However, Gumbo had no access to notification APIs, so execution failed entirely.
+:::
+
+**从通用用户模型到通用"回形针助手"(Clippy)模型?**所有参与者都感到 Gumbo 常常试图推荐并执行它**力所不能及**的建议——这是当今模型下智能体 AI 执行的现实限制 [8, 72]。相当一部分建议(20.69%)被标为"方向对但执行失败"。尽管如此,一些参与者从看 Gumbo 努力尝试又失败中获得了乐趣:
+
+"我导师一直让我去听那个 Claude Steele 的播客——它在我待办清单顶上挂了好久,我一直没腾出空。然后这个系统推了我一把:它去查了这个播客,说它与我的工作有种种联系。大纲还不错,但那些联系完全是垃圾。不过,它让我终于去听了,而且我后来完全入迷,连着搞了好几个小时。我几乎更喜欢这样,因为它没有带走任何认知负担。"——P2
+
+不过,Gumbo 的这种失败模式反映的是底层 LLM 的能力或工具使用限制:Gumbo 并没有去探索互联网并摄取该播客的内容。即使更简单的建议,比如安排提醒,也会失败:Gumbo 声称已为 P5"安排了提醒",让他可以在工作时间悄悄看一场 NCAA 比赛;然而 Gumbo 并没有通知 API 权限,执行完全失败。
+
+::: en
+Large Language Models Eager Beavers. Eagerness to help was a recurring theme amongst poorer suggestions. Gumbo would jump the gun on generating suggestions while the user was in the process of finishing the suggestion itself. Or Gumbo would try to cheat by suggesting something the participant had already completed. There's a fine line between suggestions that are in-the-moment helpful and suggestions that are too late.
+:::
+
+**大语言模型是个热心肠。**"急于帮忙"是较差建议中反复出现的主题:用户自己正在完成某件事的过程中,Gumbo 就**抢跑**生成建议;或者 Gumbo 试图"取巧",建议参与者**已经完成**的事情。在"当下正好有用"与"为时已晚"的建议之间,存在一条微妙的界线。
+
+::: en
+Inferences on Sensitive Topics. P1 expressed some discomfort with Gumbo making and saving inferences on sensitive topics. Here, GUMs audit module incorrectly assumed that because P1 viewed and discussed topics with others, it was O.K. for it to save this information too. P1 mentioned that the integrity standards for GUM should be strictly stronger than what their context implies—and that the Audit module should itself be auditable.
+:::
+
+**对敏感话题的推断。**P1 对 Gumbo **就敏感话题做出并保存**推断表示不安。此处,GUM 的 audit 模块错误地假定:因为 P1 查看过并与他人讨论过这些话题,那么它保存这些信息也没问题。P1 提到,对 GUM 而言的完整性标准应当**严格强于**其上下文的暗示——而且 Audit 模块**自身应当可被审计**。
+
+::: en
+(Is) screen activity limited? Does it generalize? All participants reflected on the generalizability of a GUM trained on their computer use, and highlighted how events outside of their computer would not be captured by Gumbo.
+
+"There were times that I was doing something on my phone and I was like, oh, I wish I could capture this too." - P2
+
+P3 also raised a similar point, explicitly reflecting on the privacy-capability trade-off of adding more context to a system like Gumbo.
+
+"There were some really great things that came out of there that I wouldn't have thought about. So how do I amplify that, but mitigate [seeing judgmental propositions]. I think I would need more than five days to use it. I would integrate some more personal work that I do." - P3
+
+We revisit this paradox in the discussion (§9.2).
+:::
+
+**屏幕活动(是不是)有限?能泛化吗?**所有参与者都反思了"基于计算机使用训练的 GUM"的泛化性,并强调计算机之外的事件不会被 Gumbo 捕捉:
+
+"有好几次我在手机上做事时就想,哦,要是能把这个也捕捉下来就好了。"——P2
+
+P3 也提出了类似观点,并明确反思了向 Gumbo 这类系统添加更多情境的**隐私-能力折中**:
+
+"那里面冒出了一些我绝不会想到的非常好的东西。那我该怎么放大这部分,又缓解(看到评判性命题)呢?我想我需要用上不止五天,我会把我做的更多个人工作接进来。"——P3
+
+作者在讨论(§9.2)中再谈这个悖论。
+
+### 9 Discussion(讨论)
+
+::: en
+Across our technical evaluations and end-to-end deployment, we find that GUM shows promise in various human-computer interaction scenarios. In our discussion, we focus on the implications of deploying GUMs. We revisit how participants engaged and reflected with propositions, the GUM privacy paradox, and the ethical and societal implications of widely deployed GUMs.
+:::
+
+贯穿技术评估与端到端部署,作者发现 GUM 在多种人机交互场景中显示出前景。讨论聚焦部署 GUM 的影响:参与者如何与命题互动并反思、GUM 的隐私悖论,以及广泛部署 GUM 的伦理与社会影响。
+
+#### 9.1 反思命题(Reflecting on Propositions)
+
+::: en
+We never intended or designed Gumbo to serve as a self-reflection tool for participants. However, across both our email and end-to-end evaluation, many participants engaged deeply with the content of the propositions. For some participants, GUM propositions were too candid: they explicitly constructed value judgements and made assessments about a user's priorities. This could be a side effect of our prompt—we explicitly prompt GUM to make accurate and truthful assessments about the user. And these assessments are indeed useful for downstream suggestions generated by Gumbo. Without an accurate user model, via an honest assessments of where the user might need help, downstream applications might fail to provide assistance. However, an accurate GUM might enable a user to indulge in activities that, while they think are helpful, might not truly be helpful (e.g. cancelling advising meetings to make time for making/eating more ice cream).⁷
+
+This dichotomy—between the ideal self and true self—is a well documented psychological phenomena [33, 65]. When confronted with their GUM, participants' reactions ranged from feeling judged to engaging in productive self-reflection.⁸ Our work raises key design questions: should Gumbo provide raw access to underlying user models, present sanitized versions, or hide propositions entirely? One approach might adapt the visible representation based on contextual factors, showing reflective content only when users are receptive to it [26]—similar to how our Audit module uses GUM to make filtering decisions for privacy. (⁷ This is a point of contention between the authors. Some of the authors are productive (the advisors), and would benefit greatly from an accurate user model. The first author thinks the "Real Them" would enjoy procrastinating. ⁸ More than once, participants likened GUM to a BuzzFeed personality test.)
+:::
+
+作者从未打算、也从未把 Gumbo 设计成参与者的**自我反思工具**。然而,在邮件与端到端两项评估中,许多参与者深度参与了命题的**内容**。对一些参与者来说,GUM 命题过于坦率:它们显式构造价值判断、对用户的优先级做出评估。这可能是提示的副作用——作者明确提示 GUM 对用户做出准确、真实的评估;而这些评估确实对 Gumbo 生成的下游建议有用:没有准确的用户模型(即对"用户可能在何处需要帮助"的诚实评估),下游应用可能无法提供协助。然而,准确的 GUM 也可能让用户沉溺于"自认为有益"但未必真正有益的活动(比如取消导师会议,腾出时间做/吃更多冰淇淋⁷)。
+
+这种**"理想自我与真实自我"的二分**是有充分记载的心理学现象 [33, 65]。面对自己的 GUM,参与者的反应从"感觉被评判"到"进行有成效的自我反思"不等⁸。本研究提出关键设计问题:Gumbo 应提供对底层用户模型的**原始**访问、呈现**净化**后的版本,还是**彻底隐藏**命题?一种方案是根据情境因素调整可见的表示,只在用户易于接受时展示反思性内容 [26]——类似于 Audit 模块用 GUM 做隐私过滤决策的方式。(⁷ 这是作者之间的争论点:一些作者(导师们)很高产,会从准确的用户模型中大大受益;第一作者认为"真实的他们"会更享受拖延。⁸ 不止一次,参与者把 GUM 比作 BuzzFeed 性格测试。)
+
+#### 9.2 隐私悖论(The Privacy Paradox)
+
+::: en
+The privacy paradox observes that people often say they care very much about their online privacy, but willingly give it up in practice in exchange for a benefit [58]. For most applications, this means giving up sensitive personal information such as location data or browsing habits to targeted advertisers via social media accounts. However, the GUM is a much more general and, we argue, much more powerful user model. So, privacy behavior becomes a critical question.
+
+The more a GUM sees, the more precise it becomes, and the stronger its downstream recommendations. Users can improve a GUM by giving it anything that the model is capable of parsing. While several of the participants were initially focused on privacy risks, we observed that they naturally came to the same conclusion and began voluntarily offering up additional data to the GUM. In our end-to-end evaluation, two of our five participants wanted to continue using a version of Gumbo following the study, brainstorming ways to give GUM more data despite initial privacy concerns.
+
+If one believes that sharing data with a private, local GUM is safe and desirable, then disclosure becomes self-reinforcing: as users observe concrete improvements in the model's performance proportional to their data contributions, they may share more. However, if one considers the accidental disclosure risks or security risks of GUMs, this loop could backfire. With this context, we outline a range of ethical and societal considerations in using GUMs.
+:::
+
+**隐私悖论**(privacy paradox)指出:人们口头上说非常在乎网络隐私,实践中却会为换取好处而自愿放弃 [58]。对多数应用而言,这意味着把位置数据或浏览习惯等敏感个人信息,经由社交媒体账户交给定向广告商。而 GUM 是一个更通用、作者认为也**强大得多**的用户模型,因此隐私行为成为关键问题。
+
+GUM 看得越多,就越精确,其下游推荐也越强。用户可以把模型能解析的**任何东西**喂给 GUM 来改进它。虽然几位参与者最初聚焦于隐私风险,作者观察到他们自然而然得出了同一结论,开始**主动**向 GUM 提供更多数据。在端到端评估中,五名参与者中的两人想在研究后继续使用某个版本的 Gumbo,不顾最初的隐私顾虑、头脑风暴给 GUM 喂数据的办法。
+
+如果相信向一个**私有的本地 GUM** 共享数据是安全且可取的,那么披露就会**自我强化**:随着用户观察到模型性能随其数据贡献成比例地具体改善,他们可能会分享更多。但如果考虑 GUM 的意外披露风险或安全风险,这个回路可能**反噬**。基于这一背景,作者概述使用 GUM 的一系列伦理与社会考量。
+
+#### 9.3 伦理与社会风险(Ethical and Societal Risks)
+
+::: en
+Persuasion, advertising, and surveillance. One risk we foresee lies in using GUMs to target users, either through persuasion, advertisement, or surveillance. We strongly recommend that all GUMs are trained and hosted on the end-users' computer or on personal infrastructure. This is a guiding principle throughout our work—all models used to build a GUM are open source, and infrastructure is managed by the research team. If external systems are ever granted access to the GUM, access should be controlled and audited. We also foresee risks associated with third-parties attempting to train GUMs, without consent, on a user's activity within their application. In these instances, obfuscation systems can generate interaction data to obscure genuine user behavior [55].
+:::
+
+**说服、广告与监视。**作者预见的一个风险,是用 GUM 通过说服、广告或监视来**定向**用户。作者强烈建议所有 GUM 都在终端用户的计算机或个人基础设施上训练与托管。这是贯穿全文的指导原则——构建 GUM 所用的全部模型都是开源的,基础设施由研究团队自管。如果外部系统被授予 GUM 访问权,访问应受控且可审计。作者还预见第三方**未经同意**、在用户于其应用内的活动上训练 GUM 的风险;在这些情形下,混淆(obfuscation)系统可以生成交互数据来遮蔽真实用户行为 [55]。
+
+::: en
+Manipulating GUMs. In our email evaluations, we found evidence of unintentional GUM manipulation. Spam email, ingested by the GUM, maliciously edited a GUM's underlying propositions. Instead of targeting users, attackers could craft messages that manipulate a user's GUM. Any application that relies on a GUM would therefore be affected. One possible mitigation for this risk would be for the GUM to ask the user to confirm any inputs that seem out of character based on its understanding so far. Another would be to develop the equivalent of adblock or spam filtering techniques [66]) to proactively detect and intercept maliciously crafted content before it's processed by GUM, or the model would need to include a component that reflects on whether someone is trying to trick it.
+:::
+
+**操纵 GUM。**在邮件评估中,作者发现了**无意 GUM 操纵**的证据:被 GUM 摄取的垃圾邮件恶意编辑了 GUM 的底层命题。攻击者可以不针对用户,而是构造操纵用户 GUM 的消息;任何依赖 GUM 的应用都会随之受影响。该风险的一种可能缓解是:GUM 基于其迄今为止的理解,请用户确认任何"看起来不合常理"的输入;另一种是开发广告拦截或垃圾过滤技术的等价物 [66],在恶意构造的内容被 GUM 处理之前主动检测并拦截;或者模型需要内置一个"是否有人试图欺骗它"的反思组件。
+
+::: en
+Bias. While participants did not raise concerns related to biased inferences, GUMs build on biased models [22, 80]. Analogously, recommendation systems have a long history of surfacing biased recommendations to end users [56]. GUMs effectively expand the surface area of recommendation systems. Carefully red-teaming and understanding the types of inferences constructed by GUM across a larger set of adversarially constructed contexts is necessary before deployment.
+:::
+
+**偏见。**虽然参与者未提出与有偏推断相关的顾虑,但 GUM 构建在**有偏见的模型**之上 [22, 80]。类似地,推荐系统向终端用户呈现有偏推荐的历史由来已久 [56];GUM 实际上**扩大了推荐系统的表面积**。部署之前,必须对 GUM 做仔细的红队测试,并在更大的一批对抗性构造的情境中理解 GUM 所构建推断的类型。
+
+#### 9.4 局限与未来工作(Limitations and Future Work)
+
+::: en
+Sampling bias. A challenge in recruiting participants for our end-to-end evaluation lies in trust. To this end, our recruitment occurred primarily at our institution and through word-of-mouth / snowball sampling. Our institution's IRB permitted up to 5 participants to mitigate the impact of any potential issues with Gumbo. For now, we recommend considering our results as likely generalizing most strongly to technical users who have familiarity with AI.
+:::
+
+**抽样偏差。**为端到端评估招募参与者的挑战在于**信任**。因此招募主要在作者所在机构内、通过口碑/滚雪球抽样进行。机构 IRB 批准上限 5 名参与者,以减轻 Gumbo 任何潜在问题的影响。目前,作者建议将结果视为最可信地泛化到**熟悉 AI 的技术用户**。
+
+::: en
+Hallucinations and misattributions. Hallucinations remain an issue with current large models. While incorrect propositions are indeed appropriately calibrated, a handful are still confident and incorrect. GUM would also occasionally hallucinate applications on a user's computer that didn't exist, or connect two unrelated propositions.
+:::
+
+**幻觉与错误归因。**幻觉仍是当前大模型的问题。虽然错误命题确实被恰当地校准(未获高置信),仍有少数命题**既自信又错误**。GUM 偶尔还会幻觉出用户计算机上并不存在的应用,或把两条不相关的命题联系起来。
+
+::: en
+The screen is still a narrow proxy for context. While we see a wide range of the user via the GUM attached to a user's email or their screen, it's not a complete picture—GUMs are still far from building context through everyday action [23]. If a user does something outside the scope of the GUM, it will fail to generalize. However:
+:::
+
+**屏幕仍是情境的窄代理。**虽然通过附加在用户邮件或屏幕上的 GUM 能看到用户的宽广一面,但这不是完整图景——GUM 离"通过日常行为构建情境" [23] 还很远。如果用户做了 GUM 范围之外的事,它将无法泛化。然而:
+
+::: en
+Better models will support longer contexts, be smaller, and extend beyond vision and language. Many components of the GUM pipeline work to mitigate the limitations of current-day LLMs, as simply putting everything in context is insufficent. Models forget parts of the context [49] or yield generic propositions. Our retrieval step, for example, is required as models cannot reliably process extremely long context lengths. Explicit confidence verbalization is necessary as model logits are uncalibrated. However, we expect future work on modeling for GUMs (e.g. end-to-end learning parts of our pipeline) to subsume specific steps. We also expect future models to grow smaller in size and run entirely on-device, further mitigating privacy risks while reducing storage impact. Currently, the GUM saves about 1GB of screenshots per day (just 5 MB of transcribed observations), which will accrue if deployed for longer. Another avenue for future work involves collecting minimal observational data for effective user models. Finally, the current GUM implementation relies on vision and language models, constraining the input space. Large models that ingest a wider range of modalities [9] along with diverse tool use could enhance GUM's capabilities. Already, advanced speech models can discern a user's tone, while healthcare models interpret various sensor signals—all of which in principle could integrate into the GUM.
+:::
+
+**更好的模型将支持更长上下文、更小体积,并超越视觉与语言两种模态。**GUM 流水线的许多组件是为了弥补当下 LLM 的局限——因为把一切都塞进上下文并不足够:模型会遗忘部分上下文 [49] 或产出泛泛的命题。例如,检索步骤之所以必要,是因为模型无法可靠地处理超长上下文;显式的置信度言语化之所以必要,是因为模型 logits 未校准。不过,作者预计未来面向 GUM 的建模工作(如端到端地学习流水线的某些部分)会**吞并**这些特定步骤;也预计未来模型体积更小、完全在设备上运行,进一步缓解隐私风险并降低存储影响。目前 GUM 每天保存约 1GB 截图(转写后的观察仅 5MB),部署时间更长会不断累积。未来工作的另一方向,是为有效的用户模型收集**最小**的观察数据。最后,当前 GUM 实现依赖视觉与语言模型,约束了输入空间;能摄取更宽模态范围 [9] 与多样工具使用的大模型可以增强 GUM 的能力——已经,先进的语音模型能辨别用户的语气,医疗健康模型能解读各种传感器信号,这些原则上都可以集成进 GUM。
+
+### 10 Conclusion(结论)
+
+::: en
+We introduce GUMs, computational models that learn rich representations of user context by observing everyday behavior. GUMs transform unstructured interactions into confidence-weighted propositions, continuously refining their inferences as new evidence accumulates. GUMs open up a range of possibilities, from grounding language models in observed user behavior to enabling proactive systems that can act on a user's behalf. We demonstrate the utility of GUMs through Gumbo, an interactive assistant that surfaces helpful suggestions drawn directly from personal context and attempts to complete them. In evaluations, GUMs produce rapid, calibrated, and accurate inferences about users. We argue that GUMs provide a framework for moving beyond siloed application-specific user models toward a general user model—one that understands who you are across the many contexts of your life.
+:::
+
+作者提出 GUM:通过观察日常行为学习用户情境丰富表示的计算模型。GUM 把非结构化交互转换为带置信度加权的命题,并随新证据积累不断精炼其推断。GUM 开启了一系列可能:从让语言模型**接地**于观察到的用户行为,到支持能**代表用户行动**的主动式系统。作者通过 Gumbo——一个直接从个人情境中浮出有用建议并尝试完成它们的交互式助手——展示了 GUM 的效用。在评估中,GUM 对用户做出了快速、校准且准确的推断。作者主张,GUM 提供了一个框架,推动我们走出各自为政(siloed)的应用级用户模型,走向一个在你人生众多情境中都理解"你是谁"的**通用**用户模型。
+
+### 致谢(Acknowledgments)
+
+::: en
+We thank Michael Y. Li, Jensen Gao, Suvir Mirchandani, Lindsay Popowski, Ryan Louie, Beleicia Bullock, Will Held, Dora Zhao, Tiziano Piccardi, Michelle Lam, and Carolyn Zou for helpful discussions and feedback. We also thank members of the Stanford HCI and NLP groups for feedback in general and for testing both GUM and Gumbo. We don't thank Omar's ice cream making hobby for filling this paper with examples that might make the reader hungry. Omar Shaikh is supported by the HAI-HPI program and Joon Park is supported by the Microsoft Research fellowship. We also thank SCBx, AXA, TRI, American Express, Banco Itaú, Ford, Hanwha, and Google, as well as ONR grant N000142412532 for helping fund our work.
+:::
+
+作者感谢 Michael Y. Li、Jensen Gao、Suvir Mirchandani、Lindsay Popowski、Ryan Louie、Beleicia Bullock、Will Held、Dora Zhao、Tiziano Piccardi、Michelle Lam 与 Carolyn Zou 的有益讨论与反馈;感谢 Stanford HCI 组与 NLP 组成员的一般性反馈,以及对 GUM 和 Gumbo 的测试。作者"不感谢" Omar 的冰淇淋制作爱好——它让这篇论文充满了可能让读者读饿的例子。Omar Shaikh 受 HAI-HPI 项目资助,Joon Park 受微软研究院奖学金资助。作者还感谢 SCBx、AXA、TRI、美国运通(American Express)、Banco Itaú、Ford、Hanwha 与 Google,以及 ONR 基金 N000142412532 对本工作的资助。
+
+> 译注:References(参考文献 [1]-[90])按站点惯例不收录,正文中的引用编号均对应原文参考文献列表。
+
+### 附录 A 代码(Code)
+
+::: en
+A demo of Gumbo and our open source package for GUM are available at https://generalusermodels.github.io
+:::
+
+Gumbo 的演示与 GUM 的开源包见 https://generalusermodels.github.io (此附录仅此一行链接。)
+
+### 附录 B 提示节选(Abridged Prompts)
+
+::: en
+Here, we outline prompts from our work in more detail. We discuss prompts used in the underlying GUM and the instantiated system, Gumbo.
+:::
+
+这里更详细地给出作者工作中的提示,讨论底层 GUM 与实例化系统 Gumbo 所用的提示。
+
+#### B.1 GUM 提示
+
+::: en
+B.1.1 Calibration. GUM is responsible for generating confidence scores alongside each proposition. One method to do this is to directly look at the logprobs on the completion from the LLM. However, this estimate for instruction-tuned LLMs is often miscalibrated: LLMs are more confident than they really are. An alternative approach involves prompting LLMs for a verbalized confidence score [76]. This entire process occurs during proposition generation, after we've already generated the reasoning and the proposition:
+
+observation: [screenshots of the user switching between Overleaf and YouTube]
+proposition_reasoning: "The user appears distracted, switching focus between an ice cream recipe video and typing intermittently in an Overleaf window."
+proposition: "User periodically views ice cream recipes while writing."
+
+Conditioned on the above, we elicit a support score (1-10), which serves as our confidence measure. An abridged version of our prompt is below:
+
+Generate a support score that captures how much evidence you have to support the generated propositons. Be conservative in your support estimates. Just because an application appears on the screen does not mean they have deeply engaged with it. They may have only glanced at it for a second, making it difficult to draw strong conclusions. Assign high support scores (e.g., 8-10) only when the transcriptions provide explicit, direct evidence that the user is actively engaging with the content in a meaningful way.
+
+Using the above, we generate a support score:
+
+support: 10
+
+We elicit conservative confidence scores, as instructed in our prompt. GUM is overall well-calibrated and does indeed generate conservative support scores. We suspect that GUM's calibration could be improved either by finetuning or through better prompting—we leave this for future work.
+:::
+
+**B.1.1 校准(Calibration)。**GUM 负责在每条命题旁生成置信度分数。一种方法是直接看 LLM 补全上的 logprobs;但对指令微调的 LLM 而言,这一估计常失准:LLM 比其真实水平更自信。另一种方法是提示 LLM 给出**言语化的置信度分数** [76]。整个过程发生在命题生成期间、推理与命题已生成之后:
+
+observation:[用户在 Overleaf 与 YouTube 之间切换的截图]
+proposition_reasoning:"用户看起来分心了,在一个冰淇淋配方视频与间断地在 Overleaf 窗口中输入之间来回切换注意力。"
+proposition:"用户写作时会周期性地看冰淇淋配方。"
+
+在以上条件下,引出一个**支持度分数**(support score,1-10),作为置信度度量。提示(节选)如下:
+
+"生成一个支持度分数,刻画你有多大证据支持所生成的命题。支持度估计要保守:应用出现在屏幕上并不代表用户深度参与了它;用户可能只瞥了一秒,难以得出强结论。只有当转写文本提供了显式、直接的证据、表明用户正以有意义的方式积极参与该内容时,才给出高支持度分数(如 8-10)。"
+
+利用上述提示生成支持度分数:
+
+support: 10
+
+按提示的指示,作者引出的是**保守的**置信度分数。GUM 总体校准良好,确实生成保守的支持度分数。作者猜想 GUM 的校准还可通过微调或更好的提示来改进——留作未来工作。
+
+::: en
+B.1.2 Reranker. To marshall the GUM, we need to be able to retrieve relevant propositions. A challenge here requires re-ranking outputs—many of the retrieved propositions may be irrelevant. To this end, we classify retrieved results using the following (abridged) prompt:
+
+Classify the similarity between two propositions as:
+(A) HIGHLY RELATED - practically or exactly the same.
+(B) SOMEWHAT RELATED - similar idea or topic.
+(C) DIFFERENT - fundamentally unrelated.
+Proposition A: {proposition_a}
+Proposition B: {proposition_b}
+Respond ONLY with: A, B, or C.
+
+Based on the classification outputs, we skip, revise, or add to the GUM.
+:::
+
+**B.1.2 重排器(Reranker)。**要调度 GUM,需要能检索相关命题。这里的一个挑战是需要对输出**重排**——许多检索到的命题可能无关。为此,用以下(节选)提示对检索结果分类:
+
+"将两条命题之间的相似性分类为:
+(A) HIGHLY RELATED(高度相关)——实际相同或完全相同。
+(B) SOMEWHAT RELATED(某种程度相关)——想法或主题相似。
+(C) DIFFERENT(不同)——根本无关。
+命题 A:{proposition_a}
+命题 B:{proposition_b}
+只回答:A、B 或 C。"
+
+基于分类输出,对 GUM 做跳过、修订或添加。
+
+#### B.2 Gumbo 提示
+
+::: en
+B.2.1 Mixed Initiative Interaction. Gumbo generates suggestions to show users, but we can't show users all suggestions. To this end, we need to filter what suggestions worth showing. We instantiate mixed-initiative interaction, but this approach requires estimating both the probability of a suggestion being useful and its utility to the user. Here, we use the GUM to generate both the probability of the user selecting the suggestion, and the costs and benefits for the user. We use the following (abridged) prompt:
+
+Evaluate each suggestion (1–10 scale):
+1. Benefit: How helpful is assistance for {user_name}? (1 = not beneficial, 10 = highly beneficial; consider simplicity, genericness, user's current actions, urgency.)
+2. False Positive Cost: How disruptive would unsolicited assistance be? (1 = not disruptive, 10 = highly disruptive; consider user's workflow and focus.)
+3. False Negative Cost: How critical is assistance if genuinely needed? (1 = no impact, 10 = significant negative impact; consider potential setbacks without help.)
+4. Decay: How quickly does the suggestion's benefit diminish over time? (1 = immediately obsolete, 10 = remains useful long-term; consider urgency and task deadlines.)
+
+As context, we provide the suggestion, propositions, and underlying observations in the prompt.
+:::
+
+**B.2.1 混合主动交互(Mixed Initiative Interaction)。**Gumbo 生成给用户看的建议,但不能把**所有**建议都展示给用户,因此需要过滤哪些值得展示。作者实例化混合主动交互,但该方法需要估计"建议有用"的概率及其对用户的效用。这里用 GUM 同时生成"用户会选择该建议"的概率与对用户的成本和收益。提示(节选)如下:
+
+"评估每条建议(1-10 分):
+1. Benefit(收益):该辅助对 {user_name} 多有帮助?(1 = 无益,10 = 极有益;考虑简单性、通用性、用户当前动作、紧迫性。)
+2. False Positive Cost(误报代价):未经请求的辅助会有多打断?(1 = 不打断,10 = 极打断;考虑用户工作流与专注度。)
+3. False Negative Cost(漏报代价):若确实需要而未辅助,后果多严重?(1 = 无影响,10 = 显著负面影响;考虑没有帮助时的潜在挫折。)
+4. Decay(衰减):建议的收益随时间衰减多快?(1 = 立即过时,10 = 长期有用;考虑紧迫性与任务截止日期。)"
+
+作为上下文,提示中提供建议、命题与底层观察。
+
+::: en
+B.2.2 Tool Use. Finally, Gumbo relies on external tools for execution. Here, we use a prompt that selects a subset of tools worth using (with the suggestion / observation in context). An abridged version is below:
+
+What tools should you use?
+Here are the tools you have at your disposal:
+llm (e.g. no tools)
+- Generate responses directly without using any tools.
+search
+- Search for topics online and provide citations.
+- Use liberally for latest internet information.
+filesystem (parameter: (str) filename)
+- ONLY use if the file certainly exists on the user's computer.
+- Helpful when viewing the entire file aids user assistance.
+reasoning
+- For challenging coding/math problems requiring deeper thought.
+image (parameter: prompt)
+- Generate an image given a specific prompt.
+Generate a list of useful tools with parameters in JSON format:
+:::
+
+**B.2.2 工具使用(Tool Use)。**最后,Gumbo 依赖外部工具执行。这里用一个提示选择值得使用的工具子集(建议/观察在上下文中)。节选版本如下:
+
+"应该使用哪些工具?
+以下是可供使用的工具:
+llm(即不用工具)
+- 不使用任何工具,直接生成回复。
+search
+- 在线搜索主题并提供引用。
+- 涉及最新互联网信息时可放手使用。
+filesystem(参数:(str) filename)
+- 仅当文件确实存在于用户计算机上时使用。
+- 当查看整个文件有助于辅助用户时有用。
+reasoning
+- 用于需要更深思考的困难编程/数学问题。
+image(参数:prompt)
+- 根据特定提示生成图像。
+以 JSON 格式生成带参数的有用工具列表:"
+
+### 附录 C 调查问题(Survey Questions)
+
+::: en
+Below, we outline all the survey questions asked to participants in the email study.
+
+(1) Demographic Information: Name, Age, Gender, Race/Ethnicity, Profession, Email (Short answer)
+(2) How often do you typically check your email? (Multiple choice: frequency options)
+(3) How many different email accounts do you use regularly? (Multiple choice: 1, 2, 3, 4+)
+(4) What do you primarily use this specific email for? (Checkboxes: use cases)
+(5) Briefly describe the type of content that shows up in this email inbox. (Paragraph)
+(6) How accurately do you feel the propositions shown to you were in reflecting what's in your email? Why do you think they are or aren't accurate? (Paragraph)
+(7) Overall, how accurate were the propositions with high confidence with respect to the context in the email? (7-point Likert)
+(8) Overall, how relevant were the propositions to the context in the email? (7-point Likert)
+(9) Any thoughts about specific propositions? If so, which ones and why? (Paragraph)
+(10) Which data sharing generation was most accurate? (Multiple choice: First, Second, Third)
+(11) How much do you agree with the answers to the best data sharing response you picked earlier? Rate these based on accuracy. (7-point Likert)
+(12) Did you feel the propositions themselves (the text) respected your context and privacy? Why or why not? (Paragraph)
+:::
+
+以下是邮件研究中向参与者提出的全部调查问题:
+
+1. 人口统计信息:姓名、年龄、性别、种族/族裔、职业、邮箱(简答)
+2. 你通常多久查看一次邮件?(多选:频率选项)
+3. 你定期使用多少个不同的邮箱账户?(多选:1、2、3、4+)
+4. 你主要用这个邮箱做什么?(复选框:用例)
+5. 简要描述这个收件箱里出现的内容类型。(段落)
+6. 你觉得展示给你的命题在反映你邮件内容方面有多准确?为什么准确/不准确?(段落)
+7. 总体上,高置信命题相对邮件情境有多准确?(7 分 Likert)
+8. 总体上,命题与邮件情境的相关性如何?(7 分 Likert)
+9. 对具体命题有什么想法?如果有,是哪些、为什么?(段落)
+10. 哪一份数据共享生成最准确?(多选:第一、第二、第三)
+11. 你在多大程度上同意你先前选出的最佳数据共享回答?按准确性评分。(7 分 Likert)
+12. 你觉得命题本身(文本)尊重了你的情境与隐私吗?为什么?(段落)
+
+### 附录 D 访谈问题(Interview Questions)
+
+::: en
+For our end-to-end evaluation, we conduct an hour-long semi-structured interview. We guide the interview using the questions below. Since the interview is unstructured, we also ask followups.
+
+D.1 Overall Experience
+(1) What were your initial expectations for using Gumbo?
+(2) How would you describe your overall experience using this?
+(3) Was there anything that fell short of your expectations?
+
+D.2 Propositions
+(1) How well do you think the propositions understood you?
+(2) Can you describe how you felt during looking at the propositions?
+(3) Was there anything about the propositions that you particularly liked?
+(4) Did you edit any of the propositions?
+(5) How accurate did you find the propositions to be?
+(6) Were there any propositions that you strongly disagreed with? What was wrong?
+(7) Did the propositions reveal something to you that you weren't aware of?
+
+D.3 Suggestions
+(1) How well do you think the suggestions understood your goals and concerns based on your interactions?
+(2) Did the system offer any insights or recommendations that you found useful?
+(3) Did the system offer any insights or recommendations that you did not find useful?
+(4) Did you act on its advice?
+
+D.4 General Reflections
+(1) If you were able to continue using this system over time, what would you want to use it for?
+(2) What features would you add to improve this?
+(3) Would you recommend this application to others? What would you tell them about it?
+(4) Is there anything else you would like to share about your experience that we haven't already asked?
+:::
+
+端到端评估中,作者进行了约一小时的半结构化访谈,以下列问题引导;由于访谈是非结构化的,还会追问。
+
+**D.1 总体体验**
+1. 使用 Gumbo 前,你最初的期待是什么?
+2. 你会如何描述使用它的整体体验?
+3. 有没有什么低于你期待的地方?
+
+**D.2 命题**
+1. 你觉得这些命题对你理解得如何?
+2. 能描述一下看命题时的感受吗?
+3. 命题中有没有你特别喜欢的地方?
+4. 你编辑过任何命题吗?
+5. 你觉得命题有多准确?
+6. 有没有你强烈不同意的命题?哪里不对?
+7. 命题有没有向你揭示一些你自己没意识到的东西?
+
+**D.3 建议**
+1. 基于你的交互,你觉得建议对你的目标与关切理解得如何?
+2. 系统有没有给出你觉得有用的洞察或推荐?
+3. 系统有没有给出你觉得没用的洞察或推荐?
+4. 你按它的建议行动了吗?
+
+**D.4 总体反思**
+1. 如果能长期继续使用这个系统,你想用它做什么?
+2. 你会添加什么功能来改进它?
+3. 你会把这个应用推荐给别人吗?你会怎么跟他们介绍?
+4. 关于你的体验,还有什么我们没问到、你想分享的吗?
+
+### 附录 E 屏幕 Observer 输出(Screen Observer Outputs)
+
+::: en
+Our screen observer provides transcriptions that the GUM uses to create propositions. The raw update is entirely in text. The first part of the update is a text-based transcription of the screen (abridged output below), where the first author was editing the Swift frontend for Gumbo:
+
+Running Application:
+- Xcode (window title: Running Horizon)
+Open Tabs in Xcode:
+- Horizon > main
+- OnboardingManager
+- FrameProcessingService
+- AddPropositionPopup
+- UserModelPage
+- DataModelManagerAPI
+- AppDelegate
+Open File in Editor:
+- File: DataModelManager.swift
+- Function: fetchNewProjects(completion:)
+[omitted code here]
+
+The second part of the transcription is a description of actions the user takes across the past 10 unique frames (anonymized example below):
+
+In Figma, the user is designing a UI mockup titled "User Model" that displays structured propositions about a user along with confidence values. They are refining grouped elements and layout, including recommendation cards like "Suit Rentals in Chicago" and "Flights to Chicago".
+
+In Overleaf, the user is editing a LaTeX document for a paper titled "General User Models." They are working in draft.tex, using input commands to include section files, and referencing the Figma UI figure in "Figure 1." A warning is possibly due to a formatting issue.
+
+In Xcode, the user is developing or debugging a Swift-based application named "Horizon." They are working in the file DataModelManager on a function fetchNewProjects(completion:) that appends suggestions and sends notifs if certain utility thresholds are met. The debug console shows a backend communication error (404 no new updates from the backend) and a missing symbol warning.
+:::
+
+屏幕 Observer 提供 GUM 用来创建命题的转写。原始更新完全是文本。更新的第一部分是屏幕的文本转写(节选输出如下),此时第一作者正在编辑 Gumbo 的 Swift 前端:
+
+正在运行的应用:
+- Xcode(窗口标题:Running Horizon)
+Xcode 中打开的标签页:
+- Horizon > main
+- OnboardingManager
+- FrameProcessingService
+- AddPropositionPopup
+- UserModelPage
+- DataModelManagerAPI
+- AppDelegate
+编辑器中打开的文件:
+- 文件:DataModelManager.swift
+- 函数:fetchNewProjects(completion:)
+[此处代码略]
+
+转写的第二部分是对用户在过去 10 个不同帧上所做动作的描述(匿名示例如下):
+
+在 Figma 中,用户正在设计一个题为 "User Model" 的 UI 模型稿,展示关于用户的结构化命题及置信值;正在细化分组元素与布局,包括"芝加哥西装租赁"(Suit Rentals in Chicago)与"飞往芝加哥的航班"(Flights to Chicago)等推荐卡片。
+
+在 Overleaf 中,用户正在编辑题为 "General User Models" 的论文的 LaTeX 文档;在 draft.tex 中工作,用 input 命令引入各节文件,并在 "Figure 1" 中引用那张 Figma UI 图。一处警告可能由格式问题引起。
+
+在 Xcode 中,用户正在开发或调试名为 "Horizon" 的 Swift 应用;在文件 DataModelManager 的函数 fetchNewProjects(completion:) 上工作,该函数会追加建议并在满足特定效用阈值时发送通知。调试控制台显示一个后端通信错误(404 no new updates from the backend)与一个缺失符号警告。
+
+## 要点速览
+
+- **核心主张**:现有用户模型"太窄"(单应用、表层整合),应代之以跨领域、跨时间尺度的通用用户模型(GUM),从任意非结构化观察中学习用户的行为、知识、信念与偏好。
+- **表示**:GUM = 带置信度(0-1)的自然语言命题集合,辅以衰减分数(命题过时速率)、接地(支持观察)与推理轨迹三类元数据;不对命题类型施加结构约束。
+- **四模块架构**:Propose(观察→推理→命题+置信度+衰减)、Retrieve(BM25 检索 + 新近度衰减 γi = exp(−αi·k·age) + MMR 多样性 λ=0.5 + LLM 重排 identical/similar/unrelated)、Revise(新旧命题合并改写、重生成置信度;零置信命题保留但不返回)、Audit(用 GUM 自身实例化情境完整性理论,五问判定是否拦截观察)。
+- **隐私优先工程**:全开源模型(Qwen 2.5 VL 72B 转写屏幕、Llama 3.3 70B 生成/修订命题)、数据留在设备/自有服务器、私有命题变量仅用户可访问、工具默认关闭。
+- **应用谱系**:为欠规格提示补全上下文(grounding gap)、操作系统通知过滤(只放行 CHI 注册通知的例子)、界面智能体复兴(GUM 消融实验证明"不适合现在看电影"的判断来自用户模型)、任何应用通过统一接口查询 GUM。
+- **Gumbo 主动式助手**:每条新命题生成 5 条候选建议;用 GUM 估计 P(τ|G)、收益 B、误报/漏报代价 C_FP/C_FN,按期望效用不等式决定是否打断,并用令牌桶限速每分钟 1 条;能自己执行就执行(沙盒、避免不可逆副作用),反馈作为普通观察回灌。
+- **关键数字(邮件评估,N=18)**:全部命题平均准确率 76.15±5.85,置信度>0.8 时 88.2%,置信度=1.0 时 100%;Brier 0.17±0.03(误差主要来自欠自信);排序胜率 Full 0.618±0.07 显著高于两个消融(0.463/0.420,p<0.05);无检索时修订失效。
+- **隐私审计结果**:180 条命题仅 7 条被标记违规,情境完整性回答认同度 6.06/7,61.1% 参与者选完整 GUM 最佳;但垃圾/钓鱼邮件可注入改写 GUM,提示攻击面问题。
+- **端到端部署(N=5,5 天)**:命题准确率 0.79±0.07、Brier 0.28±0.04;25% 建议被评为强/优秀;20.69% 建议方向正确但执行失败;两人要求继续使用;屏幕数据约 1GB/天(转写后 5MB)。
+- **开放问题**:过于直白的命题(理想自我 vs 真实自我)、隐私悖论(越用越愿意喂私有数据)、GUM 操纵与提示注入、偏见放大、屏幕之外的生活盲区——这些边界条件正是后续工作(包括下一篇 Next Action Predictors)的起点。
+
+
+
+
+
+
+
+
+
+
+
+
+
+

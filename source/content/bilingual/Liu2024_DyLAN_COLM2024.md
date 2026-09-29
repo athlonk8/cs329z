@@ -1,0 +1,942 @@
+---
+title: "A Dynamic LLM-Powered Agent Network for Task-Oriented Agent Collaboration"
+title_zh: "DyLAN:面向任务的动态 LLM 智能体协作网络"
+authors: Zijun Liu, Yanzhe Zhang, Peng Li, Yang Liu, Diyi Yang
+venue: "COLM 2024 · 清华大学 / Georgia Tech / Stanford"
+kind: paper
+importance: supplementary
+tags: 多智能体,动态团队,智能体选择,前馈网络,早停
+summary: 把多智能体协作建模为时序前馈网络(T-FFN):先用"智能体重要性分数"无监督选出任务适配的精英团队,再让团队在动态通信结构(LLM 排序器中途淘汰低效智能体+拜占庭式早停)中协作,四类任务全面超越基线。
+---
+
+## 导读
+
+本文是第 5 周「多智能体系统」的补充阅读(COLM 2024,清华 & Stanford Diyi Yang 组)。现有大多数多智能体系统(辩论、自协作等)有两个静态假设:**团队人数固定、通信结构固定**——而人类团队(如多学科会诊)会随任务组建、随进程调整。DyLAN(Dynamic LLM-powered Agent Network)把协作形式化为**时序前馈网络(T-FFN)**:每一"层"是一个时间步,节点是智能体,边是通信通道;在此图上做两件事:(1)**团队优化**——先跑一次预试验,用受反向传播与神经元重要性分数启发的"智能体重要性分数(Agent Importance Score)"无监督量化每个候选智能体的贡献,选出精英小队;(2)**任务求解**——协作中由 LLM Ranker 每步给回答排序,只有靠前的智能体进入下一层(动态通信结构/团队重组),并借鉴拜占庭共识理论在超 2/3 智能体答案一致时早停。结果:代码生成(HumanEval 82.9 pass@1,超 LATS 且 API 调用仅其 35%)、决策(WebShop reward 68.3)、通用推理(MMLU 70.5)、算术推理全面占优;MMLU 单科目经团队选择最高提升 25%。它是"多智能体拓扑应当动态化、且可以原则化地优化"这一方向早期且完整的尝试。
+
+## 全文对照翻译
+
+> **译注**:本页覆盖论文正文全部内容(标题、图 1-3、摘要、第 1-5 节、致谢、伦理声明,含表 1-8)与附录 A-D 全译(讨论与局限、实现细节含算法 1/2、附加结果含表 9-15 与图 4-7、提示词模板表 16);References 不收录。图 5-7 为案例展示图,图内对话与代码以中文说明概述。原文中的行内引用(如 (Du et al., 2023))在英文段中原样保留;脚注以"(原文脚注:……)"形式并入相应中文译文。原文 PDF 提取中的个别表格错位已在译表中按论文原版校正,无法核实的缺失项已注明。
+
+**A Dynamic LLM-Powered Agent Network for Task-Oriented Agent Collaboration**(面向任务协作的动态 LLM 智能体网络)
+Zijun Liu¹*、Yanzhe Zhang²、Peng Li³、Yang Liu¹,³,⁴、Diyi Yang⁵(¹清华大学计算机系/智能产业研究院,²佐治亚理工学院,³清华大学智能产业研究院(AIR),⁴江苏语言能力协同创新中心,⁵斯坦福大学)
+
+(原文脚注:*本工作完成于第一作者在斯坦福大学担任 UGVR 访问学生期间。¹ 代码见 https://github.com/SALT-NLP/DyLAN。)
+
+[图 1: DyLAN adopts a two-stage paradigm. Agents communicate in a structure of the temporal feed-forward network (T-FFN). At the "Team Optimization" stage, DyLAN performs agent selection for the most contributory agents in a primary collaboration, oriented to tasks or domains. The selected agents then collaborate dynamically for an answer on the given query at the "Task Solving" stage.]
+
+图 1:DyLAN 采用两阶段范式。智能体在**时序前馈网络(temporal feed-forward network,T-FFN)**的结构中通信。在"团队优化(Team Optimization)"阶段,DyLAN 面向任务或领域,在一次初步协作中执行智能体选择,挑出贡献最大的智能体;随后在"任务求解(Task Solving)"阶段,被选中的智能体针对给定查询动态协作、给出答案。图中上半部分展示了团队优化阶段:T-FFN 上标注了各智能体的重要性分数 I(如 0.65、0.35 等),Top-2 的精英智能体被选出(③ Selection);下半部分展示任务求解阶段:查询(Query)进入网络,中间时间步发生智能体团队重组(Agent Team Reformation)——低效智能体被停用,最终输出答案(Answer)。
+
+### 摘要
+
+::: en
+Recent studies show that collaborating multiple large language model (LLM) powered agents is a promising way for task solving. However, current approaches are constrained by using a fixed number of agents and static communication structures. In this work, we propose automatically selecting a team of agents from candidates to collaborate in a dynamic communication structure toward different tasks and domains. Specifically, we build a framework named Dynamic LLM-Powered Agent Network (DyLAN) for LLM-powered agent collaboration, operating a two-stage paradigm: (1) Team Optimization and (2) Task Solving. During the first stage, we utilize an agent selection algorithm, based on an unsupervised metric called Agent Importance Score, enabling the selection of best agents according to their contributions in a preliminary trial, oriented to the given task. Then, in the second stage, the selected agents collaborate dynamically according to the query. Empirically, we demonstrate that DyLAN outperforms strong baselines in code generation, decision-making, general reasoning, and arithmetic reasoning tasks with moderate computational cost. On specific subjects in MMLU, selecting a team of agents in the team optimization stage improves accuracy by up to 25.0% in DyLAN.
+:::
+
+近来的研究表明,让多个大语言模型(LLM)驱动的智能体相互协作,是一种有前景的任务求解方式。然而,现有方法受限于使用**固定数量的智能体**与**静态的通信结构**。在本工作中,我们提出从候选智能体中**自动选择一个团队**,使其在动态通信结构中面向不同任务与领域进行协作。具体地,我们构建了一个名为**动态 LLM 智能体网络(Dynamic LLM-Powered Agent Network,DyLAN)**的 LLM 智能体协作框架,采用两阶段范式:(1)**团队优化(Team Optimization)**;(2)**任务求解(Task Solving)**。在第一阶段,我们使用一个基于无监督指标"智能体重要性分数(Agent Importance Score)"的智能体选择算法,依据初步试验中的贡献、面向给定任务选出最佳智能体;随后在第二阶段,被选中的智能体依据查询动态协作。实验表明,DyLAN 在代码生成、决策、通用推理与算术推理任务上以适中的计算成本超越了强基线。在 MMLU 的特定科目上,团队优化阶段的智能体选择为 DyLAN 带来最高 25.0% 的准确率提升。
+
+### 1 引言
+
+::: en
+Large Language Model (LLM) agents (Richards & et al., 2023; Nakajima, 2023; Reworkd, 2023) have demonstrated promising performance on various tasks, ranging from reasoning (Yao et al., 2023), code generation (Shinn et al., 2023) to embodied tasks such as video gaming (Wang et al., 2023a) and autopilot systems (Jin et al., 2023). Given the impracticality of a single agent managing all these tasks efficiently, recent research has shifted towards multi-agent collaborations, yielding significant advancements (Li et al., 2023; Du et al., 2023; Wang et al., 2023c; Jiang et al., 2023; Shinn et al., 2023; Chen et al., 2024; Wu et al., 2023). As an analogy to human society, how human teams function may provide valuable insights for developing more effective multi-agent collaboration systems. For instance, recent studies have demonstrated that certain effective communication structures, derived from human society, also play a positive role in multi-agent collaborations (Yin et al., 2023; Chen et al., 2024). In addition to communication structures, another notable characteristic of human teams is that they would optimize team members according to the given task. Take medical consultations as an example. Collaborations in dynamic structures are evident when the composition of the team changes within the procedure of consultation, as some doctors may become less relevant in major as the conversation goes deeper and "leave" the consultation, leading to corresponding changes in the communication structure. Team optimization is often observed in the varying initial composition of doctors for consultations with different diseases, influenced by changes in the related medical fields and the contribution of each doctor. These characteristics prompt an important question: Does a dynamically changing team of agents benefit LLM-powered agent collaborations similarly?
+:::
+
+大语言模型(LLM)智能体(Richards & et al., 2023; Nakajima, 2023; Reworkd, 2023)已在各类任务上展现出可喜的性能,从推理(Yao et al., 2023)、代码生成(Shinn et al., 2023),到视频游戏(Wang et al., 2023a)、自动驾驶系统(Jin et al., 2023)等具身任务。鉴于单个智能体难以高效地处理所有这些任务,近期研究已转向**多智能体协作**,并取得了显著进展(Li et al., 2023; Du et al., 2023; Wang et al., 2023c; Jiang et al., 2023; Shinn et al., 2023; Chen et al., 2024; Wu et al., 2023)。类比人类社会,人类团队的运作方式或许能为构建更有效的多智能体协作系统提供有价值的洞见。例如,近期研究已经证明,某些源自人类社会的有效通信结构,在多智能体协作中同样发挥积极作用(Yin et al., 2023; Chen et al., 2024)。除通信结构之外,人类团队的另一个显著特征是:**会依据给定任务优化团队成员**。以医疗会诊为例:当团队构成在会诊过程中发生变化时,动态结构中的协作便清晰可见——随着对话深入,某些医生对其主要议题的相关性下降而"离场",通信结构也随之改变;而团队优化则常见于针对不同疾病的会诊采用不同的医生初始阵容,这受相关医学领域变化与每位医生贡献的影响。这些特征引出一个重要问题:**动态变化的智能体团队,是否同样有益于 LLM 智能体协作?**
+
+::: en
+However, the question is not well-addressed yet. While various communication structures have been studied for different tasks, such as debating for reasoning (Du et al., 2023; Liang et al., 2023; Xiong et al., 2023) and self-collaboration for coding (Dong et al., 2023; Qian et al., 2023a;b), these communication structures do not alter members in the agent team and remain fixed throughout the collaboration. It indicates that task-oriented dynamic selections in agents are not thoroughly explored in current research. Furthermore, in the context of agent teams, most existing studies opt for hand-crafting agents from human priors (Liu et al., 2023; Nakajima, 2023; Hong et al., 2024; Shinn et al., 2023; Li et al., 2023) or employ an LLM to generate them (Wang et al., 2023c; Chen et al., 2023b; Christianos et al., 2023). These approaches generally predefine agents without further validation of the collaboration process. This leads to static agent teams or rebuilding teams without principled verification (Chen et al., 2024). Challenges still remain for optimization methods.
+:::
+
+然而,这一问题尚未得到很好的解决。虽然已有研究针对不同任务探索了多种通信结构,例如用于推理的辩论(Du et al., 2023; Liang et al., 2023; Xiong et al., 2023)与用于编码的自协作(Dong et al., 2023; Qian et al., 2023a;b),但这些通信结构**不会改变智能体团队中的成员,并在整个协作过程中保持固定**。这表明,当前研究尚未充分探索面向任务的智能体动态选择。此外,在智能体团队这一语境下,多数现有研究要么依据人类先验**手工构建**智能体(Liu et al., 2023; Nakajima, 2023; Hong et al., 2024; Shinn et al., 2023; Li et al., 2023),要么让 LLM **生成**它们(Wang et al., 2023c; Chen et al., 2023b; Christianos et al., 2023)。这些做法通常只是预定义智能体,而不对协作过程做进一步验证,从而导致静态的智能体团队,或无原则验证的团队重建(Chen et al., 2024)。优化方法方面依然存在挑战。
+
+::: en
+As a first attempt towards addressing the above question, we introduce a novel framework named Dynamic LLM-Powered Agent Network (DyLAN). DyLAN conceptualizes multi-agent collaboration using temporal feed-forward networks (T-FFNs). In this formulation, each communication step of the agents corresponds to a network layer, with nodes representing the agents involved at that step and edges indicating communications between agents, for incorporating dynamic agent teams agnostically. DyLAN functions in two stages to incorporate task-oriented agent collaborations (Figure 1). The first stage is termed Team Optimization, where we select top contributory agents unsupervisedly among the initial team of candidates according to the task query, based on their individual contributions. We propose a forward-backward message passing algorithm on the T-FFN termed agent selection in Section 3.4, inspired by the back-propagation algorithm (Rumelhart et al., 1986) and neuron importance scores (Yu et al., 2018). This algorithm measures the contribution of each agent at the first stage with an unsupervised metric named Agent Importance Score. The most contributory agents form a smaller team to collaborate at the second stage — Task Solving, thereby minimizing the impact of less effective agents on the final answer. Specifically, the collaboration begins with a team of agents, and an LLM-powered ranker in the middle dynamically deactivates low-performing agents (i.e., agent team reformation), thus expanding the T-FFN, integrating dynamic communication structures into DyLAN (Section 3.3.2). Incorporating agent selection, DyLAN effectively identifies and coordinates a task-oriented team of agents in a principled way. Extensive experiments demonstrate that DyLAN outperforms strong baselines in various tasks, including code generation, decision-making, general reasoning, and arithmetic reasoning. Notably, agent selection in DyLAN has improved accuracy by up to 25.0% in certain subjects of the MMLU dataset (Hendrycks et al., 2021a), underlining the significance of dynamic agent teams.
+:::
+
+作为解决上述问题的首次尝试,我们提出了一个名为**动态 LLM 智能体网络(Dynamic LLM-Powered Agent Network,DyLAN)**的新框架。DyLAN 用**时序前馈网络(temporal feed-forward network,T-FFN)**来概念化多智能体协作:在这一形式化中,智能体的每个通信步骤对应网络的一层,节点表示该步骤参与的智能体,边表示智能体间的通信,从而以与具体实现无关(agnostic)的方式容纳动态智能体团队。DyLAN 分两个阶段运行,以实现面向任务的智能体协作(图 1)。第一阶段称为**团队优化(Team Optimization)**:我们依据任务查询,基于候选初始团队中各智能体的个体贡献,以无监督方式选出贡献最大的智能体。我们在 3.4 节提出一种在 T-FFN 上的**前向-反向消息传递算法**,称为**智能体选择(agent selection)**,其灵感来自反向传播算法(Rumelhart et al., 1986)与神经元重要性分数(Yu et al., 2018)。该算法用一种名为**智能体重要性分数(Agent Importance Score)**的无监督指标度量第一阶段中每个智能体的贡献。贡献最大的智能体组成一个更小的团队,在第二阶段——**任务求解(Task Solving)**——进行协作,从而把低效智能体对最终答案的影响降到最低。具体而言,协作从一个智能体团队开始,网络中部的 LLM 排序器会动态停用表现不佳的智能体(即**智能体团队重组,agent team reformation**),由此扩展 T-FFN,将动态通信结构融入 DyLAN(见 3.3.2 节)。结合智能体选择,DyLAN 能以有原则的方式有效地识别并协调一支面向任务的智能体团队。大量实验表明,DyLAN 在包括代码生成、决策、通用推理与算术推理在内的多种任务上超越了强基线。值得注意的是,DyLAN 中的智能体选择在 MMLU 数据集(Hendrycks et al., 2021a)的某些科目上带来了最高 25.0% 的准确率提升,凸显了动态智能体团队的重要性。
+
+::: en
+In summary, our contributions are threefold:
+
+• We introduce a novel framework named DyLAN for task-oriented agent collaboration in two stages with agent selection, marking a significant advancement in the study of dynamic agent teams.
+
+• DyLAN innovatively formulates agent collaborations in temporal feed-forward networks with agent team reformation, enhancing its adaptability and reducing dependence on human preconceptions.
+
+• Empirical results demonstrate the superior accuracy, efficiency, and stability of DyLAN across various tasks, underscoring the need for dynamic agent teams.
+:::
+
+概而言之,我们的贡献有三点:
+
+- 我们提出了新框架 DyLAN,以两阶段范式加智能体选择实现面向任务的智能体协作,标志着动态智能体团队研究的重要进展;
+- DyLAN 创新性地用时序前馈网络并结合**智能体团队重组(agent team reformation)**来形式化智能体协作,增强了适应性并降低了对人类先入之见的依赖;
+- 实证结果表明 DyLAN 在多种任务上具有更优的准确率、效率与稳定性,凸显了动态智能体团队的必要性。
+
+### 2 相关工作
+
+::: en
+Team Optimization of LLM-Powered Agents The construction of agent teams is the essential and initial step for LLM-powered agent collaboration. TPTU (Ruan et al., 2023) and Chameleon (Lu et al., 2023) decompose tasks to choose or create tools accordingly. Recent studies also use LLMs to generate a fixed number of role prompts for agents in response to a task query (Wang et al., 2023c; Suzgun & Tauman Kalai, 2024), or for each round of discussion (Chen et al., 2024). However, manual prompts require careful design, which is impractical for adaptation on each task or domain, and prompting LLMs with predefined or generated descriptions may not result in the desired abilities of the agents without verification. Therefore, posteriorly selecting a team of agents based on their actual behaviors in the collaboration according to the task becomes essential. While team optimization for LLM agents is a relatively new area, human-team optimization has been studied for a long time. For instance, Liu et al. (2015) show that skill contribution is essential for selecting crowd workers to solve outsourced tasks efficiently. Based on peer rating, researchers have developed an algorithm for managing online workers in an optimal organization (Lykourentzou et al., 2022). Drawing inspirations, we introduce an unsupervised algorithm to select a team of agents by quantifying their contributions based on peer ratings in Section 3.4.
+:::
+
+**LLM 智能体的团队优化** 智能体团队的构建是 LLM 智能体协作必不可少的初始步骤。TPTU(Ruan et al., 2023)与 Chameleon(Lu et al., 2023)通过分解任务来相应地选择或创建工具。近期研究也用 LLM 针对任务查询生成固定数量的角色提示,以充当智能体(Wang et al., 2023c; Suzgun & Tauman Kalai, 2024),或为每一轮讨论生成角色(Chen et al., 2024)。然而,人工提示需要精心设计,难以在每个任务或领域上适配;而用预定义或生成的描述去提示 LLM,若不经验证,未必能带来期望的智能体能力。因此,**依据任务、基于智能体在协作中的实际行为来后验地选择智能体团队**就变得至关重要。虽然 LLM 智能体的团队优化还是个较新的领域,人类团队的优化却已被长期研究。例如,Liu et al. (2015) 表明技能贡献对于挑选众包工人以高效完成外包任务至关重要;基于同伴互评,研究者还开发了以最优组织方式管理在线工人的算法(Lykourentzou et al., 2022)。受此启发,我们在 3.4 节提出一种无监督算法,基于同伴评分量化智能体贡献,从而选择智能体团队。
+
+::: en
+Communication Structures in LLM-Powered Agent Collaboration Collaboration between multiple LLM agents has demonstrated strong performance on various tasks in recent years and has emerged as a promising approach to enhance the capabilities of individual LLMs. To enable collaborations between multiple agents, recent studies have developed different communication structures and assigned agents in pre-defined architecture. For instance, researchers have found taking multiple LLM instances to debate for a fixed number of rounds can boost their factuality and reasoning capacities (Du et al., 2023; Liang et al., 2023; Xiong et al., 2023). To aggregate multiple LLM responses, LLM-Blender (Jiang et al., 2023) calls different LLMs in one round and uses pairwise ranking to combine the top responses. It has also been shown effective in distributing workloads to LLMs and concatenating their answers, thus producing better results (Ning et al., 2024; Suzgun & Tauman Kalai, 2024; Qiao et al., 2024). It is worth noting that existing studies (Hao et al., 2023; Zhang et al., 2023b) have tried organizing LLM instances into linear layers, but they mainly studied supervised learning in context space and LLM evaluation, respectively, not the scenario in which we are interested. However, running LLMs in a static architecture may limit the performance and generalization. On specific reasoning tasks, adopting a dynamic directed acyclic graph structure for LLMs has been shown effective (Zhang et al., 2023). Also, recent studies (Yin et al., 2023; Chen et al., 2024; Zhang et al., 2023a; Zhuge et al., 2024) have demonstrated that optimal communication structures vary with tasks and compositions of agents. Aligned with the findings, we propose a structure that adjusts dynamically based on selecting agents according to the tasks and the construction of the agent team in Section 3.3.2.
+:::
+
+**LLM 智能体协作中的通信结构** 近年来的实践表明,多个 LLM 智能体之间的协作在各类任务上表现出色,已成为提升单个 LLM 能力的有前景途径。为了让多个智能体得以协作,近期研究开发了不同的通信结构,并把智能体安置在预定义的架构中。例如,研究者发现让多个 LLM 实例辩论固定轮数可以提升其事实性与推理能力(Du et al., 2023; Liang et al., 2023; Xiong et al., 2023)。为聚合多个 LLM 的回复,LLM-Blender(Jiang et al., 2023)在单轮中调用不同的 LLM,并用两两排序(pairwise ranking)组合出最优回复。将工作负载分发给多个 LLM 再拼接其答案也被证明有效,能产生更好的结果(Ning et al., 2024; Suzgun & Tauman Kalai, 2024; Qiao et al., 2024)。值得注意的是,已有研究(Hao et al., 2023; Zhang et al., 2023b)尝试把 LLM 实例组织成线性层,但它们分别主要研究上下文空间中的监督学习与 LLM 评测,并非我们关心的场景。然而,在静态架构中运行 LLM 可能限制性能与泛化能力。在特定推理任务上,为 LLM 采用动态有向无环图结构已被证明有效(Zhang et al., 2023)。此外,近期研究(Yin et al., 2023; Chen et al., 2024; Zhang et al., 2023a; Zhuge et al., 2024)表明,最优通信结构会随任务与智能体构成而变化。与这些发现一致,我们在 3.3.2 节提出一种依据任务选择智能体、并随智能体团队构建而**动态调整**的结构。
+
+::: en
+Evaluation of the Contribution of LLM-Powered Agents It is non-trivial to evaluate the contribution of each LLM agent in a multi-agent system, especially when they communicate over multiple rounds. In the single-round setting, existing methods use LLMs heavily for evaluation. To overcome the over confidence of LLMs (Xiong et al., 2024), pairwise ranking based on an additional LLM ranker has been introduced in LLM-Blender (Jiang et al., 2023). To rank n responses with an independent LLM in a single round, they compare all O(n²) pairs. For better efficiency, researchers use a k-length sliding window to choose top k responses within O(nk) pairwise comparisons (Qin et al., 2023). However, these methods have not been extended to multi-round settings. Inspired by the neuron importance score (Yu et al., 2018), we evaluate agents by propagating and aggregating single-round peer ratings in a back-propagation manner (Rumelhart et al., 1986). In this way, we then introduce an unsupervised metric called Agent Importance Score to quantify the contribution of each agent in multi-round collaborations (Section 3.4).
+:::
+
+**LLM 智能体贡献的评估** 评估多智能体系统中每个 LLM 智能体的贡献并非易事,尤其在它们进行多轮通信时。在单轮设定下,现有方法大量使用 LLM 进行评估。为克服 LLM 的过度自信问题(Xiong et al., 2024),LLM-Blender(Jiang et al., 2023)引入了基于额外 LLM 排序器的两两排序:要用一个独立 LLM 在单轮内对 n 条回复排序,需要比较全部 $O(n^2)$ 个配对。为提高效率,研究者使用长度为 k 的滑动窗口,在 $O(nk)$ 次两两比较内选出 top-k 回复(Qin et al., 2023)。然而,这些方法尚未被扩展到多轮设定。受神经元重要性分数(neuron importance score,Yu et al., 2018)启发,我们以反向传播的方式(Rumelhart et al., 1986)传播并聚合单轮同伴评分来评估智能体。由此,我们进一步引入一种名为**智能体重要性分数(Agent Importance Score)**的无监督指标,以量化多轮协作中每个智能体的贡献(见 3.4 节)。
+
+[表 1: Comparison between DyLAN and representative previous works. In the second row, nodes denote agents at different time steps (V), arrows represent edges (E), and color indicates the role of agents.]
+
+表 1:DyLAN 与代表性先前工作的对比。第二行中,节点表示不同时间步的智能体(V),箭头表示边(E),颜色表示智能体的角色。
+
+| 方法 | 单次执行 | LLM-Blender | LLM Debate | Reflexion | CAMEL | AgentVerse | DyLAN |
+|---|---|---|---|---|---|---|---|
+| 通信结构 (V; E) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| 多角色 | × | × | × | × | 人工 | 人工 | 人工+生成 |
+| 早停(Early Stopping) | × | × | × | ✓ | ✓ | ✓ | ✓ |
+| 动态结构 | ✓ | × | × | × | × | × | ✓ |
+| 团队优化 | × | × | × | × | × | × | ✓ |
+
+(译注:✓ 表示支持,× 表示不支持;"人工+生成"表示角色既可人工指定也可由 LLM 生成。单次执行视为平凡地具有"动态结构"——单个智能体不存在固定通信拓扑。)
+
+### 3 动态 LLM 智能体网络
+
+#### 3.1 总览
+
+::: en
+We introduce a framework for LLM-powered agent collaboration named Dynamic LLM-Powered Agent Network (DyLAN), facilitating dynamic communication structures and automatically task-oriented agent selection in a two-stage fashion (Figure 1): an optimized agent team is constructed in the first stage "Team Optimization" through a preliminary trial and then the team collaborates to solve the task in the second stage "Task Solving".
+:::
+
+我们提出一个用于 LLM 智能体协作的框架——动态 LLM 智能体网络(DyLAN),它以两阶段的方式促进动态通信结构与自动化的面向任务的智能体选择(图 1):第一阶段"**团队优化**"通过一次预试验构建出优化后的智能体团队;第二阶段"**任务求解**"中,该团队协作求解任务。
+
+::: en
+A core component of DyLAN is the temporal feed-forward networks (T-FFNs), whose nodes denote agents and edges denote the communication channels between agents (Figure 2 left). T-FFNs serve not only as the abstraction of communication structures but also the computation graph. From this perspective, as shown in Table 1, various LLM-powered agent collaboration systems (Jiang et al., 2023; Shinn et al., 2023; Du et al., 2023; Li et al., 2023; Chen et al., 2024) can be represented by similar network structures as T-FFNs. DyLAN is the only framework that supports multiple agents with roles and tools, early stopping (Section 3.3.2), dynamic communication structures and team optimization simultaneously. To be specific, for team optimization, our agent selection algorithm is performed as a backward message passing algorithm on the T-FFN (Figure 2 right), and for task solving, agent team reformation expands the T-FFN dynamically with messages passing forward.
+:::
+
+DyLAN 的核心组件是**时序前馈网络(T-FFN)**,其节点表示智能体,边表示智能体之间的通信通道(图 2 左)。T-FFN 不仅是通信结构的抽象,也是计算图。从这个视角看,如表 1 所示,各种 LLM 智能体协作系统(Jiang et al., 2023; Shinn et al., 2023; Du et al., 2023; Li et al., 2023; Chen et al., 2024)都可以用与 T-FFN 类似的网络结构来表示。DyLAN 是唯一同时支持多角色与多工具智能体、**早停(early stopping)**(见 3.3.2 节)、动态通信结构与团队优化的框架。具体而言,在团队优化方面,我们的智能体选择算法以 T-FFN 上的**反向消息传递算法**形式执行(图 2 右);在任务求解方面,**智能体团队重组**伴随前向消息传递动态地扩展 T-FFN。
+
+::: en
+To make it easier to understand, we will start by explaining the formulation of T-FFNs. Then, we will move on to the task solving stage, and finally, we will explain the team optimization stage, which relies on components of task solving.
+:::
+
+为便于理解,我们先解释 T-FFN 的形式化定义,然后介绍任务求解阶段,最后解释团队优化阶段——它依赖于任务求解的组件。
+
+#### 3.2 时序前馈网络(T-FFNs)
+
+::: en
+A T-FFN is a multi-layer network, of which each layer represents a time step. Its formal definition is as follows.
+
+Definition 1 (Agents) Agents participating the collaboration are represented by
+
+$$A = \{a_1, a_2, \cdots, a_N\}, \tag{1}$$
+
+where $N$ denotes the total number of agents, and $a_i$ can be (I) an LLM-powered agent possibly equipped with tools, or (II) an independent tool, e.g., scripts, code interpreters.
+:::
+
+T-FFN 是一个多层网络,每一层表示一个时间步。其形式化定义如下。
+
+**定义 1(智能体)** 参与协作的智能体表示为
+
+$$A = \{a_1, a_2, \cdots, a_N\}, \tag{1}$$
+
+其中 $N$ 表示智能体总数,$a_i$ 可以是 (I) 可能配备工具的 LLM 智能体,或 (II) 独立工具,例如脚本、代码解释器。
+
+::: en
+Definition 2 (Nodes) The t-th layer of a T-FFN consists of N nodes, each of which corresponding to one agent:
+
+$$V_t = \{v_{t,1}, \cdots, v_{t,N}\}, \tag{2}$$
+
+where $t = 1, \cdots, T$, and node $v_{t,i}$ corresponds to agent $a_i$.
+:::
+
+**定义 2(节点)** T-FFN 的第 $t$ 层由 $N$ 个节点组成,每个节点对应一个智能体:
+
+$$V_t = \{v_{t,1}, \cdots, v_{t,N}\}, \tag{2}$$
+
+其中 $t = 1, \cdots, T$,节点 $v_{t,i}$ 对应智能体 $a_i$。
+
+::: en
+Definition 3 (Edges) Edges in a T-FFN refer to the communication channels between nodes, forming the communication structure between agents. Specifically, the set of edges between the nodes in layer $t-1$ and $t$ is denoted as
+
+$$E_{t-1,t} = \{(v_{t-1,i}, v_{t,j})\} \subseteq V_{t-1} \times V_t, \tag{3}$$
+
+where $t = 2, \cdots, T$, and $(v_{t-1,i}, v_{t,j})$ denotes an edge connecting nodes $v_{t-1,i}$ and $v_{t,j}$.
+:::
+
+**定义 3(边)** T-FFN 中的边指节点之间的通信通道,构成智能体之间的通信结构。具体地,第 $t-1$ 层与第 $t$ 层节点之间的边集记为
+
+$$E_{t-1,t} = \{(v_{t-1,i}, v_{t,j})\} \subseteq V_{t-1} \times V_t, \tag{3}$$
+
+其中 $t = 2, \cdots, T$,$(v_{t-1,i}, v_{t,j})$ 表示连接节点 $v_{t-1,i}$ 与 $v_{t,j}$ 的一条边。
+
+::: en
+Definition 4 (T-FFN) Finally, the T-FFN corresponding to the collaboration is defined as a T-layer network:
+
+$$G = (V_1, \cdots, V_T; E_{1,2}, \cdots, E_{T-1,T}). \tag{4}$$
+
+Note that we only consider T-FFNs where edges only exist in adjacent layers. However, edge can be added to arbitrary pairs of nodes, making the T-FFN capable of representing more complex communication structures.
+:::
+
+**定义 4(T-FFN)** 最后,对应于该协作的 T-FFN 被定义为一个 $T$ 层网络:
+
+$$G = (V_1, \cdots, V_T; E_{1,2}, \cdots, E_{T-1,T}). \tag{4}$$
+
+注意,我们只考虑边仅存在于相邻层之间的 T-FFN。不过,也可以在任意节点对之间加边,使 T-FFN 能够表示更复杂的通信结构。
+
+[图 2: The left part shows how DyLAN outputs the answer in a temporal feed-forward network (T-FFN), where nodes represent agents at specific time steps (Section 3.2). Agent team reformation functions in the middle steps, during which the low-performing agent is deactivated in subsequent time steps. The right part depicts agent selection (Section 3.4), where the contribution of each agent in a primary trial is automatically evaluated in three steps using Agent Importance Score, denoted as I. Then, the top-ranked agents based on I will be selected as the optimized, task-oriented team of agents.]
+
+图 2:**左**部分展示 DyLAN 如何在时序前馈网络(T-FFN)中输出答案,其中节点表示特定时间步的智能体(见 3.2 节);智能体团队重组在中间时间步生效,其间低效智能体在后续时间步中被停用(图中 $t=3\to t=4$ 处,LLM Ranker 对当前各回答给出 0.1/0.4/0.5/0.7 等同伴评分,表现不佳的智能体不再进入下一层)。**右**部分描绘智能体选择(见 3.4 节):在一次预试验中,用智能体重要性分数(记为 $I$)经三步自动评估每个智能体的贡献——①传播(每个节点对其前驱的回答做同伴评分)、②聚合(每个节点汇总从后继收到的评分,如 $\#I_{i,1}=0.65$、$\#I_{i,3}=1.15$ 等)、③选择(依据重要性分数选出 Top-2 精英智能体)——随后按 $I$ 排名靠前的智能体被选为优化后的、面向任务的智能体团队。
+
+#### 3.3 任务求解
+
+::: en
+Task solving involves performing inference on the T-FFNs, jointly with agent team reformation, which be elaborated on in the subsequent two sections.
+:::
+
+任务求解包括在 T-FFN 上执行推理,并配合智能体团队重组进行,下面两小节分别详述。
+
+##### 3.3.1 推理
+
+::: en
+Before details, we first introduce the formulation of message passing on T-FFNs.
+
+Definition 5 (Message Passing) Given a T-FFN, a node $v_{t,j}$, a set of adjacent nodes $U = \{u_1, \cdots, u_K\}$, and the messages $M = \{m_{u_1}, \cdots, m_{u_K}\}$ received by $v_{t,j}$, where $K$ is the size of $U$, and $m_{u_k}$ is the message sent from $u_k$ to $v_{t,j}$, message passing aggregates all the messages $M$ to produce a updated message $\hat{m}_{v_{t,j}}$ for $v_{t,j}$, which is formally defined as
+
+$$\hat{m}_{v_{t,j}} = f^{\mathrm{mp}}(M, v_{t,j}), \tag{5}$$
+
+where $f^{\mathrm{mp}}(\cdot, \cdot)$ is the aggregator function.
+:::
+
+在展开细节之前,先介绍 T-FFN 上**消息传递(message passing)**的形式化。
+
+**定义 5(消息传递)** 给定一个 T-FFN、一个节点 $v_{t,j}$、一组相邻节点 $U = \{u_1, \cdots, u_K\}$、以及 $v_{t,j}$ 收到的消息 $M = \{m_{u_1}, \cdots, m_{u_K}\}$,其中 $K$ 是 $U$ 的大小,$m_{u_k}$ 是从 $u_k$ 发往 $v_{t,j}$ 的消息。消息传递将所有消息 $M$ 聚合,为 $v_{t,j}$ 产生一条更新后的消息 $\hat{m}_{v_{t,j}}$,其形式化定义为
+
+$$\hat{m}_{v_{t,j}} = f^{\mathrm{mp}}(M, v_{t,j}), \tag{5}$$
+
+其中 $f^{\mathrm{mp}}(\cdot, \cdot)$ 是聚合函数(aggregator function)。
+
+::: en
+Definition 6 We refer the algorithm as forward message passing when $U$ is the set of all adjacent nodes of $v_{t,j}$ from the previous time step, i.e., $U = \{u_k \mid \forall u_k, (u_k, v_{t,j}) \in E_{t-1,t}\}$. Similarly, it is referred as backward message passing when $U$ is the set of all adjacent nodes from the next time step: $U = \{u_k \mid \forall u_k, (v_{t,j}, u_k) \in E_{t,t+1}\}$.
+:::
+
+**定义 6** 当 $U$ 是 $v_{t,j}$ 在上一个时间步的全部相邻节点时,即 $U = \{u_k \mid \forall u_k, (u_k, v_{t,j}) \in E_{t-1,t}\}$,我们称该算法为**前向消息传递(forward message passing)**;类似地,当 $U$ 是下一时间步的全部相邻节点时,即 $U = \{u_k \mid \forall u_k, (v_{t,j}, u_k) \in E_{t,t+1}\}$,称之为**反向消息传递(backward message passing)**。
+
+::: en
+With the above formulation, we can describe the inference process of a T-FFN $G$ in the manner of forward message passing. During collaborations on a given task, an agent at a specific time step takes the responses, i.e., messages, from other agents at the previous time step as input and generates responses based on the task query. Based on different types of agents at $v_{t,j}$, we can implement $f^{\mathrm{mp}}(\cdot, v_{t,j})$ respectively: (I) concatenating input messages along with the task query into prompt templates (refer to task instructions in Appendix D) and take the response from LLM after generation or tool calling, or (II) filter the input that the tool can process, e.g., code completions and structured text.
+:::
+
+有了上述形式化,我们可以用前向消息传递的方式描述 T-FFN $G$ 的推理过程。在给定任务上的协作中,特定时间步的智能体把上一个时间步其他智能体的回复(即消息)作为输入,并基于任务查询生成回复。根据 $v_{t,j}$ 处智能体的类型,可分别实现 $f^{\mathrm{mp}}(\cdot, v_{t,j})$:(I)把输入消息与任务查询拼接进提示模板(任务指令见附录 D),取 LLM 生成或工具调用后的回复;或 (II)过滤出该工具能处理的输入,例如代码补全与结构化文本。
+
+::: en
+During inference, we begin feeding the task query $q \in \mathcal{Q}$ into agents at time step 1 ($V_1$), where $\mathcal{Q}$ denotes the dataset. By passing responses of nodes $V_{t-1}$ at time step $t-1$ to nodes $V_t$ at $t$, agents can perceive responses from all nodes at the previous time step and perform collaborative behavior, which might include criticizes, advice, refinement, or quality reviews, depending on the implementation of agents. Formally, the inference process is defined as
+
+$$f^{\mathrm{Infer}}(q, G) = o, \tag{6}$$
+
+where $o = \arg\max\{M_T\}$ and $M_T$ denotes the responses from $V_T$. Please refer to Algorithm 1 for detailed procedure.
+:::
+
+推理时,我们首先把任务查询 $q \in \mathcal{Q}$ 注入第 1 个时间步的智能体($V_1$),其中 $\mathcal{Q}$ 表示数据集。通过把第 $t-1$ 步节点 $V_{t-1}$ 的回复传给第 $t$ 步节点 $V_t$,智能体能够感知上一步所有节点的回复,并做出协作行为——依智能体实现而定,可能包括批评、建议、精炼或质量审查。形式化地,推理过程定义为
+
+$$f^{\mathrm{Infer}}(q, G) = o, \tag{6}$$
+
+其中 $o = \arg\max\{M_T\}$,$M_T$ 表示 $V_T$(末层)的回复。详细流程见算法 1。
+
+##### 3.3.2 智能体团队重组
+
+::: en
+Given a set of agents $A$, agent team reformation aims to identify more contributory agents and construct a dynamic communication structure accordingly. To this end, we leverage an additional LLM instance, referred as the "LLM Ranker", to analyze responses from the agents participate in the current time step and give out a ranking, prompted by the template of "Ranker" in Appendix D. Then, the top-ranked agents are allowed to participate in the next time step. In other words, edges will only be added for these top-ranked agents, resulting in a dynamic communication structure.
+:::
+
+给定智能体集合 $A$,**智能体团队重组(agent team reformation)**旨在识别贡献更大的智能体,并据此构建动态通信结构。为此,我们引入一个额外的 LLM 实例,称为"**LLM 排序器(LLM Ranker)**",在附录 D 的"Ranker"模板提示下,分析当前时间步参与智能体的回复并给出排名。随后,只有排名靠前的智能体被允许参与下一个时间步。换言之,只会为这些排名靠前的智能体添加边,从而形成动态通信结构。
+
+::: en
+Formally, suppose the set of agents participates in time step $t$ is $A_t = \{a_k\}$, and the top-ranked agents are $A_{t+1} = \{a_l\}$, where $k$ and $l$ are the indices of the agents as defined in Equation (1), then we can obtain two nodes sets $V'_t = \{v_{t,k} \mid \forall a_k \in A_t\}$ and $V'_{t+1} = \{v_{t+1,l} \mid \forall a_l \in A_{t+1}\}$, and the edge set $E_{t,t+1}$ is defined as
+
+$$E_{t,t+1} = V'_t \times V'_{t+1}. \tag{7}$$
+:::
+
+形式化地,设参与时间步 $t$ 的智能体集合为 $A_t = \{a_k\}$,排名靠前的智能体为 $A_{t+1} = \{a_l\}$,其中 $k$ 与 $l$ 是式 (1) 定义的智能体下标。由此可得两个节点集 $V'_t = \{v_{t,k} \mid \forall a_k \in A_t\}$ 与 $V'_{t+1} = \{v_{t+1,l} \mid \forall a_l \in A_{t+1}\}$,边集 $E_{t,t+1}$ 定义为
+
+$$E_{t,t+1} = V'_t \times V'_{t+1}. \tag{7}$$
+
+::: en
+The process progresses iteratively until the stop condition is met, and finally, we get a T-FFN $G^A_q$ for the query input $q$. We use function $f^{\mathrm{IAS}}$ to denote the entire computation:
+
+$$G^A_q = f^{\mathrm{IAS}}(A, q). \tag{8}$$
+:::
+
+该过程迭代推进,直到满足停止条件,最终得到针对输入查询 $q$ 的 T-FFN $G^A_q$。我们用函数 $f^{\mathrm{IAS}}$ 表示整个计算:
+
+$$G^A_q = f^{\mathrm{IAS}}(A, q). \tag{8}$$
+
+::: en
+To further enhance efficiency, we introduce an early-stopping mechanism. Inspired by the Byzantine Consensus theory (Castro & Liskov, 1999), at least $3p + 1$ agents are needed to tolerate $p$ faulty agents in a single round of communication. Following the theory, the inference process will be terminated when over 2/3 of agents in a single layer have a consistent answer. In practice, the inference process will also be terminated when the maximum time step is reached. Note that none of the consistency measures used in prior work (Wang et al., 2023b; Aggarwal et al., 2023; Yin et al., 2023) applies to multi-round multi-agent interaction since their theories are assumed to execute a single LLM instance multiple times or expect all agents to reach the same answer.
+:::
+
+为进一步提升效率,我们引入**早停机制(early-stopping mechanism)**。受拜占庭共识(Byzantine Consensus)理论(Castro & Liskov, 1999)启发:在单轮通信中,要容忍 $p$ 个故障智能体,至少需要 $3p+1$ 个智能体。遵循该理论,当单层中超过 2/3 的智能体给出一致的答案时,推理过程即终止。实践中,当达到最大时间步时推理也会终止。注意,先前工作中使用的一致性度量(Wang et al., 2023b; Aggarwal et al., 2023; Yin et al., 2023)均不适用于多轮多智能体交互,因为它们的理论假设是对单个 LLM 实例执行多次,或期望所有智能体达成相同答案。
+
+#### 3.4 团队优化
+
+::: en
+The goal of team optimization is to select a subset of agents from candidates based on their contributions evaluated from a primary trial, such that the new team solves the task query more effectively and efficiently. Formally, given a task query $q$, a set of agents $A$, a trial is performed based on the algorithm proposed in Section 3.3.2 resulting in a T-FFN $G^A_q$. And team optimization is formulated as
+
+$$\hat{A} = f^{\mathrm{Optim}}(A, G^A_q, q), \text{ where } \hat{A} \subset A. \tag{9}$$
+
+$f^{\mathrm{Optim}}$ is implemented as in a three-step procedure of agent selection (Figure 2 right):
+
+(1) Propagation: Each node rates the solutions to the task query from its predecessors, which is a forward message passing process. Formally, given a node $v_{t,j}$ and an edge $(v_{t-1,i}, v_{t,j})$, the message $m_{v_{t-1,i}}$ sent from $v_{t-1,i}$ to $v_{t,j}$ is defined as the response to the task query $q$ from the agent $a_i$ at the previous time step. The aggregator function $f^{\mathrm{mp}}(\cdot, v_{t,j})$ is implemented as a scoring function $f^{(s)}_{t,j}(\cdot, \cdot, \cdot)$, which maps the prompt $p_j$, the input query $q$, and all the messages $M$ to the rating scores. Here, we use $w_{t-1,i,j}$ to refer to the rating score on $v_{t-1,i}$ from $v_{t,j}$, and
+
+$$[w_{t-1,1,j}, w_{t-1,2,j}, ..., w_{t-1,N,j}] = f^{(s)}_{t,j}(p_j, q, M). \tag{10}$$
+
+(2) Aggregation: Each node aggregates the ratings it has received from its successors towards itself to quantify its own contribution independently at different time steps. The contribution of node $v_{t-1,i}$ is the sum of its successors' contribution multiplied by their peers' ratings on the agent's response. Aggregation is a backward message passing process. Formally, given a node $v_{t-1,i}$ and an edge $(v_{t-1,i}, v_{t,j})$, the message $m_{v_{t,j}}$ sent from $v_{t,j}$ to $v_{t-1,i}$ is defined as $w_{t-1,i,j}$. And the aggregator function $f^{\mathrm{mp}}$ is defined as a weighted sum function:
+
+$$I_{t-1,i} = \sum_{(v_{t-1,i}, v_{t,j}) \in E_{t-1,t}} I_{t,j} \cdot w_{t-1,i,j}, \tag{11}$$
+
+where $I_{t,i}$ denotes the contribution of $a_{t,i}$.
+
+(3) Selection: During the last step, we sum up the scores for the same agent over all time steps to derive an importance score for each agent, and extract the top-$k$ agents that are most contributory according to these scores to form the optimized agent team. Formally, the Agent Importance Score $I_i$ for agent $a_i$ is defined as
+
+$$I_i = \sum_{t=1}^{T} I_{t,i}. \tag{12}$$
+
+In practice, we initialize the contributions in the final layer first, and step backward to perform Aggregation layer by layer (Algorithm 2). The definition guarantees that the agent importance scores add up to 1 in each layer, which benefits fair comparison. Other details, such as initializing contributions in the final layer, are presented in Appendix B.2.
+:::
+
+团队优化的目标是:基于一次预试验评估出的贡献,从候选中选出一个智能体子集,使新团队更有效、更高效地求解任务查询。形式化地,给定任务查询 $q$ 与智能体集合 $A$,先依据 3.3.2 节提出的算法执行一次试验,得到 T-FFN $G^A_q$;团队优化则表述为
+
+$$\hat{A} = f^{\mathrm{Optim}}(A, G^A_q, q), \text{ 其中 } \hat{A} \subset A. \tag{9}$$
+
+$f^{\mathrm{Optim}}$ 实现为三步的智能体选择流程(图 2 右):
+
+**(1)传播(Propagation)**:每个节点对其**前驱(predecessors)**就任务查询给出的解法进行评分,这是一个前向消息传递过程。形式化地,给定节点 $v_{t,j}$ 与边 $(v_{t-1,i}, v_{t,j})$,从 $v_{t-1,i}$ 发往 $v_{t,j}$ 的消息 $m_{v_{t-1,i}}$ 定义为智能体 $a_i$ 在上一时间步对任务查询 $q$ 的回复。聚合函数 $f^{\mathrm{mp}}(\cdot, v_{t,j})$ 实现为打分函数 $f^{(s)}_{t,j}(\cdot, \cdot, \cdot)$,它把提示 $p_j$、输入查询 $q$ 与全部消息 $M$ 映射为评分。这里用 $w_{t-1,i,j}$ 表示 $v_{t,j}$ 给 $v_{t-1,i}$ 的评分,且
+
+$$[w_{t-1,1,j}, w_{t-1,2,j}, ..., w_{t-1,N,j}] = f^{(s)}_{t,j}(p_j, q, M). \tag{10}$$
+
+**(2)聚合(Aggregation)**:每个节点聚合从其后继(successors)收到、指向自己的评分,从而在不同时间步独立量化自身贡献。节点 $v_{t-1,i}$ 的贡献等于其各后继的贡献乘以后继对该智能体回复的同伴评分之和。聚合是一个反向消息传递过程。形式化地,给定节点 $v_{t-1,i}$ 与边 $(v_{t-1,i}, v_{t,j})$,从 $v_{t,j}$ 发往 $v_{t-1,i}$ 的消息 $m_{v_{t,j}}$ 定义为 $w_{t-1,i,j}$;聚合函数 $f^{\mathrm{mp}}$ 定义为加权求和函数:
+
+$$I_{t-1,i} = \sum_{(v_{t-1,i}, v_{t,j}) \in E_{t-1,t}} I_{t,j} \cdot w_{t-1,i,j}, \tag{11}$$
+
+其中 $I_{t,i}$ 表示 $a_{t,i}$ 的贡献。
+
+**(3)选择(Selection)**:最后一步,我们把同一智能体在所有时间步上的分数求和,得到每个智能体的重要性分数,并据此提取贡献最大的 top-$k$ 个智能体,组成优化后的智能体团队。形式化地,智能体 $a_i$ 的**智能体重要性分数** $I_i$ 定义为
+
+$$I_i = \sum_{t=1}^{T} I_{t,i}. \tag{12}$$
+
+实践中,我们先初始化末层的贡献,再逐层向后执行聚合(算法 2)。该定义保证每一层内智能体重要性分数之和为 1,有利于公平比较。其余细节(如末层贡献的初始化)见附录 B.2。
+
+### 4 实验
+
+#### 4.1 设置
+
+::: en
+Code Generation (CG) We use the HumanEval benchmark, with 164 human-labeled function-level completion codes and unit tests (Chen et al., 2021). Unit tests are used to validate the correctness of generated codes. We leverage two strong baselines CodeT (Chen et al., 2023a) and Reflexion (Shinn et al., 2023) along with the single execution. For multi-agent baselines, we re-implement CAMEL (Li et al., 2023) and AgentVerse (Chen et al., 2024) under their original configurations for fair comparisons.
+:::
+
+**代码生成(Code Generation,CG)** 我们使用 HumanEval 基准,它包含 164 个人工标注的函数级补全代码及单元测试(Chen et al., 2021),用单元测试验证生成代码的正确性。我们采用两个强基线 CodeT(Chen et al., 2023a)与 Reflexion(Shinn et al., 2023),以及单次执行(single execution)。多智能体基线方面,为公平比较,我们在原始配置下重新实现了 CAMEL(Li et al., 2023)与 AgentVerse(Chen et al., 2024)。
+
+::: en
+Decision Making (DM) We evaluate our methods in the WebShop environment, selecting 50 environments in its test set (Chen et al., 2021) following the setting of LATS (Zhou et al., 2023). WebShop requires to find the item given an instruction of the customer. It provides "reward" as an intrinsic metric for item-instruction relevance, and "success" is marked when the reward is 1.0. Besides ReAct (Yao et al., 2023) and Reflexion, we re-ran a multi-agent method BOLAA (Liu et al., 2023), and a single-agent method LATS as strong baselines.
+:::
+
+**决策(Decision Making,DM)** 我们在 WebShop 环境中评估方法,遵循 LATS 的设置(Zhou et al., 2023)从其测试集选取 50 个环境(Chen et al., 2021)。WebShop 要求根据顾客指令找到商品,它提供"奖励(reward)"作为商品-指令相关性的内在指标,当奖励为 1.0 时记为"成功(success)"。除 ReAct(Yao et al., 2023)与 Reflexion 外,我们还重跑了多智能体方法 BOLAA(Liu et al., 2023)与单智能体方法 LATS 作为强基线。
+
+::: en
+General Reasoning (GR) For the general reasoning task, we use the MMLU dataset (Hendrycks et al., 2021a), which contains four categories of a vast amount of problems in 57 subjects. We down-sample 1/5 of the problems in the test set because of its huge quantity. We choose LLM Debate (Du et al., 2023), LLM-Blender (Jiang et al., 2023), and the single execution on LLM as baselines.
+:::
+
+**通用推理(General Reasoning,GR)** 通用推理任务使用 MMLU 数据集(Hendrycks et al., 2021a),它涵盖四大类别、57 个科目的大量题目。由于其题量巨大,我们从测试集中下采样 1/5 的题目。基线选择 LLM Debate(Du et al., 2023)、LLM-Blender(Jiang et al., 2023)以及 LLM 上的单次执行。
+
+::: en
+Arithmetic Reasoning (AR) We leverage the test set of MATH (Hendrycks et al., 2021b) for evaluation, which consists of 7 subareas and 5,000 questions in total. To draw a fair comparison and verify the robustness, we categorize methods by different prompting strategies and select strong baselines accordingly. Preliminary experiments show that collaborating agents in different domains (e.g., algebra and geometry experts) does not make significant improvement, therefore we adopt agents with same prompts for all methods.
+:::
+
+**算术推理(Arithmetic Reasoning,AR)** 我们用 MATH 的测试集(Hendrycks et al., 2021b)评估,它由 7 个子领域、共 5,000 道题组成。为公平比较并验证鲁棒性,我们按不同提示策略对方法分类并相应选择强基线。初步实验显示,让不同领域的智能体(如代数专家与几何专家)协作并无显著提升,因此所有方法均采用相同提示的智能体。
+
+::: en
+DyLAN Setup In Table 5, we elaborate the setup of DyLAN. To keep in line with baseline methods, we only equipped DyLAN with code interpreters as tools in the CG task. It is worth noting that agent selection is performed for each subject in the GR task, for each web page in the DM task, and directly for CG task in the team optimization stage. Due to space limitations, please refer to Appendix B.1 for details.
+:::
+
+**DyLAN 设置** 表 5 详述了 DyLAN 的设置。为与基线方法保持一致,我们仅在 CG 任务中为 DyLAN 配备代码解释器作为工具。值得注意的是,在团队优化阶段,智能体选择在 GR 任务中按每个科目进行、在 DM 任务中按每个网页进行、在 CG 任务中直接按任务进行。篇幅所限,详见附录 B.1。
+
+[表 5: Demonstration of experiment settings, including the number of agents and the performance throughout team optimization. We report reward for the DM task.]
+
+表 5:实验设置展示,包括智能体数量与团队优化前后的性能。DM 任务报告 reward。
+
+| 任务 | 智能体数 | 工具 | 性能提升 | API 调用开销 |
+|---|---|---|---|---|
+| CG | 12→8 | ✓ | 76.2→82.9 | 23.04→16.85 |
+| DM | 8→4 | × | 53.0→68.3 | 32.03→24.85 |
+| GR | 7→4 | × | 69.5→70.5 | 8.30→4.39 |
+| AR | 4 | × | - | - |
+
+#### 4.2 主结果
+
+::: en
+In Table 2, Table 3, and Table 4, we report the results on each dataset respectively. The number of API calls serves as a proxy for the efficiency of communication structures for agents, which cannot be clearly determined from token consumption which varies greatly depending on tasks and prompting strategies. Since "Task solving" after "Team Optimization" is essential for testing and deployment, we mainly report the cost from the second stage. The difference can be seen in Table 5, and further discussions in Appendix C.1.
+:::
+
+表 2、表 3 与表 4 分别报告了各数据集上的结果。**API 调用次数**充当智能体通信结构效率的代理指标——这一点无法从 token 消耗中清晰判断,因为 token 消耗随任务与提示策略差异极大。由于"团队优化"之后的"任务求解"才是测试与部署的关键,我们主要报告第二阶段的成本。两者的差异见表 5,进一步讨论见附录 C.1。
+
+[表 2: Experimental results on the CG task (left) and results on the DM task (right). The number in parentheses indicates the difference relative to the single execution or direct execution. We indicate the foundation model of methods except for GPT-35-turbo. The median of three trials is reported when non-zero temperature is used.]
+
+表 2:CG 任务(左)与 DM 任务(右)的实验结果。括号中的数字表示相对单次执行/直接执行的差值。除 GPT-3.5-turbo 外,各方法所用的基础模型均有标注(译注:提取文本中该标注丢失);使用非零温度时报告三次试验的中位数。
+
+**左表:CG 任务(HumanEval)**
+
+| 方法 | Pass@1 | #API 调用 |
+|---|---|---|
+| Single Execution(单次执行) | 73.2 (+0.0) | 1.00 |
+| CodeT | 65.8 (-7.4) | 20.00 |
+| CodeT (Codex) | 74.8 (+1.6) | 20.00 |
+| Reflexion | 68.3 (-4.9) | 4.05 |
+| LATS | 81.1 (+7.9) | 48.00 |
+| CAMEL | 69.5 (-4.1) | 12.03 |
+| AgentVerse | 75.0 (+1.8) | 22.50 |
+| DyLAN(本文) | **82.9 (+9.7)** | 16.85 |
+
+**右表:DM 任务(WebShop)**
+
+| 方法 | Reward | 成功率 | #API 调用 |
+|---|---|---|---|
+| Direct Execution(直接执行) | 50.6 (+0.0) | 28.0 | 14.52 |
+| ReAct | 53.8 (+3.2) | 30.0 | 8.40 |
+| ReAct-SC | 58.0 (+7.4) | 36.0 | 25.75 |
+| Reflexion (trial=4) | 62.0 (+11.4) | 40.0 | 25.40 |
+| LATS | 64.5 (+13.9) | 38.0 | > 400 |
+| BOLAA | 66.0 (+15.4) | 40.0 | 32.40 |
+| DyLAN(本文) | **68.3 (+17.7)** | **42.0** | 24.85 |
+
+[表 3: Accuracy (%) on the AR task. The number in parentheses indicates the performance difference relative to a single execution.]
+
+表 3:AR 任务(MATH)上的准确率(%)。括号中的数字表示相对单次执行的性能差值。
+
+| 方法 | 提示 | 代数 | 计数与概率 | 几何 | 中间代数 | 数论 | 前代数 | 前微积分 | 总体 | #API 调用 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Single Execution | CoT | 43.6 | 29.3 | 21.5 | 15.8 | 30.0 | 48.9 | 16.5 | 31.6 (+0.0) | 1.00 |
+| LLM-Blender | CoT | 47.5 | 25.5 | 23.8 | 13.8 | 39.7 | 46.7 | 15.8 | 31.7 (+0.1) | 6.00 |
+| LLM Debate | CoT | 50.2 | 25.3 | 22.3 | 13.1 | 28.9 | 48.0 | 19.0 | 32.4 (+0.8) | 8.00 |
+| DyLAN(本文) | CoT | 52.9 | 27.2 | 25.3 | 15.5 | 33.5 | 55.2 | 19.0 | **35.7 (+4.1)** | 7.15 |
+| Single Execution | Complex CoT | 49.1 | 29.7 | 22.3 | 14.6 | 33.4 | 53.8 | 16.8 | 34.1 (+0.0) | 1.00 |
+| PHP | Complex CoT | 51.1 | 33.7 | 25.4 | 17.1 | 35.1 | 57.7 | 16.1 | 36.5 (+2.4) | 3.67 |
+| DyLAN(本文) | Complex CoT | 53.7 | 33.3 | 26.1 | 18.1 | 33.5 | 58.7 | 18.9 | **37.6 (+3.5)** | 6.21 |
+
+[表 4: Accuracy (%) on the GR task. "Other" stands for subjects like business, health, and misc in the MMLU dataset. We report the median of three runs for experiments.]
+
+表 4:GR 任务(MMLU)上的准确率(%)。"Other" 代表 MMLU 数据集中商业、健康与其他杂项等科目。实验报告三次运行的中位数。
+
+| 方法 | 人文 | 社会科学 | STEM | 其他 | 总体 | #API 调用 |
+|---|---|---|---|---|---|---|
+| Random(随机) | 25.0 | 25.0 | 25.0 | 25.0 | 25.0 | - |
+| Single Exec.(单次执行) | 59.8 | 74.0 | 62.9 | 71.8 | 66.4 (+0.0) | 1.00 |
+| LLM-Blender | 60.4 | 75.2 | 66.3 | 70.7 | 67.3 (+0.9) | 6.00 |
+| LLM Debate | 59.8 | 77.4 | 69.0 | 75.5 | 69.3 (+2.9) | 12.00 |
+| DyLAN | 62.1 | 79.1 | 69.7 | 75.5 | **70.5 (+4.1)** | 4.39 |
+
+::: en
+DyLAN improves overall performance on different tasks with a reasonable computational cost. From Table 3, we find DyLAN realizes an 10.2% improvement to LLM Debate in terms of accuracy, with 10.6% lower #API calls (L3 vs. L4), suggesting it is a better trade-off between efficiency and effectiveness. Similar trends can be observed as DyLAN has a better performance with only 36.6% API calls of LLM Debate (L5 vs. L4 in Table 4), and 35.1% of LATS on CG and <6% on DM (L8 vs. L5 (left), L7 vs. L5 (right) in Table 2). We argue it can be attributed to the feed-forward structure and early-stopping mechanism, which allows different solutions to be delivered simultaneously and confirmed rapidly. In contrast, for methods in sequential architecture like PHP and Reflexion (Table 2), incorrect intermediates might easily influence the final output due to the single thread of reasoning or code generation and review. Also, ReAct on DM tasks exhibits similar failures due to misoperations in the middle. In contrast, Reflexion and LATS access the environment at certain states for multiple times to for reflection, limiting generalizabilities. In our case, any feedback from predecessors could be rated by successor nodes, making it easier to rectify potential invalid actions. Moreover, we see that DyLAN dynamically adjust the cost based on the difficulty of tasks. For instance, most questions in the MMLU dataset are less challenging than MATH, DyLAN has 2.76 fewer API calls on the query from the former. However, compared to other tasks, DyLAN introduces relatively lower improvements in AR tasks, which might be due to the high knowledge dependency of the MATH dateset.
+:::
+
+DyLAN 以合理的计算成本在不同任务上全面提升了性能。由表 3 可见,DyLAN 相对 LLM Debate 的准确率提升达 10.2%,同时 API 调用少 10.6%(L3 对 L4),说明它在效率与效果之间取得了更好的折中。类似趋势也可见于:DyLAN 性能更优而 API 调用仅为 LLM Debate 的 36.6%(表 4 中 L5 对 L4);在 CG 上仅为 LATS 的 35.1%、在 DM 上不足其 6%(表 2 中左表 L8 对 L5、右表 L7 对 L5)。我们认为这归功于**前馈结构与早停机制**——不同的解法可以同时投递、并被快速确认。相比之下,PHP、Reflexion 等串行架构的方法(表 2)由于推理或"代码生成+审查"只有单一线程,错误的中间结果很容易影响最终输出;ReAct 在 DM 任务上也因中途误操作出现类似失败。而 Reflexion 与 LATS 需要在某些状态多次访问环境以做反思,限制了泛化性。在我们的方案中,来自前驱的任何反馈都可被后继节点打分,从而更容易纠正潜在的无效动作。此外,DyLAN 会依据任务难度动态调整成本:例如 MMLU 数据集的多数问题比 MATH 简单,DyLAN 在前者上平均少用 2.76 次 API 调用。不过,与其他任务相比,DyLAN 在 AR 任务上的提升相对较小,可能源于 MATH 数据集的高度知识依赖。
+
+::: en
+DyLAN benefits from the team optimization. Moreover, we found that a dynamic team of task-oriented agents could enhance DyLAN. For different subjects in GR tasks, agent compositions are adjusted correspondingly to improve up to 25.0% in accuracy, as shown in Table 7. As denoted in Table 5, a dynamically selected team of agents could result in significant performance improvement, especially for DM tasks, where agents might have great interference from others. The overall performance can be significantly improved (up to 6.7%) with lower computational costs on each tasks after agent selection. Moreover, it also suggests that Agent Importance Scores can effectively capture and reflect the actual contributions of agents on a wide range of tasks. We further verify this claim in Appendix C.6.
+:::
+
+DyLAN 受益于团队优化。而且我们发现,面向任务的动态智能体团队还能进一步增强 DyLAN:对 GR 任务的不同科目,相应地调整智能体组成,最高可带来 25.0% 的准确率提升(见表 7)。如表 5 所示,动态选出的智能体团队可带来显著的性能提升,在 DM 任务上尤其明显——智能体之间可能存在严重干扰。经过智能体选择,各项任务在更低计算成本下总体性能最高提升 6.7%。这也表明**智能体重要性分数能在广泛任务上有效捕捉并反映智能体的真实贡献**。我们在附录 C.6 中进一步验证了这一论断。
+
+#### 4.3 消融研究
+
+::: en
+Impact of Optimized Agent Team Size Fewer proper agents in a team could have better performance. As shown in Figure 3, DyLAN with an optimized team of 3 agents can outperform both DyLAN before team optimization and LLM Debate with 4 agents, suggesting the effectiveness of our proposed agent selection. The efficiency is also significantly improved by 52.9% and 67.8%, respectively. Probably because the imbalance of agents' expertise and opinions interfere with each other before optimization, especially on GR, where few candidates are relevant to a subject.
+:::
+
+**优化后团队规模的影响** 团队中较少数量的合适智能体反而可能带来更好的性能。如图 3 所示,拥有 3 个优化智能体的 DyLAN 同时优于团队优化前的 DyLAN 与 4 智能体的 LLM Debate,印证了我们提出的智能体选择的有效性;效率也分别显著提升 52.9% 与 67.8%。原因可能在于:优化前智能体的专长与观点失衡、相互干扰,尤其是在 GR 任务上——候选中与某一科目相关的智能体很少。
+
+::: en
+Robustness of Agent Importance Score The Agent Importance Score is robust over the imbalance of agent roles. On GR tasks, the candidates are imbalanced in terms of expertise. For most queries, there are less than 2 candidates that are related according to their role prompts. In Table 7, we found agent selection is capable for selecting related agents, e.g., "Mathematician" for "college mathematics", that matches human priors. However, if candidates are all vastly different from the task domain, e.g., "public relation", where the improvement is less significant. We also tested DyLAN on CG tasks with different amount of code writers and code reviewers after the "Team Optimization" stage. It is worth noting that a single run of "Team Optimization" could provides reusable Agent Importance Scores for multiple trials of agent selection. In Table 8, we exhibit the results under imbalanced teams of agents. We verified the imbalance of code writers and reviewers after optimization won't cause great performance drops. Though, reviewers affect the performance slightly greater than writers (L2,3 vs. L4,5), indicating the necessity of the amount of reviewers for code refinement.
+:::
+
+**智能体重要性分数的鲁棒性** 智能体重要性分数对智能体角色失衡是稳健的。在 GR 任务中,候选智能体的专长并不均衡:对多数查询,按角色提示判断相关的候选不足 2 个。由表 7 可见,智能体选择能够选出相关的智能体,例如为"大学数学"选"数学家",与人类先验相符;但如果候选与任务领域都相去甚远,例如"公共关系",提升就不那么显著。我们还在"团队优化"阶段之后,测试了 DyLAN 在 CG 任务上采用不同数量代码写作者与代码审查者的表现。值得注意的是,一次"团队优化"运行所得的智能体重要性分数可供多次智能体选择试验复用。表 8 展示了失衡智能体团队下的结果:我们验证了优化后写码者与审查者的失衡不会导致大幅性能下降;不过,审查者对性能的影响略大于写码者(L2,3 对 L4,5),说明代码精炼需要足够数量的审查者。
+
+::: en
+Impact of Early-Stopping and Agent Team Reformation As shown in Table 6, early-stopping mechanism boosts efficiency to a great extent by minimizing #API calls by 45.0%, 66.2%, 11.3%, and 54.2% on AR, GR, CG, and DM tasks respectively, while providing slight performance improvement. Agent team reformation, however, is critical to enhance the correctness of the final answer. We conjecture it is because agents are filtered for temporary mistakes in LLMs, such as hallucinations, etc. Additionally, answer comparison is more challenging for open-ended tasks like CG or DM tasks. We use the BLEU score with a 0.9 threshold for consistency checks. This makes early stopping less effective since agents may generate codes in different formats, leading to fewer opportunities to stop early.
+:::
+
+**早停与智能体团队重组的影响** 如表 6 所示,早停机制将 AR、GR、CG、DM 任务上的 API 调用分别削减 45.0%、66.2%、11.3% 与 54.2%,大幅提升了效率,同时性能还略有提升。而**智能体团队重组**对提升最终答案的正确性至关重要。我们推测,这是因为它过滤掉了 LLM 的临时性错误(如幻觉等)。此外,对 CG、DM 这类开放性任务,答案比较更具挑战性:我们用 0.9 阈值的 BLEU 分数做一致性检查。由于智能体生成的代码格式各异,提前停止的机会更少,早停的效果因此打折扣。
+
+::: en
+Stability of DyLAN with Different Backbone Models There is also a notable difference in CG tasks when the backbone model changes (Table 2). Reflexion and CodeT's performances are heavily related to the backbone model (L4 vs. L5 and L6 vs. L9). Instead, DyLAN shows a steady, consistent high performance (L7 vs. L10) under different backbone models with almost the same amount of API calls.
+:::
+
+**DyLAN 在不同骨干模型下的稳定性** 骨干模型更换时,CG 任务上也会出现明显差异(表 2)。Reflexion 与 CodeT 的表现与骨干模型高度相关(L4 对 L5、L6 对 L9);相比之下,DyLAN 在不同骨干模型下都表现出稳定、持续的高性能(L7 对 L10),且 API 调用量几乎不变。
+
+[表 6: Impact of the early-stopping mechanism (es) and agent team reformation (atr).]
+
+表 6:早停机制(es)与智能体团队重组(atr)的影响。
+
+**左表:AR 与 GR 任务**
+
+| 方法 | AR 准确率 | AR #API | GR 准确率 | GR #API |
+|---|---|---|---|---|
+| DyLAN | 35.7 | 7.15 | 70.5 | 4.39 |
+| w/o es(去早停) | 35.0 | 13.00 | 70.1 | 13.00 |
+| w/o atr(去团队重组) | 33.8 | 8.20 | 69.9 | 7.05 |
+
+**右表:CG 与 DM 任务**
+
+| 方法 | CG Pass@1 | CG #API | DM Reward | DM #API |
+|---|---|---|---|---|
+| DyLAN | 82.9 | 16.85 | 68.3 | 24.85 |
+| w/o es(去早停) | 80.5 | 19.00 | 67.5 | 54.25 |
+| w/o atr(去团队重组) | 76.2 | 17.98 | 66.0 | 48.90 |
+
+[表 7: The optimized composition of agents and performance improvement on different subjects in the GR task.]
+
+表 7:GR 任务中不同科目上优化后的智能体组成及性能提升。
+
+| 科目 | 优化后组成 | 性能提升 |
+|---|---|---|
+| 大学数学(college mathematics) | 经济学家、律师、程序员、数学家 | 25.0 : 40.0→65.0 |
+| 管理学(management) | 律师、心理学家、经济学家、程序员 | 14.3 : 76.2→90.5 |
+| 高中统计(high school statistics) | 历史学家、程序员、心理学家、数学家 | 9.3 : 65.1→74.4 |
+| 临床知识(clinical knowledge) | 医生、数学家、程序员、心理学家 | 5.7 : 69.8→75.5 |
+| 公共关系(public relations) | 历史学家、心理学家、律师、数学家 | 4.5 : 54.5→59.1 |
+
+[表 8: Different compositions of agents on the CG task of an optimized team of agents. Agent teams are optimized by the Agent Importance Score from the first line.]
+
+表 8:CG 任务上优化团队中不同的智能体组成。各团队按首行给出的智能体重要性分数优化而来。
+
+| #代码写作者 | #代码审查者 | Pass@1 | #API 调用 |
+|---|---|---|---|
+| 6 | 6 | 76.2 | 23.04 |
+| 4 | 4 | 82.9 | 16.85 |
+| 4 | 3 | 81.1 | 14.64 |
+| 4 | 2 | 77.4 | 12.50 |
+| 3 | 3 | 78.0 | 11.73 |
+| 3 | 2 | 75.6 | 9.60 |
+
+[图 3: Impact of optimized agent team size. 2∼4 agents are selected from 7 candidate agents based on Agent Importance Score. Accuracy (left) and #API calls (right) on the GR task are visualized.]
+
+图 3:优化后团队规模的影响。基于智能体重要性分数,从 7 个候选智能体中选出 2∼4 个。图中可视化 GR 任务上的准确率(左)与 API 调用数(右)。左图:团队规模从 1 到 8 个智能体时,DyLAN 的准确率先升后降——1 个约 68.4,3 个达峰值 70.5,7 个(优化前)约 69.5;LLM Debate(4 智能体)为 69.9。右图:API 调用随规模递增:2 个约 2.83、3 个约 3.90、4 个 4.39、8 个 8.30;可见精选 3 个智能体即可在更低成本下超越更大团队。
+
+### 5 结论与未来工作
+
+::: en
+This work introduces a framework named Dynamic LLM-Powered Agent Network (DyLAN) for collaboration of dynamic agent teams on complicated tasks. DyLAN functions in a two-stage paradigm, enabling agents to interact in a dynamic structure with agent team reformation. In "Team Optimization" stage, the agent selection algorithm based on an unsupervised metric termed Agent Importance Score, selects top contributory agents in a principled way for collaboration on "Task Solving". Overall, DyLAN reveals improvement on diverse tasks with relatively less computational cost compared to baselines. In the future, we plan to explore the effectiveness of DyLAN built on open-source foundation models.
+:::
+
+本工作提出了动态 LLM 智能体网络(DyLAN)框架,用于在复杂任务上实现动态智能体团队的协作。DyLAN 以两阶段范式运行,使智能体能够在带有智能体团队重组的动态结构中交互。在"团队优化"阶段,基于无监督指标"智能体重要性分数"的智能体选择算法,以有原则的方式选出贡献最大的智能体,供"任务求解"阶段协作。总体而言,DyLAN 在多样任务上相对基线取得了提升,且计算成本更低。未来,我们计划探索 DyLAN 构建在开源基础模型之上的有效性。
+
+### 致谢
+
+::: en
+We thank Yilun Du for the helpful assistance on code implementation. We sincerely thank William Held, Ruibo Liu, Dr. Yue Zhuge, Noah Shinn and Kangfu Zheng for their valuable feedback on the project.
+:::
+
+我们感谢 Yilun Du 在代码实现上的有益协助,并诚挚感谢 William Held、Ruibo Liu、Yue Zhuge 博士、Noah Shinn 与 Kangfu Zheng 对本项目的宝贵反馈。
+
+### 伦理声明
+
+::: en
+LLM-powered agent systems are widely used in practical applications. DyLAN could also effortlessly cover practical software development, virtual room chat, video games, and so on (Hong et al., 2024; Nascimento et al., 2023; Zhou et al., 2023; Zhu et al., 2023; Chan et al., 2024). In these open-world environments, agents may operate as planners, actors, etc. DyLAN only requires people to give rough instructions on the constitute of agents and could automatically optimize a better team of agents to construct an efficient multi-agent system. These systems could benefit from DyLAN to reduce human labor on designing agents and have a better performance on their target tasks.
+:::
+
+LLM 智能体系统已被广泛用于实际应用。DyLAN 也可以轻松覆盖实际软件开发、虚拟房间聊天、视频游戏等场景(Hong et al., 2024; Nascimento et al., 2023; Zhou et al., 2023; Zhu et al., 2023; Chan et al., 2024)。在这些开放世界环境中,智能体可以充当规划者、执行者等角色。DyLAN 只需要人们就智能体的构成给出粗略指示,就能自动优化出更好的智能体团队,构建高效的多智能体系统。这些系统可以借助 DyLAN 减少设计智能体的人力投入,并在其目标任务上获得更好的性能。
+
+::: en
+Also, the overall architecture of DyLAN (Figure 2) reflects the optimal collaboration organization of human online workers (Lykourentzou et al., 2022), and reveals significant performance in agent collaborations. Therefore, simulating human collaboration by LLM-powered agent collaborations under DyLAN might also be possible. Optimizing human collaboration by searching and simulating LLM agents will hopefully be more convenient and effective. We also acknowledge the potential risk in pretrained language models used in the paper, e.g., GPT-3.5 and GPT-4, which may cause improper responses. Furthermore, creating agents by hand and LLM generations might prompt LLM-powered agents to act or response misaligned with principles of society, which may possibly happen during agent collaborations. However, we think team optimization process could potentially alleviate this situation.
+:::
+
+此外,DyLAN 的整体架构(图 2)与人类在线工作者的最优协作组织相呼应(Lykourentzou et al., 2022),并在智能体协作中展现出显著性能。因此,在 DyLAN 之下用 LLM 智能体协作来模拟人类协作,或许也是可行的;通过搜索与模拟 LLM 智能体来优化人类协作,有望更加便捷高效。我们也承认论文所用预训练语言模型(如 GPT-3.5 与 GPT-4)的潜在风险,它们可能产生不当回复。再者,人工或 LLM 生成的智能体,可能促使 LLM 智能体的行为或回应与社会准则不符,这在智能体协作中是有可能发生的。不过我们认为,团队优化过程有可能缓解这一状况。
+
+*(References 部分为文献列表,不收录。)*
+
+### 附录 A 讨论与局限
+
+::: en
+In experiments, we view code generation tasks as representative of open-ended generation tasks and adopt BLEU to decide whether two answers are consistent in early stopping mechanism in Section 3.3.2. In fact, the performance could be further leveraged by task-specific methods like CodeBLEU (Ren et al., 2020) or CodeT (Chen et al., 2023a). For practical usage, the agent-evaluation metrics could cooperate with human annotation to give a more precise evaluation result on individual contributions of agents, mainly when facing data scarcity problems. Furthermore, we simply incorporating agent selection on DyLAN with agent team reformation, as a primary step towards collaboration of dynamic agent teams. It still remains to be seen how to cooperate off-collaboration and in-collaboration optimization methods in a finer granularity to further improve performance and efficiency in LLM-powered agent collaboration systems.
+:::
+
+实验中,我们把代码生成任务视为开放性生成任务的代表,并在 3.3.2 节的早停机制中采用 BLEU 判断两个答案是否一致。事实上,性能还可借助任务专属方法进一步提升,如 CodeBLEU(Ren et al., 2020)或 CodeT(Chen et al., 2023a)。在实际使用中,智能体评估指标可以与人工标注配合,对智能体的个体贡献给出更精确的评估,尤其在面临数据稀缺问题时。此外,我们只是把智能体选择与智能体团队重组简单地组合到 DyLAN 上,作为迈向动态智能体团队协作的第一步;"协作外(off-collaboration)优化"与"协作中(in-collaboration)优化"如何以更细的粒度配合,以进一步提升 LLM 智能体协作系统的性能与效率,仍有待探索。
+
+::: en
+Additionally, though agent selection could differentiate top contributory agents, in extreme cases where the majority of agents are designed to contradict the task requirement, low performance might be caused, e.g., agents are prompted or trained to generate codes may face difficulties in clinical question answering. To tackle the imbalance of high- and low-performing agents, replicating agents with high Agent Importance Score instead of including low-score agents could be a solution. Additionally, in extreme circumstances, we can automatically introduce agents from more capable LLMs with validation, in addition to agent selection.
+:::
+
+另外,虽然智能体选择能够区分贡献最大的智能体,但在极端情况下——大多数智能体的设计与任务要求相悖时——可能导致低性能,例如被提示或训练来生成代码的智能体,在临床问答上会遭遇困难。为应对高、低性能智能体的失衡,一种可行解法是**复制高智能体重要性分数的智能体**,而不是纳入低分智能体;在极端情形下,除智能体选择之外,还可以在验证后自动引入由更强 LLM 承载的智能体。
+
+### 附录 B 实现细节
+
+#### B.1 详细实验设置
+
+[算法 1: The Inference Process of DyLAN on an Arbitrary Query(DyLAN 在任意查询上的推理过程)]
+
+算法 1:DyLAN 在任意查询上的推理过程。输入:T-FFN $G = (V_1, \cdots, V_T; E_{1,2}, \cdots, E_{T-1,T})$ 与查询 $q$;输出:最终答案 $o$。
+
+```text
+// E = {(v_{t,i}, v_{t+1,j})}^{T-1}_{t=1},v_{t,i}, v_{t+1,j} ∈ V;V = ∪^T_{t=1} V_t
+// m_{t,i} ∈ M_t 表示来自 v_{t,i} ∈ V_t 的回复
+for t = 1; T do
+    if 在时间步 t 发生智能体团队重组 then
+        M_top ← top-k({m_{t-1,j} | v_{t-1,j} ∈ V_{t-1})          // 选出上一时间步排名靠前的回复
+        E ← E \ {(v_{t',j}, v_{t'',j'}), (v_{t'',j'}, v_{t',j}) |   // 删除与未入选节点相关的后续边
+                  m_{t',j} ∈ M_top, m_{t',j'} ∉ M_top, t', t'' ≥ t-1}
+        m_{t,j} ← m_{t-1,j}, ∀(v_{t-1,j}, v_{t,j}) ∈ E           // 被停用智能体的消息不再更新
+    else
+        ∀i, ∃k, (v_{t,i}, v_{t+1,k}) ∈ E_{t,t+1},
+        m_{t,i} ← f^mp({m_{t-1,j} | (v_{t-1,j}, v_{t,i}) ∈ E_{t-1,t}}, v_{t,i})   // 前向消息传递生成回复
+    end if
+    if 早停条件满足 then
+        T ← t
+        break
+    end if
+end for
+o ← postProcess(maxCount{M_T})      // 对末层回复计数取多数,并做后处理
+```
+
+[算法 2: The Team Optimization Process fOptim of Agent Importance Score within DyLAN(DyLAN 中基于智能体重要性分数的团队优化过程)]
+
+算法 2:DyLAN 中智能体重要性分数的团队优化过程 $f^{\mathrm{Optim}}$。输入:输出 $o$、T-FFN $G=(V,E)$;输出:各智能体的智能体重要性分数 $I$。
+
+```text
+// m_{t,i} ∈ M_t 表示来自 v_{t,i} ∈ V_t 的回复
+flag ← False
+for t = T; 1 do                                  // 从末层向前逐层回传
+    if {v_{t,i} | ∃k, (v_{t-1,k}, v_{t,i}) ∈ E} ≠ ∅ then
+        if ¬flag then
+            flag ← True
+            distribute scores for I_{t,i}        // 在末层初始化贡献分布
+        else
+            M_{t-1} ← {m_{t-1,j} | (v_{t-1,j}, v_{t,i}) ∈ E}          // 收集前驱回复
+            [w_{t-1,1,i}, ..., w_{t-1,m,i}] ← f^(s)_{t,i}(p_i, q, M_{t-1})   // 同伴评分(传播)
+            I_{t-1,j} ← I_{t-1,j} + I_{t,i} w_{t-1,j,i}, ∃(v_{t-1,j}, v_{t,i}) ∈ E   // 聚合
+        end if
+    end if
+end for
+```
+
+::: en
+Common Settings In all experiments, we use gpt-35-turbo-0301 for every method if not specified. The version of GPT-4 is GPT-4-0613. In Table 2, "(Codex)" denotes code-davinci-002 from OpenAI (Chen et al., 2021; OpenAI, 2023). All experiments with non-zero temperature is repeated for three times and the median is reported. To avoid the context length issue in prior work (Du et al., 2023; Liu et al., 2024), we set memory space for agents in DyLAN to 1 only to keep the freshest responses of predecessors. We set max tokens to 2048 for GR and AR tasks and 1024 for CG and DM tasks to avoid exceeding the maximum context length. The construction of candidates are demonstrated in Appendix D. We set N = 4 in T-FFN after team optimization because the early-stopping mechanism requires at least four agents to tolerate one different response at a specific time step (Section 3.3.2); when reaching consensus over 2/3 of agents, it allows for 4 − (2/3)N = 1 exceptional response. We use a listwise ranker in the agent team reformation of DyLAN because of the effectiveness and efficiency, compared to ELo rating (Herbrich et al., 2006) or Sliding Window (Qin et al., 2023) we have tested in Appendix C.5. We use the same ranker to implement LLM-Blender (Jiang et al., 2023) in experiments. We set k = 2 in the agent team reformation, because it's the minimal number for collaborations and we empirically found it brings great trade-off between effectiveness and efficiency. To avoid positional bias, for each time step t, we shuffle the responses from agents at t − 1 when passing messages towards agents at t. The detailed inference algorithm is in Algorithm 1. To implement the early-stopping mechanism, we need to determine whether the answers from the nodes in the same layer of DyLAN are consistent. For classification and decision-making problems, the answers are consistent if identical, and for open-ended generation, the consistency is determined by a threshold of BLEU score.
+:::
+
+**通用设置** 所有实验中,除非特别说明,每个方法均使用 gpt-35-turbo-0301;GPT-4 版本为 GPT-4-0613。表 2 中"(Codex)"指 OpenAI 的 code-davinci-002(Chen et al., 2021; OpenAI, 2023)。所有非零温度的实验重复三次并取中位数。为避免先前工作中的上下文长度问题(Du et al., 2023; Liu et al., 2024),我们把 DyLAN 中智能体的记忆空间设为 1,只保留前驱的最新回复。为不超出最大上下文长度,GR 与 AR 任务的 max tokens 设为 2048,CG 与 DM 任务设为 1024。候选的构建见附录 D。团队优化后 T-FFN 中设 $N=4$,因为早停机制至少需要四个智能体才能容忍某一时间步上的一条不同回复(见 3.3.2 节):当超过 2/3 智能体达成共识时,允许 $4 - \frac{2}{3}N = 1$ 条例外回复。DyLAN 的智能体团队重组使用**列表式排序器(listwise ranker)**,因为与我们在附录 C.5 中测试的 Elo 评分(Herbrich et al., 2006)或滑动窗口(Qin et al., 2023)相比,它兼顾效果与效率;实验中实现 LLM-Blender(Jiang et al., 2023)也用同一排序器。团队重组中设 $k=2$,这是协作所需的最小数量,且经验上它在效果与效率间带来极佳折中。为避免位置偏差,在每个时间步 $t$,把 $t-1$ 步各智能体的回复打乱后再传给第 $t$ 步的智能体。详细推理算法见算法 1。实现早停机制需要判断 DyLAN 同层节点的答案是否一致:对分类与决策问题,答案相同即一致;对开放性生成,一致性由 BLEU 分数阈值判定。(原文脚注:2 BLEU 用 sacreBLEU(Post, 2018)计算,其签名为 "nrefs:1|case:mixed|eff:no|tok:13a|smooth:exp|version:2.3.1"。)
+
+::: en
+Experiments on Reasoning Tasks In general reasoning, we extract the answer from the response by matching the last "(X" or "(X)", where "X" represents A, B, C or D. On average, Agent team reformation functions on the third time step. They could go through at maximum T = 4 rounds of interaction. We also searched temperature in {0, 0.2, 0.8, 1.0} for the best configuration for each system. In arithmetic reasoning, we set temperature to 0 for the single execution and PHP, 0.2 for LLM Debate, LLM-Blender, and DyLAN with Complex CoT prompts, and 1.0 for DyLAN with simple CoT prompts in Table 3, since systems with the same prompts will give all the same responses if temperature is zero, causing degradation. Prompting templates are replicated from their original studies, including normal CoT prompts (Wei et al., 2022) from the MATH dataset (Hendrycks et al., 2021b) and Complex CoT from PHP (Zheng et al., 2023). We follow the answer extraction method from the origin paper (Hendrycks et al., 2021b). We construct DyLAN with 4 agents assigned no specific roles and let agents to interact for at maximum T = 4 rounds under T-FFN formulation. We reported the classification accuracy of each category averaged across subjects and the numbers of API calls of running DyLAN on the optimized team of agents.
+:::
+
+**推理任务实验** 通用推理中,我们通过匹配回复中最后一个 "(X" 或 "(X)" 来抽取答案,其中 "X" 表示 A、B、C 或 D。平均而言,智能体团队重组在第三个时间步生效;系统最多进行 $T=4$ 轮交互。我们还在 {0, 0.2, 0.8, 1.0} 中搜索温度,为每个系统选取最佳配置。算术推理中,表 3 的温度设置为:单次执行与 PHP 取 0;LLM Debate、LLM-Blender 及使用 Complex CoT 提示的 DyLAN 取 0.2;使用简单 CoT 提示的 DyLAN 取 1.0——因为温度为零时,相同提示的系统会给出完全相同的回复,导致性能退化。提示模板复制自原始研究,包括 MATH 数据集(Hendrycks et al., 2021b)的普通 CoT 提示(Wei et al., 2022)与 PHP 的 Complex CoT(Zheng et al., 2023)。答案抽取方法遵循原始论文(Hendrycks et al., 2021b)。我们构建的 DyLAN 使用 4 个不指定具体角色的智能体,在 T-FFN 形式下最多交互 $T=4$ 轮。我们报告各类别在科目上平均的分类准确率,以及 DyLAN 在优化团队上运行的 API 调用数。
+
+::: en
+Experiments on Code Generation Tasks In the code generation task, we set temperature to 0 for the single execution, Reflexion, and 0.8 for LLM Debate, LLM-Blender, CodeT, and DyLAN in Table 2. In DyLAN, we optimized four agents to write code and four agents to give code reviews from 12 candidates in Appendix D. The selected code writers are "Python Assistant", "Algorithm Developer", "Computer Scientist", and "Programmer"; and the selected code reviewers are "Syntax Checker", "Unit Tester", "Reflector", and "Ranker". "Syntax Checker" is pure external tools using a code interpreter for syntax checking without LLMs, and "Unit Tester" is equipped with a code interpreter. The tool is triggered when LLM generated codes inside the format ```python\n(code)\n```. In DyLAN, solutions given by code writers are reviewed by code reviewers in at maximum T = 6 rounds. At time step t = 1, 3, 4, 6, code writers gives solutions and code reviewers review it at t = 2, 5. And agent team reformation occurs at t = 4. To ensure the participation of each agent, early-stopping mechanism functions at the third layer and later (t ≥ 3). We use BLEU score in the early-stopping mechanism. We calculate BLEU by sacreBLEU² (Post, 2018). For answer post-processing, we store all unit tests from the unit tester (if exists in the system) and randomly select the final output from the top 5 code completions from all nodes that pass most tests.
+:::
+
+**代码生成任务实验** 代码生成任务中,表 2 的温度设置为:单次执行与 Reflexion 取 0;LLM Debate、LLM-Blender、CodeT 与 DyLAN 取 0.8。在 DyLAN 中,我们从附录 D 的 12 个候选里优化出 4 个写代码的智能体与 4 个做代码审查的智能体。选出的代码写作者为 "Python Assistant"、"Algorithm Developer"、"Computer Scientist" 与 "Programmer";选出的代码审查者为 "Syntax Checker"、"Unit Tester"、"Reflector" 与 "Ranker"。"Syntax Checker" 是不使用 LLM 的纯外部工具,用代码解释器做语法检查;"Unit Tester" 配备代码解释器。当 LLM 以 ```python\n(代码)\n``` 格式生成代码时,触发工具。在 DyLAN 中,代码写作者给出的解法由代码审查者审查,最多进行 $T=6$ 轮:在时间步 $t=1,3,4,6$,代码写作者给出解法;在 $t=2,5$,代码审查者进行审查。智能体团队重组发生在 $t=4$。为确保每个智能体都参与,早停机制从第三层及以后($t \geq 3$)生效。早停机制使用 BLEU 分数,以 sacreBLEU²(Post, 2018)计算。答案后处理方面,我们保存(系统内存在的)单元测试器给出的全部单元测试,并从通过最多测试的所有节点中,随机从前 5 个代码补全里选出最终输出。
+
+::: en
+Experiments on Decision Making Tasks In the decision-making task, we set temperature to 0 for DyLAN and all baselines in Table 2. For ReAct with self-consistency (denoted by ReAct-SC in the table) (Wang et al., 2023b), we sampled three times for each response. In DyLAN, we optimized four agents from 8 candidates which are depicted in Appendix D. All methods are also conducted on gpt-35-turbo-1106. We did not select LASER (Ma et al., 2023) as a baseline, because it requires GPT-4 for better performance and it extracts all valid actions in each page into function calls, instead of detected by agent itself, which we decide to be a different setting. We divide the pages of the WebShop environment into 3 parts: the initialization page for "searching" part, the item list page for "exploring" part, and the item details pages for "item" part. Thus, we managed to optimize teams for each part from agents in Appendix D: "Search Optimizer", ''Budget Analyst", "Instruction Analyst", "Decision Reflector" for "searching" group, "Decision Maker", "Budget Analyst", "Product Explorer", "InstructionAnalyst" for "exploring" group, and "Budget Analyst", "Description Reader", "Decision Maker", "Result Estimater" for "item" group. Agents interact for at maximum T = 4 steps for each action. We simply concatenate observations of previous actions on each decision. For answer post-processing, we skip invalid actions from the outputs of V_T.
+:::
+
+**决策任务实验** 决策任务中,表 2 的 DyLAN 与所有基线温度均设为 0。对带自洽性的 ReAct(表中记作 ReAct-SC)(Wang et al., 2023b),每条回复采样三次。DyLAN 从附录 D 所示的 8 个候选中优化出 4 个智能体。所有方法也在 gpt-35-turbo-1106 上进行了实验。我们未选择 LASER(Ma et al., 2023)作为基线,因为它需要 GPT-4 才有较好表现,而且它把每个页面的全部有效动作抽取成函数调用而非由智能体自行检测,我们认定这是不同的设定。我们把 WebShop 环境的页面分为 3 部分:初始化页面(对应"搜索"环节)、商品列表页(对应"浏览"环节)、商品详情页(对应"商品"环节),并据此从附录 D 的智能体中为每个环节优化团队:"搜索"组为 "Search Optimizer"、"Budget Analyst"、"Instruction Analyst"、"Decision Reflector";"浏览"组为 "Decision Maker"、"Budget Analyst"、"Product Explorer"、"Instruction Analyst";"商品"组为 "Budget Analyst"、"Description Reader"、"Decision Maker"、"Result Estimater"。每个动作中智能体最多交互 $T=4$ 步。每次决策时,我们简单拼接先前动作的观察。答案后处理方面,跳过 $V_T$ 输出中的无效动作。
+
+#### B.2 智能体重要性分数的计算
+
+::: en
+To implement the agent selection algorithm under DyLAN, only one sentence needs to be injected into the end of the prompt of each node in T-FFN: "Along with the answer, give a score ranging from 1 to 5 to the solutions of other agents. Put all {num_p} scores in the form like [[1, 5, 2, ...]]", where num_p denotes the number of predecessors of the node. The prompt functions as the f^(s)_{t,i} in Section 3.4 and we extract w_{t,i,j} from its response at the same time when we extract the message that passes between nodes. The scores are normalized so that their sum (∑_{i=1}^{N} w_{t,i,j}) equals 1. To avoid positional bias, responses from agents at previous time step are shuffled when rating.
+
+In Algorithm 2, initial contributions are distributed on nodes at the last layer. For reasoning and dicision-making tasks, we uniformly distribute contributions to agents that give consistent answers in the last layer. On code generation tasks, we uniformly distribute contributions in the final round with no syntax error in their answers.
+:::
+
+要在 DyLAN 下实现智能体选择算法,只需向 T-FFN 中每个节点的提示末尾注入一句话:"Along with the answer, give a score ranging from 1 to 5 to the solutions of other agents. Put all {num_p} scores in the form like [[1, 5, 2, ...]]"(在给出答案的同时,请为其他智能体的解法打 1 到 5 分;把全部 {num_p} 个分数写成 [[1, 5, 2, ...]] 的形式),其中 num_p 表示该节点的前驱数量。该提示即充当 3.4 节中的 $f^{(s)}_{t,i}$;我们在抽取节点间传递消息的同时,从其回复中抽出 $w_{t,i,j}$。分数经归一化,使其和($\sum_{i=1}^{N} w_{t,i,j}$)等于 1。为避免位置偏差,评分时会把上一时间步各智能体的回复打乱。
+
+在算法 2 中,初始贡献分布在最后一层的节点上:对推理与决策任务,把贡献均匀分给末层给出一致答案的智能体;对代码生成任务,把贡献均匀分给最后一轮回答中没有语法错误的智能体。
+
+### 附录 C 附加结果
+
+::: en
+In this section, detailed results and additional experiments are presented.
+:::
+
+本节呈现详细结果与附加实验。
+
+#### C.1 团队优化的数据效率
+
+::: en
+We further demonstrate the data efficiency of agent selection by performing it based on different amounts of data. The experiments are conducted on five subjects in the GR task (the same as Table 7) and the CG task. We sample the subsets with the proportions of 1% and 10% of the original dataset. Agent Importance Score for agent selection is averaged on the subsets, and the selected team is tested on the whole dataset. We raise random selection and human prior selection as baselines. The latter is simulated by GPT-4 prompted by the task and agent descriptions (Appendix D).
+
+As shown in Table 9, by optimizing the team 10% of the original dataset, DyLAN has demonstrated similar performance compared to using the whole dataset, with only 0.2 loss on GR and 0.6 loss on CG. We can observe that even with only 1% of the original dataset, DyLAN could obtain a significant improvement of +3.7 over random selection on CG. From observation, agents augmented with tools are always selected during team optimization under different proportions of the dataset, indicating the effectiveness of Agent Importance Score as an indicator. Please refer to Appendix C.3 for a detailed analysis of the human priors.
+:::
+
+我们进一步通过在不同数据量上执行智能体选择,来展示其**数据效率**。实验在 GR 任务的五个科目(与表 7 相同)及 CG 任务上进行。我们按原始数据集的 1% 与 10% 比例采样子集;用于智能体选择的智能体重要性分数在子集上取平均,选出的团队则在完整数据集上测试。我们以随机选择与人类先验选择作为基线,后者由 GPT-4 依据任务与智能体描述模拟(附录 D)。
+
+如表 9 所示,只用原始数据集的 10% 做团队优化,DyLAN 便可取得与用完整数据集相当的性能——GR 上仅损失 0.2,CG 上仅损失 0.6。可以看到,即使只用原始数据集的 1%,DyLAN 在 CG 上相对随机选择也能获得 +3.7 的显著提升。观察发现,在不同数据比例下,配备工具的智能体在团队优化中总会被选中,说明智能体重要性分数作为指标是有效的。人类先验的详细分析见附录 C.3。
+
+[表 9: Experimental results of different indicators used in agent selection during team optimization in DyLAN on five subjects in the GR and CG tasks. "Dataset" denotes the proportion of dataset used in team optimization.]
+
+表 9:DyLAN 团队优化阶段使用不同选择指标在 GR 任务五个科目与 CG 任务上的实验结果。"Dataset" 表示团队优化所用的数据集比例。
+
+| 指标 | Dataset | GR | CG |
+|---|---|---|---|
+| 无 | - | 63.5 | 76.2 |
+| 随机选择 | - | 64.8 | 75.6 |
+| 人类先验选择 | - | 66.7 | 78.0 |
+| 智能体重要性分数 | 1% | 68.9 | 79.3 |
+| 智能体重要性分数 | 10% | 72.2 | 82.3 |
+| 智能体重要性分数 | 100% | 73.6 | 82.9 |
+
+#### C.2 DyLAN 中不同基础模型的鲁棒性
+
+::: en
+Besides using GPT-3.5 for DyLAN on CG tasks in Table 2, we also experiment with GPT-4 in Table 10. Due to budget limits, we directly reuse the performance reported in the paper of baselines, including LATS (Zhou et al., 2023), Reflexion (Shinn et al., 2023), Meta-GPT (Hong et al., 2024), and AgentVerse (Chen et al., 2024), and estimate the cost in terms of numbers of API calls. DyLAN is also constructed by agents which are optimized based on GPT-3.5, as demonstrated in Appendix B.1. We found that DyLAN consistently outperforms other multi-agent methods, indicating the effectiveness of dynamic agent team in T-FFN structure and the cross-model transferability of optimization results on agent teams. Although LATS outperforms DyLAN, it requires over 40 times GPT-4 calls per sample to conduct inference-time MCTS on GPT-4, which demonstrates poor efficiency.
+:::
+
+除表 2 中 CG 任务使用 GPT-3.5 外,我们也在表 10 中实验了 GPT-4。受预算所限,基线方法——包括 LATS(Zhou et al., 2023)、Reflexion(Shinn et al., 2023)、Meta-GPT(Hong et al., 2024)与 AgentVerse(Chen et al., 2024)——直接沿用其论文报告的性能,成本以 API 调用次数估算。如附录 B.1 所示,DyLAN 的智能体也是基于 GPT-3.5 优化得到的。我们发现 DyLAN 始终优于其他多智能体方法,这说明 T-FFN 结构中动态智能体团队的有效性,以及智能体团队优化结果的**跨模型可迁移性**。虽然 LATS 胜过 DyLAN,但它需要在 GPT-4 上做推理时 MCTS,每个样本要调用 GPT-4 超过 40 次,效率很差。
+
+[表 10: Experimental results on the CG task on GPT-4-0613. The number in parentheses indicates the difference relative to the single execution or direct execution. The bold font denotes the results of our method and the best results are underlined.]
+
+表 10:CG 任务在 GPT-4-0613 上的实验结果。括号中的数字表示相对单次执行/直接执行的差值。加粗(译注:本页以粗体标示)为本文方法的结果,最佳结果在原表中加下划线。
+
+| 方法 | Pass@1 | #API 调用 |
+|---|---|---|
+| **单智能体方法** | | |
+| Single Execution(单次执行) | 88.4 (+0.0) | 1.00 |
+| LATS | 94.4 (+6.0) | >40.00 |
+| Reflexion | 91.4 (+3.0) | 7.32 |
+| **多智能体方法** | | |
+| Meta-GPT | 85.9 (-3.5) | >30.00 |
+| AgentVerse | 89.0 (+0.6) | 27.00 |
+| **DyLAN(本文)** | **92.1 (+3.7)** | 15.94 |
+
+#### C.3 人类先验与智能体重要性分数
+
+::: en
+We further investigated how these agents selected by our unsupervised metric Agent Importance Score differ from human priors (e.g., these predefined roles). To do so, we calculated agent importance scores for 7 agents on each subject of the MMLU dataset. As an example, we show the subjects where the agent of "Doctor" and "Programmer" has the highest agent importance score among all agents in Table 11 and Table 12.
+
+Though most subjects seems to be reasonably aligned with the role of the agent based on human priors (with green annotations), there are some subjects that do not match human priors, e.g., High School Computer Science as the subject that "Doctor" has the highest score. It exhibits the difference between human priors and the evaluation results of agent importance scores on agents with human-made or LLM-generated prompts.
+:::
+
+我们进一步研究了由无监督指标"智能体重要性分数"选出的智能体,与人类先验(如这些预定义角色)有何差异。为此,我们对 MMLU 数据集的每个科目计算 7 个智能体的重要性分数。作为示例,表 11 与表 12 列出了 "Doctor" 与 "Programmer" 等智能体在所有智能体中重要性分数最高的那些科目。
+
+尽管从人类先验看,多数科目与该智能体的角色合理对应(原表中以绿色标注),但也有一些科目与人类先验不符,例如 "Doctor" 分数最高的科目竟是"高中计算机科学"。这体现了人类先验与智能体重要性分数评估结果之间的差异——后者评估的是带人工或 LLM 生成提示的智能体的实际表现。
+
+[表 11: Subjects on which agents have the top-ranked Agent Importance Score in the experiment with DyLAN of 7 agents on the GR task. Green annotation denotes the fields related to the role from the human perspective, which are annotated manually.]
+
+表 11:GR 任务上 7 智能体 DyLAN 实验中,各智能体重要性分数排名第一的科目。绿色标注(原表)表示从人类视角与该角色相关的领域,由人工标注。
+
+| 角色 | Top 10 科目 |
+|---|---|
+| Doctor(医生) | 高中计算机科学*;临床知识;大学生物;职业医学;营养学;高中美国历史;人类衰老;解剖学;高中生物;高中心理学 |
+| Programmer(程序员) | 高中物理;电气工程;高中政府与政治;大学计算机科学;大学化学;高中数学;形式逻辑;抽象代数;机器学习;计算机安全 |
+
+(译注:*号项即"高中计算机科学"为原表中与角色不匹配的例外;各角色列表中未经标注者(临床知识、解剖学等)在原表为绿色相关项。)
+
+[表 12: Subjects on which agents have the top-ranked Agent Importance Score in the same experiment in Table 11. Green annotation denotes the fields highly related to the role from the human perspective.]
+
+表 12:与表 11 同一实验中,其余各智能体重要性分数排名第一的科目。绿色标注(原表)表示从人类视角与该角色高度相关的领域。
+
+| 角色 | Top 10 科目 |
+|---|---|
+| Mathematician(数学家) | 大学物理;美国外交政策;大学计算机科学;计量经济学;市场营销;高中数学;抽象代数;国际法;专业会计;人类性别学 |
+| Lawyer(律师) | 高中微观经济学;医学遗传学;史前史;社会学;人类衰老;管理学;形式逻辑;世界宗教;高中统计学;法理学 |
+| Historian(历史学家) | 美国外交政策;计量经济学;世界宗教;公共关系;高中政府与政治;哲学;天文学;高中统计学;机器学习;高中欧洲历史 |
+| Economist(经济学家) | 高中计算机科学;法理学;逻辑谬误;专业会计;高中微观经济学;高中欧洲历史;计算机安全;道德争议;专业法律;大学数学 |
+| Psychologist(心理学家) | 全球事实;公共关系;商业伦理;高中美国历史;哲学;道德争议;管理学;(其后条目在提取文本中缺失,原表共 10 项) |
+
+::: en
+We also compare current agent selection method that is implemented with Agent Importance Score with the implementation with Human Prior Selection on a few subjects in the MMLU and the HumanEval datasets. For Human Prior Selection, we setup GPT-4 mimicking human selecting the agents for collaborations based on the description of the task and role prompts of each agent. We provide prompt templates in Appendix D. As shown in Table 13, the implementation with Agent Importance Score steadily outperforms Human Prior Selection. There are two major reasons: (1) Compared to posterior optimization methods, prior selection may not grasp the actual behaviors of agents, and may not understand which agents are most contributory or helpful to others in the real collaboration process. Thus, in High School Statistics, Clinical Knowledge, and Public Relations subjects in the MMLU dataset, prior selection performs even worse than random selection. (2) Human Prior Selection might struggle to understand tool augmentation without peer ratings from fellow agents. From our observation, "Unit Tester" and "Syntax Checker" were not selected for code generation tasks, which may cause lower performance.
+:::
+
+我们还在 MMLU 的若干科目与 HumanEval 数据集上,把当前用智能体重要性分数实现的智能体选择,与"人类先验选择(Human Prior Selection)"实现进行对比。人类先验选择由 GPT-4 扮演人类,依据任务描述与各智能体的角色提示来挑选协作智能体,提示模板见附录 D。如表 13 所示,智能体重要性分数的实现稳定优于人类先验选择。原因主要有二:(1) 与后验优化方法相比,先验选择无法把握智能体的实际行为,也可能不理解在真实协作过程中哪些智能体贡献最大、对他人最有帮助。因此在 MMLU 的高中统计、临床知识与公共关系科目上,先验选择甚至比随机选择更差。(2) 没有来自同伴智能体的评分,人类先验选择难以理解工具增强的作用。据我们观察,代码生成任务中 "Unit Tester" 与 "Syntax Checker" 未被其选中,可能导致性能下降。
+
+[表 13: Detailed performance of different indicators of agent selection on five subjects in GR tasks (top) and the CG task (bottom). The five subjects in GR tasks and other settings are identical to Table 7. The overall accuracy in the top table denotes the accuracy across the five subjects.]
+
+表 13:GR 任务五个科目(上)与 CG 任务(下)上不同智能体选择指标的详细性能。GR 任务的五个科目及其他设置与表 7 相同。上表中的总体准确率指五个科目上的准确率。
+
+**上表:GR 任务(按科目)**
+
+| 智能体数 | 优化指标 | 大学数学 | 管理学 | 高中统计 | 临床知识 | 公共关系 | 总体 |
+|---|---|---|---|---|---|---|---|
+| 7(优化前) | | 40.0 | 76.2 | 65.1 | 69.8 | 54.5 | 63.5 (+0.0) |
+| 4 | 随机选择 | 45.0 | 71.4 | 67.4 | 71.7 | 54.5 | 64.8 (+1.3) |
+| 4 | 人类先验选择 | 60.0 | 80.1 | 65.1 | 69.8 | 54.5 | 66.7 (+3.2) |
+| 4 | 智能体重要性分数 | **65.0** | **90.5** | **74.4** | **75.5** | **59.1** | **73.6 (+10.1)** |
+
+**下表:CG 任务**
+
+| 智能体数 | 优化指标 | Pass@1 | #API 调用 |
+|---|---|---|---|
+| 12(优化前) | | 76.2 (+0.0) | 23.04 |
+| 8 | 随机选择 | 75.6 (-0.6) | 17.73 |
+| 8 | 人类先验选择 | 78.0 (+1.8) | 16.37 |
+| 8 | 智能体重要性分数 | **82.9 (+6.7)** | 16.85 |
+
+#### C.4 DyLAN 对温度的稳定性
+
+::: en
+We tested a few methods on the AR (with simple CoT prompts) and the CG tasks under both low and high temperatures and repeated each experiment three times when the temperature was not zero. We exhibit the experimental results in Figure 4. From experimental results, we found that DyLAN is more stable on different hyper-parameters.
+
+Experiments show that temperature greatly influences arithmetic reasoning and code generation tasks. In Figure 4, we found that most baseline methods have significant performance drops when temperature increases, but DyLAN shows strong robustness to various temperatures. We surprisingly found that DyLAN gets better results when temperature rises, suggesting it has benefited from diversity instead of being disturbed by low-quality answers of high-temperature agents. The agent team reformation may lead to the higher accuracy by keeping best responses when agents' replies become more diverse. In conclusion, the collaboration of different roles functions effectively and robustly in the dynamic architecture.
+
+Nonetheless, higher temperature requires DyLAN to take more API calls (about +0.98 on average on AR tasks (temperature: 0.2→1.0)).
+:::
+
+我们在 AR(使用简单 CoT 提示)与 CG 任务上测试了若干方法在低温与高温下的表现,温度非零时每个实验重复三次。结果见图 4。实验结果表明,DyLAN 对不同超参数更为稳定。
+
+实验显示,温度对算术推理与代码生成任务影响很大。由图 4 可见,多数基线方法在温度升高时出现显著性能下滑,而 DyLAN 对不同温度表现出很强的鲁棒性。我们惊讶地发现,**DyLAN 在温度升高时反而得到更好的结果**,说明它受益于多样性,而没有被高温智能体的低质量回答干扰。当智能体的回复变得更加多样时,智能体团队重组保留最优回复,可能带来了更高的准确率。总之,不同角色的协作在动态架构中有效且稳健地发挥着作用。
+
+尽管如此,更高的温度需要 DyLAN 调用更多 API(AR 任务上(温度 0.2→1.0)平均约 +0.98 次)。
+
+[图 4: Performance of different methods under low and high temperatures on AR (left) and CG (right) tasks. DyLAN shows better robustness to different temperature and even takes advantage of higher temperature.]
+
+图 4:不同方法在低温与高温下于 AR(左)与 CG(右)任务上的表现。左图(AR,简单 CoT):温度 0.2 时 Single 约 32、Debate 约 33、Blender 约 34、DyLAN 约 35.7;温度升至 1.0 时基线普遍下滑,而 DyLAN 不降反升。右图(CG):温度 0.0 时 Single 73.2、Reflexion 68.3;温度 0.8 时 DyLAN 达 82.9,超过 Reflexion 与单次执行。DyLAN 对不同温度更鲁棒,甚至能利用更高温度。
+
+#### C.5 不同排序方法
+
+::: en
+We also tested different ranking methods for agent team reformation of DyLAN on the GR task. We tested listwise ranker with our own prompts, pairwise GPT ranker from original LLM-Blender (Jiang et al., 2023), Elo Score from TrueSkill (Herbrich et al., 2006) also implemented with pairwise ranker, and pairwise ranker with Sliding Window algorithm (Qin et al., 2023). In Table 14, we show that different ranking methods have a relatively low impact on performance, probably because of strong discrimination ability of GPT-3.5, but pairwise ranking methods always consume higher computational cost. Thus, we chose a listwise ranker in our implementation of DyLAN.
+:::
+
+我们还在 GR 任务上测试了 DyLAN 智能体团队重组的不同排序方法:用自定义提示的列表式排序器(listwise ranker)、原始 LLM-Blender 的两两 GPT 排序器(Jiang et al., 2023)、同样以两两排序器实现的 TrueSkill 的 Elo 评分(Herbrich et al., 2006),以及带滑动窗口算法的两两排序器(Qin et al., 2023)。表 14 表明,不同排序方法对性能的影响相对较小——可能由于 GPT-3.5 区分能力强——但两两排序方法总是消耗更高的计算成本。因此,我们在 DyLAN 实现中选择了列表式排序器。
+
+[表 14: Overall accuracy (%) of DyLAN with different ranking method in the agent team reformation on the GR task. Other settings are identical with Table 4.]
+
+表 14:GR 任务上 DyLAN 智能体团队重组采用不同排序方法的总体准确率(%)。其他设置与表 4 相同。
+
+| 排序方法 | 总体准确率 | #API 调用 |
+|---|---|---|
+| 列表式排序器(Listwise Ranker) | 70.5 | 4.39 |
+| 两两式:LLM-Blender | 70.1 | 19.27 |
+| 两两式:Elo Score | 70.3 | 19.55 |
+| 两两式:滑动窗口(Sliding Window) | 70.3 | 11.40 |
+
+#### C.6 智能体重要性分数能否捕捉实际贡献?
+
+::: en
+Shapley Value is a widely used supervised metric for evaluating contribution of a single agent in a multi-agent system. Though it is not suitable for unsupervised Team Optimization, by viewing it as a ground-truth metric for measuring individual contributions, we can use it for validating the Agent Importance Score. We implement a simplified algorithm for LLM-powered agent collaboration systems. Given that the collaboration process is symmetric in the formulation of the temporal feed-forward network (Section 3.2), we could reduce the permutation set in the original formula (Lundberg & Lee, 2017) to the combination set:
+
+$$S_i(R) = \frac{1}{|C||R|} \sum_{T \in C} \left(\text{Performance}(T \cup \{i\}) - \text{Performance}(T)\right), \tag{13}$$
+
+where $R$ is the set of agents in the system, $C$ is the combination set of $R\setminus\{i\}$, $i \in R$, and Performance denotes the overall performance of the system on the current task, e.g., classification accuracy or Pass@1. The metric requires ground truth and multi-pass results of the system with different subsets of agents. We use classification accuracy for classification tasks and Pass@1 for code generation tasks. However, its computation cost is still too high when the number of agents grows larger due to its combinatorial complexity.
+:::
+
+**沙普利值(Shapley Value)**是广泛使用的有监督指标,用于评估多智能体系统中单个智能体的贡献。虽然它不适合无监督的团队优化,但把它视为度量个体贡献的真值(ground-truth)指标,就可以用来验证智能体重要性分数。我们为 LLM 智能体协作系统实现了一个简化算法:鉴于协作过程在时序前馈网络的形式化(3.2 节)中是对称的,可以把原始公式(Lundberg & Lee, 2017)中的排列集简化为组合集:
+
+$$S_i(R) = \frac{1}{|C||R|} \sum_{T \in C} \left(\text{Performance}(T \cup \{i\}) - \text{Performance}(T)\right), \tag{13}$$
+
+其中 $R$ 是系统中的智能体集合,$C$ 是 $R\setminus\{i\}$ 的组合集($i \in R$),Performance 表示系统在当前任务上的整体表现,如分类准确率或 Pass@1。该指标需要真值标签以及系统在不同智能体子集下的多次运行结果;分类任务用分类准确率,代码生成任务用 Pass@1。不过,由于其组合复杂度,当智能体数量增大时,其计算成本依然过高。
+
+::: en
+To examine Agent Importance Score as an indicator of agent selection with Shapley Value, we also randomly chose three combinations of three agents out of all 7 candidates to assemble a T-FFN and calculated the Shapley Value and the Agent Importance Score on GR tasks. In the GR task, The roles of candidates in DyLAN match the categories of MMLU in human priors, including "Mathematician" and "Programmer" for STEM, "Lawyer" and "Historian" for Humanities, "Economist" and "Psychologist" in Social Science, and "Doctor" for clinical questions in the "Other" category. During experiment with a T-FFN with at least one agent matches the category of the question, it is called a In-Domain scenario; vice versa.
+
+In Appendix C.6, we report the correlations between Shapley Values and Agent Importance Scores. We are curious whether Agent Importance Score is an unsupervised substitution for Shapley Value. So, we calculated two list-wise metrics for the similarity between distributions: the KL divergence and ListMLE (Xia et al., 2008), between Agent Importance Scores and Shapley Value. It indeed shows a high correlation between the distributions of the two metrics during in-domain scenarios.
+
+In summary, we use Shapley Value as a self-evident metric for measuring individual contribution, showing that Agent Importance Score emerges as a promising, unsupervised alternative with light computational complexity.
+:::
+
+为用沙普利值检验智能体重要性分数作为智能体选择指标的表现,我们从全部 7 个候选中随机抽取三种"三智能体"组合搭建 T-FFN,并在 GR 任务上计算沙普利值与智能体重要性分数。在 GR 任务中,DyLAN 候选智能体的角色按人类先验与 MMLU 的类别对应:STEM 对应 "Mathematician" 与 "Programmer",人文学科对应 "Lawyer" 与 "Historian",社会科学对应 "Economist" 与 "Psychologist","Other" 类别中的临床问题对应 "Doctor"。实验中,若 T-FFN 中至少有一个智能体与题目类别匹配,称为**域内(In-Domain)场景**;反之则为域外场景。
+
+我们在附录 C.6(即表 15)中报告沙普利值与智能体重要性分数的相关性。我们想知道智能体重要性分数能否作为沙普利值的无监督替代。为此,我们计算了两种分布相似度的列表式指标:智能体重要性分数与沙普利值之间的 KL 散度与 ListMLE(Xia et al., 2008)。结果确实显示,域内场景中两种指标的分布高度相关。
+
+总之,我们把沙普利值作为度量个体贡献的自明指标,结果表明**智能体重要性分数是一个有前景、计算开销轻的无监督替代方案**。
+
+[表 15: Correlation between different metrics for quantifying agents' contributions in DyLAN on the GR task. We compute the KL divergence (DKL) and the ListMLE loss (LListMLE) between Shapley Value and other metrics on each subject and report the average value. The In-Domain column means at least one agent in DyLAN matches the category of the subject according to Appendix C.6, and Off-Domain means none of agents matches the subject.]
+
+表 15:GR 任务上不同贡献度量指标间的相关性。我们对每个科目计算沙普利值与其他指标之间的 KL 散度($D_{\mathrm{KL}}$)与 ListMLE 损失($L_{\mathrm{ListMLE}}$)并报告平均值。In-Domain 列表示 DyLAN 中至少一个智能体与该科目类别匹配(依据附录 C.6),Off-Domain 表示无智能体匹配。
+
+| 指标 | 域内 $D_{\mathrm{KL}}$ | 域内 $L_{\mathrm{ListMLE}}$ | 域外 $D_{\mathrm{KL}}$ | 域外 $L_{\mathrm{ListMLE}}$ |
+|---|---|---|---|---|
+| Shapley Value(沙普利值) | 0 | 0.673 | 0 | 0.674 |
+| Agent Importance Score(智能体重要性分数) | 0.229×10⁻³ | 0.686 | 0.347×10⁻³ | 0.693 |
+| Uniform Distribution(均匀分布) | 0.359×10⁻³ | 0.693 | 0.327×10⁻³ | 0.693 |
+
+#### C.7 案例研究
+
+::: en
+In Figure 5 and Figure 6, we demonstrate the cases of DyLAN on the code generation and the general reasoning tasks, respectively. First, we notice that the communication structure is different between figures, exhibiting dynamic architecture of DyLAN on different queries. The former gives answer at t = 4, the latter at t = 2. We also notice that the answer is gradually growing better along the temporal axis. In Figure 6, the "Mathematician" agent is selected for the arithmatic query and it gives a correct answer while convincing other agents, agent selection method is effective. We can also observe that the distribution of Agent Importance Score is reasonable. Also, instructing LLM agents to rate scores on predecessors hints them to reflect on predecessors' responses, which might be helpful to give better answers. Last but not least, agents with different roles lead a diverse conversation and make full use of each one, which benefits performance and robustness.
+
+Last but not least, we provide qualitative analysis on a failure case in Figure 7.
+:::
+
+图 5 与图 6 分别展示了 DyLAN 在代码生成与通用推理任务上的案例。首先,两图的通信结构不同,体现出 DyLAN 在不同查询上的动态架构:前者在 $t=4$ 给出答案,后者在 $t=2$。我们还注意到,答案沿时间轴逐渐变好。在图 6 中,"Mathematician" 智能体被选中处理算术查询,它给出正确答案并说服了其他智能体,可见智能体选择方法是有效的。我们也能观察到智能体重要性分数的分布是合理的。此外,让 LLM 智能体给前驱打分,会提示它们反思前驱的回复,这可能有助于给出更好的答案。最后,不同角色的智能体带来多样化的对话,使每个角色都得到充分利用,这有利于性能与鲁棒性。
+
+最后,我们在图 7 中对一个失败案例做定性分析。
+
+[图 5: A case of DyLAN solving code generation task. Different agents are recruited to write code and give feedback. At the time steps t = 2, 5 code reviewers are asked to provide code reviews. The result grows better layer by layer regarding correctness, efficiency, and readability. Different directions of implementation are delivered forward in implicit multiple paths. We ignore the peer rating scores in multi-round responses for computing Agent Importance Scores due to space limits.]
+
+图 5:DyLAN 求解代码生成任务的案例。题目为实现 `modp(n, p)`(返回 $2^n \bmod p$),查询要求按给定函数签名补全 Python 函数。不同智能体被招募来写代码与给出反馈,在 $t=2,5$ 时间步由代码审查者给出代码评审。第 1 层($V_1$)中,Programmer 给出逐位循环平方解法(初版遗漏 $p=1$ 边界,不正确);Algorithm Developer 先提出用 numpy 求幂(不正确),后在其基础上补 `import numpy as np` 仍不正确;Computer Scientist 与 Python Assistant 直接给出内置三参数幂 `return pow(2, n, p)`。第 2 层($V_2$)Unit Tester 用 `assert modp(10000, 1) == 0` 等单元测试判定 A1、A2 通过,A3、A4 失败(A4 报 NameError:未定义 numpy);Syntax Checker 检查语法;Code Reflector 指出"代码清晰高效"与"A4 忘了导入 numpy,应加一行 import numpy as np"等评审意见。第 3 层($V_3$)Programmer 依据反馈修正边界(`if p == 1: return 0`,正确),Algorithm Developer 道歉并修正。第 4 层($V_4$)发生智能体团队重组:评审认为"A3 虽考虑了边界,但 A1、A2 在效率与可读性上更优",Top-2 选为 [1, 2]。最终在 $t=4$ 触发早停,一致答案为 `return pow(2, n, p)`(正确)。结果在正确性、效率与可读性上逐层变好;不同实现方向沿隐式的多条路径向前传递。因篇幅所限,计算智能体重要性分数所用的多轮同伴评分被省略。
+
+[图 6: A case of DyLAN solving general reasoning task. Different agents are recruited to give and refine solutions. The result is incorrect at the first time step but correct at the second time step. It includes the ratings from agents for calculating Agent Importance Scores.]
+
+图 6:DyLAN 求解通用推理任务的案例。题目:"一节课开始时班上一半学生去图书馆,之后剩余学生中的一半去机房,若最后班里还剩 8 名学生,问班里原有多少学生?"(选项 A. 12、B. 16、C. 24、D. 32)。第 1 层($V_1$)中,Mathematician 从结果倒推但算错;Programmer 算得 8×2+8=24,答 (C);Economist 同样答 (C) 24;Doctor 表示"作为医生不擅长答数学题",拒绝作答。第 2 层($V_2$)各智能体在看到他者解法后更新回答:Mathematician 正确倒推"8÷0.5=16,16÷0.5=32",答 (D) 32,并给四个解法打分 [[5, 2, 3, 0]];Programmer 答 (D) 32,打分 [[4, 3, 2, 0]];Economist 与 Doctor 亦给出 [[4, 3, 2, 1]] 等评分。第 2 步即触发早停,最终答案为 (D) 32 students。图下方展示重要性分数的计算:$I_{1,1} = 0.165+0.147+0.132 = 0.45$、$I_{1,2} = 0.28$、$I_{1,3} = 0.24$、$I_{1,4} = 0.03$(末层贡献 $I_{2,1}=I_{2,2}=I_{2,4}=0.33$、$I_{2,3}=0.00$)——第一轮就答对方向并说服他人的 Mathematician 分数最高。结果在第 1 时间步不正确、第 2 时间步变正确;图中包含用于计算智能体重要性分数的智能体评分。
+
+[图 7: A failed case of DyLAN solving code generation task. Optimization directions provided by Code Reflector are wrong.]
+
+图 7:DyLAN 求解代码生成任务的一个失败案例。题目为 `minPath(grid, k)`(在网格中找出长度为 k 的最小路径)。第 1 层 Algorithm Developer 用堆/DFS 等给出了(正确的)实现;但第 2 层 Code Reflector 给出的优化方向是错误的("A1 虽写了高效算法,但代码不够精炼……"),引导后续层朝错误方向改写;最终在后续时间步触发早停输出"最终答案",结果为失败(超时 Timeout)。这说明当审查者给出错误反馈时,动态架构也可能被带偏。
+
+### 附录 D 提示词模板
+
+::: en
+In DyLAN, agents are assigned roles with prompts extracted from an open-source code base³, relative research projects (Du et al., 2023; Shinn et al., 2023; Zheng et al., 2023), and generation results of GPT-4-0613, besides manual construction. The prompt of each agent are constructed by concatenation of the role prompt and optional tool descriptions, as the system prompt, and instruction prompts. We exhibit the instruction templates of different datasets, the prompts of all agents, and their sources in Table 16. We annotate the task where each prompt is used in the parenthesis, and the source of each prompt template. We omit the in-context examples of AR tasks from the original dataset of MATH (Hendrycks et al., 2021b) and PHP Zheng et al. (2023), and WebShop from ReAct (Yao et al., 2023).
+:::
+
+在 DyLAN 中,智能体的角色提示除人工构建外,提取自一个开源代码库(原文脚注:³ https://github.com/GoGPTAI/ChatGPT-Prompt/blob/main/prompts.csv)、相关研究项目(Du et al., 2023; Shinn et al., 2023; Zheng et al., 2023)以及 GPT-4-0613 的生成结果。每个智能体的提示由"角色提示 + 可选的工具描述"(作为系统提示)与指令提示拼接而成。表 16 展示了各数据集的指令模板、所有智能体的提示及其来源;括号中标注各提示所用的任务,并标注每个提示模板的来源。我们省略了 AR 任务来自 MATH 原始数据集(Hendrycks et al., 2021b)、PHP(Zheng et al., 2023)以及 WebShop 来自 ReAct(Yao et al., 2023)的上下文示例。
+
+[表 16: Instruction and prompting templates used in different datasets and agents.]
+
+表 16:不同数据集与智能体所用的指令与提示模板。(来源:Manual=手工编写;Retrieved=从开源库/原论文检索;Generated=由 GPT-4 生成。)
+
+**指令模板(按任务)**
+
+| 提示词 | 内容(中译) | 来源 |
+|---|---|---|
+| MMLU 指令(GR) | "Here is the question: {question} / These are the solutions to the problem from other agents: {responses} / Using the reasoning from other agents as additional advice with critical thinking, can you give an updated answer? Examine your solution and that other agents step by step. Notice that their answers might be all wrong. Put your answer in the form (X) at the end of your response. (X) represents choice (A), (B), (C), or (D)."(这是题目:{question}。这些是其他智能体对该题的解法:{responses}。请批判性地把其他智能体的推理当作额外建议,给出更新后的答案。逐步检查你与其他智能体的解法。注意他们的答案可能全错。把答案以 (X) 形式放在回复末尾,(X) 表示选项 (A)/(B)/(C)/(D)。) | Manual |
+| MATH 指令(AR) | "Follow the given examples and answer the mathematics problem. {question} / These are the solutions... from other agents: {responses} / Using the reasoning from other agents as additional advice with critical thinking, can you give an updated answer? Examine your solution and that other agents step by step. Notice that their answers might be all wrong."(参照给定示例解答数学题:{question}。这些是其他智能体的解法:{responses}。请批判性地把他们的推理当作额外建议,给出更新后的答案;逐步检查你与其他智能体的解法,注意他们的答案可能全错。) | Manual |
+| HumanEval 指令(CG) | "You must complete the python function I give you by rectifying previous implementations. Use the other information as a hint. Be sure to use the same indentation I specified. Furthermore, you may only write your response in code/comments. [improved impl]: ```python {function signature}```. Please follow the template by repeating the function signature and complete the new implementation in [improved impl]. If no changes are needed, simply rewrite the implementation in the Python code block."(你必须通过修正此前的实现来补全我给出的 Python 函数;把其他信息当作提示;务必使用我指定的缩进;此外,回复只能包含代码/注释。[改进实现]:```python {函数签名}```。请按模板重复函数签名,并在 [improved impl] 中完成新实现;若无需修改,直接在 Python 代码块中原样重写实现即可。) | Retrieved |
+| WebShop 指令(DM) | "{history of observations and actions} / These are the suggested next action from other agents: {actions from other agents} / Using the solutions from other agents as additional advice with critical thinking, can you give an updated action in response to previous observations and actions? Please select the item after searching (click on the product name 'B0...'). And when you buy the item ('click[Buy Now]'), please make sure you have selected an item and entered its description page. Do not search for multiple times. Based on the example and previous actions and observations on the new instruction, give your next action in the format of 'Action: search[...]' or 'Action: click[...]'."({观察与动作历史}。这些是其他智能体建议的下一步动作:{其他智能体的动作}。请批判性地把其他智能体的方案当作额外建议,结合先前的观察与动作给出更新后的动作。搜索后请点击商品名('B0...')选择商品;购买('click[Buy Now]')前务必确认已选中商品并进入其详情页;不要反复搜索。请基于示例与关于新指令的先前动作和观察,以 "Action: search[...]" 或 "Action: click[...]" 格式给出下一步动作。) | Retrieved |
+| 人类先验选择指令(-) | "A few agents will collaborate on the same task query. Please select the optimal composition of the candidate agents based on the description of the task and the agents' profiles. - Task: {subject} - Agents { - Agent/Code Writer/Judge_t (Name): Role Prompt/Description }_{t=1}^n. We want to select k agents/code writers/code reviewers among these candidates. Please write the agent IDs as the following format: [1, 2, 3, 4]. There could be multiple agents with the same ID."(若干智能体将协作完成同一任务查询。请依据任务描述与各智能体的画像,从候选中选出最优组合。——任务:{subject}——智能体:{各智能体/代码写作者/评审的名称与角色描述}。我们要从这些候选中选出 k 个智能体/代码写作者/代码审查者。请把智能体 ID 写成如下格式:[1, 2, 3, 4];允许同一 ID 出现多次。) | Manual |
+| Ranker 指令(-) | "Here is the question: {question} / These are the solutions to the problem from other agents: {responses} / Please choose the best 2 solutions and think step by step. Put your answer in the form like [1,2] or [3,4] at the end of your response."(这是题目:{question}。这些是其他智能体的解法:{responses}。请逐步思考,选出最好的 2 个解法,并把答案以 [1,2] 或 [3,4] 的形式放在回复末尾。) | Manual |
+
+**角色提示(智能体)**
+
+| 提示词(角色) | 内容(中译) | 来源 |
+|---|---|---|
+| Mathematician(数学家,GR) | "You are a mathematician. You are good at math games, arithmetic calculation, and long-term planning."(你是一名数学家,擅长数学游戏、算术计算与长期规划。) | Retrieved |
+| Programmer(程序员,GR) | "You are a programmer. You are good at computer science, engineering, and physics. You have experience in designing and developing computer software and hardware."(你是一名程序员,擅长计算机科学、工程与物理,有软硬件设计与开发经验。) | Retrieved |
+| Lawyer(律师,GR) | "You are a lawyer. You are good at law, politics, and history."(你是一名律师,擅长法律、政治与历史。) | Retrieved |
+| Historian(历史学家,GR) | "You are a historian. You research and analyze cultural, economic, political, and social events in the past, collect data from primary sources and use it to develop theories about what happened during various periods of history."(你是一名历史学家,研究并分析过去的文化、经济、政治与社会事件,从一手资料收集数据并据此建立关于各历史时期史实的理论。) | Retrieved |
+| Economist(经济学家,GR) | "You are an economist. You are good at economics, finance, and business. You have experience on understanding charts while interpreting the macroeconomic environment prevailing across world economies."(你是一名经济学家,擅长经济学、金融与商业,有结合图表理解全球经济宏观环境的经验。) | Retrieved |
+| Psychologist(心理学家,GR) | "You are a psychologist. You are good at psychology, sociology, and philosophy. You give people scientific suggestions that will make them feel better."(你是一名心理学家,擅长心理学、社会学与哲学,能给人们科学的建议使其感觉更好。) | Retrieved |
+| Doctor(医生,GR) | "You are a doctor and come up with creative treatments for illnesses or diseases. You are able to recommend conventional medicines, herbal remedies and other natural alternatives. You also consider the patient's age, lifestyle and medical history when providing your recommendations."(你是一名医生,能为疾病提出有创造性的治疗方案,能推荐常规药物、草药疗法与其他天然替代品;给出建议时还会考虑患者的年龄、生活方式与病史。) | Retrieved |
+| Python Assistant(CG) | "You are a Python writing assistant, an AI that only responds with python code, NOT ENGLISH. You will be given a function signature and its docstring by the user. Write your full implementation (restate the function signature)."(你是一个 Python 编写助手,一个只用 Python 代码(而非英文)回复的 AI。用户会给出函数签名与文档字符串,请写出完整实现(并复述函数签名)。) | Retrieved |
+| Algorithm Developer(CG) | "You are an algorithm developer. You are good at developing and utilizing algorithms to solve problems. You must respond with python code, no free-flowing text (unless in a comment). You will be given a function signature and its docstring by the user. Write your full implementation following the format (restate the function signature)."(你是一名算法开发者,擅长开发与运用算法解决问题。必须用 Python 代码回复,不得有自由文本(注释除外)。用户会给出函数签名与文档字符串,请按格式写出完整实现(复述函数签名)。) | Retrieved |
+| Computer Scientist(CG) | "You are a computer scientist. You are good at writing high performance code and recognizing corner cases while solve real problems. You must respond with python code, no free-flowing text (unless in a comment). You will be given a function signature and its docstring by the user. Write your full implementation following the format (restate the function signature)."(你是一名计算机科学家,擅长编写高性能代码并在解决实际问题时识别边界情况。必须用 Python 代码回复(自由文本仅限注释)。用户会给出函数签名与文档字符串,请按格式写出完整实现(复述函数签名)。) | Retrieved |
+| Programmer(程序员,CG) | "You are an intelligent programmer. You must complete the python function given to you by the user. And you must follow the format they present when giving your answer! You can only respond with comments and actual code, no free-flowing text (unless in a comment)."(你是一名聪明的程序员,必须补全用户给出的 Python 函数,且回答必须遵循其给定格式!只能以注释与实际代码回复,不得有自由文本(注释除外)。) | Retrieved |
+| Coding Artist(CG) | "You are a coding artist. You write Python code that is not only functional but also aesthetically pleasing and creative. Your goal is to make the code an art form while maintaining its utility. You will be given a function signature and its docstring by the user. Write your full implementation following the format (restate the function signature)."(你是一名编码艺术家,写出的 Python 代码不仅实用而且美观、有创意;目标是在保持实用性的同时把代码变成艺术。用户会给出函数签名与文档字符串,请按格式写出完整实现(复述函数签名)。) | Generated |
+| Software Architect(CG) | "You are a software architect, skilled in designing and structuring code for scalability, maintainability, and robustness. Your responses should focus on best practices in software design. You will be given a function signature and its docstring by the user. Write your full implementation following the format (restate the function signature)."(你是一名软件架构师,擅长以可扩展、可维护、健壮为目标设计与组织代码;回复应聚焦软件设计的最佳实践。用户会给出函数签名与文档字符串,请按格式写出完整实现(复述函数签名)。) | Generated |
+| Unit Tester(CG) | "You are an AI coding assistant that can write unique, diverse, and intuitive unit tests for functions given the signature and docstring."(你是一名 AI 编程助手,能依据函数签名与文档字符串,为函数写出独特、多样且直观的单元测试。) | Retrieved |
+| Syntax Checker(CG) | (空,Null——纯外部工具,无提示词) | - |
+| Code Reflector(CG) | "You are a Python writing assistant. You will be given a series of function implementations of the same function signature. Write a few sentences to explain whether and why the implementations are wrong. These comments will be used as a hint and your goal is to write your thoughts on the n-th previous implementation after [reflection n]."(你是一名 Python 编写助手。你会看到同一函数签名的一系列实现,请用几句话说明这些实现是否错误及原因。这些评注将作为提示;你的目标是在 [reflection n] 之后写下对倒数第 n 个实现的思考。) | Generated |
+| Debugger(CG) | "You are a debugger, specialized in finding and fixing bugs in Python code. You will be given a function implementation with a bug in it. Your goal is to identify the bug and provide a corrected implementation. Include comments to explain what was wrong and how it was fixed."(你是一名调试专家,专精于发现并修复 Python 代码中的 bug。你会得到一个含 bug 的函数实现,目标是定位 bug 并给出修正后的实现;用注释说明错在哪里、如何修复。) | Generated |
+| Quality Manager(CG) | "You are a quality manager, ensuring that the code meets high standards in terms of readability, efficiency, and accuracy. You will be given a function implementation and you need to provide a code review. Comment on its correctness, efficiency, and readability, and suggest improvements if needed."(你是一名质量管理者,确保代码在可读性、效率与准确性上达到高标准。你会得到一个函数实现,需要给出代码评审:就正确性、效率与可读性发表意见,必要时提出改进建议。) | Generated |
+| Ranker(CG) | "You are a Python writing assistant. You will be given a series of function implementations of the same function signature. You need to choose the best 2 implementations in consideration of correctness, efficiency, and possible corner cases."(你是一名 Python 编写助手。你会看到同一函数签名的一系列实现,需要综合考虑正确性、效率与潜在边界情况,选出最好的 2 个实现。) | Generated |
+| Search Optimizer(DM) | "As a Search Optimizer, analyze a user's vague or broad instruction and suggest a more precise and effective set of keywords or filters to accurately find products that meet their specific requirements. Please focus more on searching actions when giving the next action, especially on providing informative and accurate searching words in 'search[...]'."(作为搜索优化师,分析用户模糊或宽泛的指令,建议更精确有效的关键词或过滤条件,以准确找到符合其具体需求的商品。给出下一步动作时请更侧重搜索动作,尤其是提供信息量足、准确度高的 "search[...]" 检索词。) | Generated |
+| Budget Analyst(DM) | "As a Budget Analyst, guide a user in setting a realistic budget for their shopping needs, considering product categories, market prices, and personal financial constraints. Analyze whether the product matches the budget one by one. Please avoid searching multiple times. Please focus more on which product to click in 'click[...]' when giving the next action."(作为预算分析师,结合商品类别、市场价与个人财务约束,引导用户为购物需求设定现实预算;逐一分析商品是否匹配预算。请避免多次搜索;给出下一步动作时更侧重在 "click[...]" 中点击哪个商品。) | Generated |
+| Product Explorer(DM) | "As a Product Explorer, offer guidance on how to effectively compare different products based on their features, prices, and reviews. Advise on key factors to consider for making informed decisions in various product categories. You are preferred to 'click[← Prev]' or 'click[Next →]' to go on different pages, and click on the item name to browse its details."(作为商品探索者,提供如何依据特性、价格与评价有效比较不同商品的指引,并就各类商品做知情决策的关键因素提出建议。你更倾向于用 "click[← Prev]" 或 "click[Next →]" 翻页,并点击商品名浏览详情。) | Generated |
+| Instruction Analyst(DM) | "As an Instruction Analyst, evaluate a customer's stated needs and preferences, and provide a structured approach to ensure the selected product align with these instructions. Do not keep refining searching. You are preferred to check out products that might align with instruction. Otherwise, give the most reasonable action for the next step."(作为指令分析师,评估顾客陈述的需求与偏好,提供结构化方法确保所选商品与指令一致。不要反复优化搜索;你更倾向于查看可能符合指令的商品,否则给出下一步最合理的动作。) | Generated |
+| Description Reader(DM) | "As a Description Reader, detail how to read and interpret product descriptions and specifications to match them with a customer's specific needs, focusing on identifying key features, benefits, and potential drawbacks. You are preferred to click into each product and 'click[Description]' to see product details."(作为详情阅读者,详述如何阅读并解读商品描述与规格,使其与顾客的具体需求相匹配,重点识别关键特性、优点与潜在缺点。你更倾向于点进每件商品并 "click[Description]" 查看商品详情。) | Generated |
+| Decision Maker(DM) | "As a Decision Maker, you are more confident to purchase related products without refining searching results. If you believe a product is a suitable choice, proceed to click in the product and persuade other agents to click 'click[Buy Now]'. If not, recommend the most logical next step for rapid adaptation for the next product."(作为决策者,你更有信心在不继续精炼搜索结果的情况下购买相关商品。若认为某商品合适,就点击进入该商品并说服其他智能体点击 "click[Buy Now]";否则推荐最合乎逻辑的下一步,以便快速转向下一件商品。) | Generated |
+| Decision Reflector(DM) | "As a Decision Reflector, provide a framework for customers to critically evaluate their potential purchases, considering their initial requirements, product features, and overall value. Guide them in reflecting on whether a choice truly meets their needs. Please avoid repeated searching. If you think it's good to buy the product, go 'click[Buy Now]'. Otherwise, give the most reasonable action for the next step."(作为决策反思者,为顾客提供批判性评估潜在购买行为的框架,考虑其初始需求、商品特性与整体价值,引导其反思该选择是否真正满足需求。请避免重复搜索;若认为值得购买,就 "click[Buy Now]",否则给出下一步最合理的动作。) | Manual |
+| Result Estimater(DM) | "As a Result Estimator, describe how to predict the potential satisfaction and success of a customer's purchase decision based on their needs, product choice, and market trends. Offer insights into how these choices may meet their expectations. If you have any suggestions, print them in 'think[...]'. Otherwise, give the most reasonable action for the next step."(作为结果预估者,描述如何基于顾客需求、商品选择与市场趋势,预测其购买决策的潜在满意度与成功率,并就这些选择能否达到预期给出洞见。若有建议,请写入 "think[...]";否则给出下一步最合理的动作。) | Generated |
+
+## 要点速览
+
+- 形式化:**多智能体协作 = 时序前馈网络(T-FFN)**,层=时间步、节点=智能体、边=通信;前向传消息推理,反向传评分归因。
+- 两阶段:Team Optimization(预试验 + 重要性分数选精英)→ Task Solving(动态协作)。
+- **Agent Importance Score**:同伴互评(前向)× 后继贡献加权求和(反向,类反向传播),各层归一化;无监督、可复用、对角色失衡稳健。
+- **动态结构**:LLM Ranker 每步排序,末位智能体退出后续层;**拜占庭式早停**(>2/3 一致即停)大幅省成本(最高省 66% 调用)。
+- 主结果:HumanEval 82.9(超 LATS、调用仅其 35%)、WebShop 68.3、MMLU 70.5(调用仅 Debate 的 36.6%);MMLU 单科目选团队最高 +25%。
+- 与课程关联:回应了 AutoGen(GroupChatManager 手动/生成式组队)的"团队怎么定"问题——答案是**用数据后验地选**;与《Why Multi-Agent LLM Systems Fail?》指出的"角色/成员配置失误"失效模式直接对应:先选对团队,多智能体才不添乱。

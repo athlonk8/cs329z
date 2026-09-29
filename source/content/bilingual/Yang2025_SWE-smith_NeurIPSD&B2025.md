@@ -1,0 +1,451 @@
+---
+title: "SWE-smith: Scaling Data for Software Engineering Agents"
+title_zh: "SWE-smith:为软件工程 Agent 扩展数据规模"
+authors: "John Yang et al."
+venue: "NeurIPS 2025 D&B · Stanford / Princeton"
+kind: paper
+importance: recommended
+tags: "合成数据,软件工程Agent,数据引擎,拒绝采样微调,SWE-bench,执行验证"
+summary: 通过向真实代码库注入合成 bug 并以单元测试验证,SWE-smith 用约 20 小时人力构建 5 万实例训练集,训练出 SWE-bench Verified 40.2% 的开源 SOTA 模型。
+---
+
+## 导读
+
+本文是第 7 周「数据选择与质量」单元的第三篇,与 LIMA 形成「质 vs 量」的两极对话:LIMA 证明 1,000 条精选数据足以对齐,而 SWE-smith(Stanford、Princeton 等机构合作,发表于 NeurIPS 2025 Datasets & Benchmarks)则展示如何把软件工程(SE)训练数据的**规模**提升一个数量级——同时保持执行验证(execution-based validation)的高质量把关。
+
+背景痛点:训练开源 SE Agent 的最大瓶颈是数据。爬取 GitHub PR/issue 没有执行环境与测试,无法可靠验证;沿用 SWE-bench 的采集流程则受限于「必须同时修改代码与测试的 PR」极其稀少、且为每个实例搭建 Docker 环境需大量人工、配套环境动辄数 TB 存储。SWE-smith 反转思路:**先建环境、再在环境内合成任务**——给定任意 Python 代码库,先用 SWE-agent 自动安装并以测试通过率把关,然后用四种策略(LM 改写、AST 程序化变异、组合 bug、PR 镜像)向代码库「注入」bug,只保留能打破既有测试的补丁作为任务实例,再用 LM 生成 issue 文本。最终以约 20 小时人力、1,360 美元成本,从 128 个真实仓库产出 50,137 个实例,并借此以拒绝采样微调训练出 SWE-agent-LM-32B——在 SWE-bench Verified 上单次尝试(resolve)40.2%,时为开源模型之最。对 Agent 工程师而言,这是一份「数据引擎」设计范本:合成 + 执行过滤可以在可控成本下持续量产带验证信号的高价值训练数据。
+
+## 全文对照翻译
+
+> **译注**:覆盖论文正文全部内容(摘要、第 1-6 节与致谢,原文第 1-10 页)。References 与附录 A-G(基础设施、仓库选择、四类 bug 生成策略的完整提示与算法、数据统计、issue 生成、难度评级、训练与评测细节、杂项)未收录,请查阅原文 PDF(swesmith.com);要点已浓缩在文末「要点速览」。术语首现处给中英对照:**基于执行的验证(execution-based validation)**、**抽象语法树(abstract syntax tree, AST)变换(transformation,即语法转换 syntax transformation)**、**bug 注入 / 故障注入(bug / fault injection)**、**拒绝采样微调(rejection sampling fine-tuning, RFT)**、**失败转通过测试(Fail-to-Pass, F2P)** 等;LM、Agent、SWE-bench 等通用缩写保留英文。原文图表中的数据在译文中以 markdown 表格保留。
+
+::: en
+**Abstract** — Despite recent progress in Language Models (LMs) for software engineering, collecting training data remains a significant pain point. Existing datasets are small, with at most 1,000s of training instances from 11 or fewer GitHub repositories. The procedures to curate such datasets are often complex, necessitating hundreds of hours of human labor; companion execution environments also take up several terabytes of storage, severely limiting their scalability and usability. To address this pain point, we introduce SWE-smith, a novel pipeline for generating software engineering training data at scale. Given any Python codebase, SWE-smith constructs a corresponding execution environment, then automatically synthesizes 100s to 1,000s of task instances that break existing test(s) in the codebase. Using SWE-smith, we create a dataset of 50k instances sourced from 128 GitHub repositories, an order of magnitude larger than all previous works. We train SWE-agent-LM-32B, achieving 40.2% Pass@1 resolve rate on the SWE-bench Verified benchmark, state of the art among open source models. We open source SWE-smith (collection procedure, task instances, trajectories, models) to lower the barrier of entry for research in LM systems for automated software engineering. All assets available at https://swesmith.com.
+:::
+
+**摘要** —— 尽管语言模型(LM)在软件工程领域近期进展显著,收集训练数据仍是重大痛点。现有数据集规模小,至多数千个训练实例、来自 11 个或更少的 GitHub 仓库;策划(curate)此类数据集的流程往往复杂,需要数百小时人工;配套的执行环境(execution environment)也要占用数 TB 存储,严重限制其可扩展性与可用性。为解决这一痛点,我们提出 **SWE-smith**——一个大规模生成软件工程训练数据的新流水线(pipeline)。给定任意 Python 代码库,SWE-smith 会构建对应的执行环境,然后自动合成数百到数千个能打破代码库既有测试的**任务实例(task instance)**。利用 SWE-smith,我们构建了源自 128 个 GitHub 仓库的 5 万实例数据集,比以往所有工作大一个数量级。我们训练出 SWE-agent-LM-32B,在 SWE-bench Verified 基准(benchmark)上取得 40.2% 的 Pass@1 解决率(resolve rate),为开源模型中的最先进(state of the art)结果。我们开源 SWE-smith(采集流程、任务实例、轨迹、模型),以降低自动化软件工程 LM 系统研究的门槛。所有资源见 https://swesmith.com。
+
+### 1 引言(Introduction)
+
+::: en
+Language Model (LM) agents, such as SWE-agent (Yang et al., 2024a) or OpenHands (Wang et al., 2024), have made remarkable progress towards automating software engineering (SE) tasks, as tracked by benchmarks such as SWE-bench (Jimenez et al., 2024b). However, the most effective agents still rely on proprietary LMs, as building open source LMs for SE remains bottlenecked by the lack of large-scale, high-quality training data. To ensure that open research remains relevant in this field, it is critical to develop infrastructure for collecting software engineering training data at scale.
+:::
+
+SWE-agent(Yang et al., 2024a)、OpenHands(Wang et al., 2024)等语言模型(LM)**智能体(agent)**,在 SWE-bench(Jimenez et al., 2024b)等基准的追踪下,朝自动化软件工程(SE)任务已取得显著进展。然而,最有效的智能体仍依赖专有 LM,因为构建面向 SE 的开源 LM 的瓶颈,正是缺乏大规模、高质量的训练数据。为确保开放研究在这一领域保持竞争力,开发大规模收集软件工程训练数据的基础设施至关重要。
+
+[图 1: Scaling task instances (left) and performance (right) for SWE-agent's with SWE-smith. Using SWE-smith, we can create 100s to 1000s of instances for any Python codebase, enabling us to train SWE-agent-LM-32B which achieves 40.2% on SWE-bench Verified.]
+
+图 1 中文说明:左图为**任务实例规模扩展**——横轴为仓库数(Repositories),纵轴为实例数(Instances,0–50k),SWE-smith 达到 50k 实例 / 128 仓库,远超 SWE-bench(约 2k 实例);右图为**性能扩展**——横轴为训练轨迹数(Trajectories,100 到 5.0k),纵轴为解决率(% Resolved),轨迹数从 100、200、400、800、1.6k、3.2k 增至 5.0k,SWE-bench Verified 解决率相应从 14.3% → 27.8% → 33.4% → 40.2% 稳步上升。即:用 SWE-smith 可为任意 Python 代码库创建数百到数千个实例,据此训练的 SWE-agent-LM-32B 在 SWE-bench Verified 上达到 40.2%。
+
+::: en
+The current open-source ecosystem offers two kinds of data sources to train LMs on SE tasks. One simple approach is to crawl pull requests (PRs) and issues from GitHub repositories. However, without execution environments or tests, these instances offer no reliable way of validating generated solutions, and LMs are limited to learning from the surface form of code (Xie et al., 2025a) or via rewards based on superficial string similarity (Wei et al., 2025). In contrast, SWE-bench provides reliable validation by running unit tests against proposed solutions. Another line of work has simply extended the SWE-bench collection strategy to a new set of repositories for training purposes (Pan et al., 2024). This produces flexible environments for training and distilling LM agents, since we can generate agent trajectories and filter them based on the unit test results. However, the scalability of this approach is severely limited by the challenges associated with SWE-bench's collection strategy. SWE-bench's filtering process leaves only a small number of PRs that not only resolve a Github issue, but also make meaningful changes to unit tests. Also, setting up execution environments for each instance requires a substantial amount of human intervention.
+:::
+
+当前开源生态为训练 SE 任务 LM 提供两类数据源。一种简单做法是从 GitHub 仓库爬取**拉取请求(pull request, PR)**与 issue。然而,没有执行环境或测试,这些实例就无法可靠地验证生成的解,LM 只能从代码的**表层形式(surface form)**学习(Xie et al., 2025a),或依赖基于肤浅字符串相似度的奖励(Wei et al., 2025)。相比之下,SWE-bench 通过对提议的解运行单元测试来提供可靠验证。另一条工作线则直接把 SWE-bench 的采集策略扩展到一组新仓库用于训练(Pan et al., 2024)。这种做法能产出用于训练与蒸馏 LM 智能体的灵活环境,因为我们可以生成智能体**轨迹(trajectory)**并按单元测试结果过滤。但其可扩展性严重受制于 SWE-bench 采集策略自身的挑战:SWE-bench 的过滤流程只留下极少数既解决某个 GitHub issue、又对单元测试做出有意义修改的 PR;此外,为每条实例搭建执行环境还需要大量人工干预。
+
+[图 2: SWE-smith creates training data for software engineering agents by crafting bugs into real codebases. Given a codebase, we employ several strategies to create task instances that break existing tests. Using SWE-smith, we create 50k+ task instances with execution environments from 128 real world repositories.]
+
+图 2 中文说明:SWE-smith 通过向真实代码库「雕琢(bug 注入 / 故障注入,bug/fault injection)」来为软件工程智能体制造训练数据。流程自左向右:真实仓库(Real Repositories,含源码 src/、单元测试 tests/、setup.py、README.rst)→ 环境创建(Environment Creation):SWE-agent 尝试安装仓库并执行测试,开发者据其工作撰写 Dockerfile,产出环境镜像(Environment Image)→ 任务生成策略(Task Gen. Strategies):真实仓库 + LM 生成(LM Generated)+ 程序化修改(Procedural)+ 组合 bug(Combine Bugs)+ PR 镜像(PR Mirroring)→ 单元测试(Unit Tests,如 tests/test_utils.py、test_client.py、test_auth.py、test_api.py)→ 新任务实例(New Task Instances):带 bug 的补丁(Bugged Patch,+20 -12)、生成的 issue(Generated Issue)、经验证的测试(Verified Tests,标注 2 与 9 两个合成任务 Synthetic Tasks)。用 SWE-smith,我们从 128 个真实仓库创建了 5 万多个带执行环境的任务实例。
+
+::: en
+In this paper, we introduce the SWE-smith toolkit, which marries the flexible execution environments of SWE-bench with scalable instance collection (Figure 1). SWE-smith features several techniques to automatically synthesize bugs in existing GitHub repositories, such as (1) generating errant rewrites of functions with an LM, (2) procedurally modifying the abstract syntax tree (AST) of functions, (3) undoing PRs, and (4) combining bugs. Our key insight is that execution-based validation can not only validate proposed solutions, but also identify bug candidates which cause substantial software regression (i.e., break tests).
+:::
+
+本文提出 SWE-smith 工具包,把 SWE-bench 的灵活执行环境与可扩展的实例采集结合起来(图 1)。SWE-smith 具备若干自动在既有 GitHub 仓库中合成 bug 的技术,如:(1)用 LM 生成带错误的函数重写;(2)程序化修改函数的**抽象语法树(abstract syntax tree, AST)**;(3)撤销 PR;以及(4)组合 bug。我们的关键洞察是:**基于执行的验证(execution-based validation)不仅能验证提议的解,还能识别那些造成实质性软件回归(software regression,即打破测试)的 bug 候选**。
+
+::: en
+In a nutshell, SWE-smith puts forth the following task creation workflow, as shown in Figure 2. Given a codebase, we automatically set up a corresponding environment using SWE-agent (Yang et al., 2024a). Within this environment, we then use the aforementioned techniques to synthesize 100s to 1,000s of task instances. Finally, we craft realistic issue descriptions automatically with LMs. SWE-smith's design significantly reduces the amount of human labor and storage required for constructing execution environments. Using SWE-smith, we create a dataset of 50k task instances across 128 real-world GitHub repositories. Using the SWE-smith dataset, we achieve a new open-weight state of the art result on SWE-bench verified. Using the SWE-smith task instances, we generate 5,016 expert trajectories with Claude 3.7 Sonnet and fine-tune Qwen 2.5 Coder Instruct 32B. The resulting LM, SWE-agent-LM-32B, achieves 40.2% (+33.4%) on SWE-bench Verified in a single attempt, without inference-time scaling. This sets a new state of the art for open-weight models.
+:::
+
+简言之,SWE-smith 提出如图 2 所示的任务创建工作流。给定一个代码库,我们先用 SWE-agent(Yang et al., 2024a)自动搭建对应环境;在该环境内,我们再用前述技术合成数百到数千个任务实例;最后,我们用 LM 自动撰写贴近真实的 issue 描述。SWE-smith 的设计显著降低了构建执行环境所需的人力与存储。利用 SWE-smith,我们创建了横跨 128 个真实 GitHub 仓库的 5 万任务实例数据集。借助 SWE-smith 数据集,我们在 SWE-bench Verified 上取得新的开放权重(open-weight)最先进结果。借助 SWE-smith 任务实例,我们用 Claude 3.7 Sonnet 生成 5,016 条专家轨迹并微调 Qwen 2.5 Coder Instruct 32B。所得模型 SWE-agent-LM-32B 在 SWE-bench Verified 上**单次尝试**取得 40.2%(较基座 +33.4%),且不做推理时扩展(inference-time scaling)。这创下了开放权重模型的新纪录。
+
+::: en
+The scale and diversity of the SWE-smith dataset enables us to begin establishing truths and investigate interesting phenomena about developing SWE-agents. Training on more instances, bug types, and repositories helps. LM generated issue text approximates real ones effectively. Using SWE-smith, we find that it's possible to optimize LMs to perform well for specific repositories while only suffering minor generalization loss.
+:::
+
+SWE-smith 数据集的规模与多样性,使我们得以开始确立一些关于开发 SWE-agent 的规律并考察有趣现象:在更多实例、更多 bug 类型、更多仓库上训练是有帮助的;LM 生成的 issue 文本能有效逼近真实 issue;利用 SWE-smith,我们发现可以让 LM 针对特定仓库优化、表现得更好,而只遭受轻微的泛化损失。
+
+::: en
+We release SWE-smith as an open-source toolkit — including instances, environments, and trajectories — to catalyze the development of stronger open-source LM agents.
+:::
+
+我们将 SWE-smith 作为开源工具包发布——包括实例、环境与轨迹——以催化更强的开源 LM 智能体的开发。
+
+### 2 SWE-smith:大规模软件任务生成(Software Task Generation at Scale)
+
+::: en
+The core principle of SWE-smith's collection strategy is to define an execution environment first, and then synthesize task instances within the environment. Conceptually, this is a simple inversion of SWE-bench's approach, which instead prioritizes identifying task instances, and then attempts to build an environment for each. In this section, we describe the procedure in detail and show how, in practice, SWE-smith scales significantly better in terms of repositories, task instances, and storage.
+:::
+
+SWE-smith 采集策略的核心原则是:**先定义执行环境,再在环境内合成任务实例**。概念上,这是对 SWE-bench 做法的简单反转——后者优先识别任务实例,然后再尝试为每条实例构建环境。本节将详细描述该流程,并展示在实践中 SWE-smith 如何在仓库数、任务实例数与存储三方面都实现显著更优的扩展。
+
+#### 2.1 采集(Collection)
+
+::: en
+**Building execution environments for repositories with passing tests.** Given a repository, we run SWE-agent (Yang et al., 2024a) on the latest commit for at most 100 steps, instructing it to install the codebase and run the test suite. We then manually verify the installation and testing instructions, check if more than 80% of existing tests pass, and finally create a Docker image for the repository. We target repositories for the 5,000 most downloaded packages listed in the Python Package Index (PyPI) as of November 18, 2024, sort the PyPI packages by GitHub stars, and then remove any PyPI package with less than 1,000 stars, as well as all 12 SWE-bench test repositories from consideration. More in §A.2.
+:::
+
+**为测试通过的仓库搭建执行环境。** 给定一个仓库,我们在其最新提交上运行 SWE-agent(Yang et al., 2024a),至多 100 步,指示它安装代码库并运行测试套件。随后我们人工核实安装与测试指令,检查既有测试的通过率是否超过 80%,最终为该仓库创建 Docker 镜像。我们以 2024 年 11 月 18 日 Python 包索引(Python Package Index, PyPI)上下载量前 5,000 的包所对应的仓库为目标,按 GitHub 星数对这些 PyPI 包排序,然后剔除星数少于 1,000 的包,并把全部 12 个 SWE-bench 测试仓库排除在考虑之外。详见 §A.2。
+
+::: en
+**Creating task instance candidates.** Per repository, we employ four different strategies to create candidates. As shown in Figure 2, each strategy takes in a repository as input, then produces task instance candidates represented as .diff files. Extensive details in §B.
+:::
+
+**创建任务实例候选。** 每个仓库采用四种不同策略生成候选。如图 2 所示,每种策略以仓库为输入,产出以 .diff 文件表示的任务实例候选。完整细节见 §B。
+
+::: en
+• **LM Generation**: Per repository, we identify all programmatic entities (functions, classes), then take two approaches: (1) provide an LM with the function and prompt it to introduce errant modifications (henceforth referred to as "LM Modify"), and (2) given only the function header and docstring, ask the LM to rewrite it ("LM Rewrite"). More in §B.1.
+:::
+
+- **LM 生成(LM Generation)**:每个仓库识别出全部程序实体(函数、类),然后采取两种方式:(1)把函数提供给 LM,提示它引入错误修改(下称「LM Modify」);(2)只给函数签名与文档字符串(docstring),让 LM 重写该函数(「LM Rewrite」)。详见 §B.1。
+
+::: en
+• **Procedural Modification**: Per function, we acquire an abstract syntax tree (AST) representation of the code, then randomly perform one or more transformations (e.g., remove a conditional/loop, change an operator, +11 more. See Table 8). More in §B.2.
+:::
+
+- **程序化修改(Procedural Modification)**:对每个函数,获取代码的抽象语法树(AST)表示,然后随机执行一种或多种**变换(transformation,即语法转换 syntax transformation)**——例如删除一个条件/循环、更换一个操作符,另有 11 种(见原文表 8)。详见 §B.2。
+
+::: en
+• **Combine Bugs**: LM generation and Procedural Modification task instances exclusively edit one function or class. To create more complex tasks that require editing multiple portions of the codebase, we devise a "Patch Combination" strategy that creates a task instance by aggregating candidates from the same file(s) or module(s). More in §B.3.
+:::
+
+- **组合 bug(Combine Bugs)**:LM 生成与程序化修改的任务实例只编辑单个函数或类。为创建需要编辑代码库多个部分的更复杂任务,我们设计了「补丁组合(Patch Combination)」策略:把来自相同文件或模块的候选聚合起来,构成一个任务实例。详见 §B.3。
+
+::: en
+• **Invert PRs (or "PR Mirror")**: Per repository, we collect all PRs that modify Python files. Per PR, we attempt to undo its revisions in the current version of the repository. To achieve this, we provide an LM with the PR's code changes (a .diff plaintext) and prompt it to rewrite each affected file such that the PR edits are reverted. Unlike SWE-bench, we do not check out the PR's base commit, as the install specifications determined in the previous step may not be compatible with older versions of the repo. More in §B.4.
+:::
+
+- **反转 PR(或「PR 镜像,PR Mirror」)**:每个仓库收集所有修改 Python 文件的 PR。对每个 PR,我们尝试在仓库当前版本上撤销其修改。为此,我们把 PR 的代码变更(.diff 纯文本)提供给 LM,提示它重写每个受影响的文件,使 PR 的编辑被回退。与 SWE-bench 不同,我们不检出(check out)PR 的 base commit,因为上一步确定的安装说明可能与旧版仓库不兼容。详见 §B.4。
+
+::: en
+**Execution-based validation of candidates.** We apply each candidate patch to the corresponding repository, run the test suite, and only keep patches that break one or more existing, passing tests (referred to as Fail-to-Pass or F2P test(s)). For efficiency purposes, we also limit testing runtime to two minutes; bug candidates that cause test runtimes in excess of this time limit are discarded. Minor additional details in §A.3.
+:::
+
+**基于执行的候选验证。** 把每个候选补丁应用到对应仓库,运行测试套件,只保留能打破一条以上既有**通过中测试**的补丁(称为**失败转通过测试,Fail-to-Pass 或 F2P**)。出于效率考虑,我们把测试运行时间限制为两分钟;导致测试运行超出该时限的 bug 候选会被丢弃。少量补充细节见 §A.3。
+
+::: en
+**Generating problem statements.** The issue text associated with a bug can significantly alter the difficulty and feasibility of the task instance. Detailed descriptions of "expected" vs. "observed" behavior or bug-reproduction code in issue text heavily affect an agent's capacity to localize bugs or iterate on proposed solutions. We explore several techniques covered fully in §D, and ultimately settle on a simple strategy. Per task instance, we provide an LM with the .diff patch, source code of a random F2P test, and execution output from running the repository's test suite with the bug patch applied. We prompt the LM for GitHub issue-style text that includes reproduction code based on the F2P test.
+:::
+
+**生成题目描述(problem statement)。** 与 bug 关联的 issue 文本能显著改变任务实例的难度与可行性。issue 文本中对「预期」与「观测」行为的详细描述、或 bug 复现代码,会严重影响智能体定位 bug 或迭代改进所提议之解的能力。我们探索了多种技术(完整覆盖见 §D),最终采用一个简单策略:对每个任务实例,向 LM 提供 .diff 补丁、一条随机 F2P 测试的源码、以及在打上 bug 补丁后运行仓库测试套件的执行输出;提示 LM 生成包含基于该 F2P 测试的复现代码的 GitHub issue 风格文本。
+
+::: en
+**What human labor remains?** The steps requiring manual effort are (1) parsing the correct installation setup procedures from the agent trajectory (∼7 min per repository), and (2) implementing the parser for test outputs (∼1 min per repository). Step two requires very little time because parsers can be reused for repositories with the same testing infrastructure (e.g., pytest). SWE-smith removes the need for manual efforts to determine installation specifications for multiple versions of a codebase across time, the most costly step of SWE-bench collection. Creating SWE-smith took one author ∼20h of human labor.
+:::
+
+**还剩多少人工?** 需要人工的步骤只有两处:(1)从智能体轨迹中解析出正确的安装配置流程(每仓库约 7 分钟);(2)实现测试输出的解析器(每仓库约 1 分钟)。第二步耗时很少,因为解析器可在使用相同测试基础设施(如 pytest)的仓库间复用。SWE-smith 免去了「为代码库在时间维度上的多个版本确定安装说明」这一人工步骤——那正是 SWE-bench 采集中最昂贵的一步。创建 SWE-smith 总共花费一位作者约 20 小时人力。
+
+#### 2.2 特征(Features)
+
+::: en
+We apply SWE-smith to 128 Python repositories, generating a total of 50k instances. Table 1 captures the key statistics. On average, we generate 381 task instances per repository, with as many as 2277 for pandas-dev/pandas. We summarize the distribution of task instances per repository in Figure 3, where repositories are grouped into one of six general categories. SWE-smith took $1360 to create ($1000 to generate bugs, $160 for automatic repository installation with SWE-agent, $200 to generate issues for 10K bugs). Generating an issue costs 2.54¢ on average. More dataset analyses in §C.
+:::
+
+我们把 SWE-smith 应用于 128 个 Python 仓库,共生成 5 万个实例。表 1 汇总了关键统计量:平均每仓库生成 381 个任务实例,pandas-dev/pandas 最多达 2,277 个。图 3 总结了每仓库任务实例的分布,其中仓库被归入六大通用类别之一。SWE-smith 的创建成本为 1,360 美元(生成 bug 1,000 美元、用 SWE-agent 自动安装仓库 160 美元、为 1 万个 bug 生成 issue 200 美元);平均生成一条 issue 花费 2.54 美分。更多数据集分析见 §C。
+
+**表 1: SWE-smith 统计汇总(Summary of SWE-smith statistics)**
+
+| bug 类型 | 产率 Yield % | 实例数 # Insts | 成本 Cost | F2P | 编辑行数 Lines |
+|---|---|---|---|---|---|
+| Combine(组合) | 96.9% | 10,092 | 0.00¢ | 15 | 11 |
+| LM Modify | 56.0% | 17,887 | 0.38¢ | 4 | 3 |
+| LM Rewrite | 35.0% | 4,173 | 3.93¢ | 4 | 24 |
+| PR Mirror | 33.8% | 2,344 | 5.53¢ | 3 | 14 |
+| Procedural(程序化) | 40.2% | 15,641 | 0.00¢ | 7 | 5 |
+| 合计 | 50.1 | 50,137 | 2.32¢ | 6 | 5 |
+
+(原表注:「产率 Yield %」指某策略生成的候选中打破 1 条以上测试的比例;「成本 Cost」为生成一个候选的平均成本;「F2P」(失败转通过测试)与「编辑行数 Lines [Edited]」为中位数。)
+
+[图 3: Distribution of instances per repo for 128 repo's grouped into 6 categories.]
+
+图 3 中文说明:128 个仓库按 6 大类别分组的每仓库实例数分布(横轴为实例数 0-1500):系统工具(System Tools,24 个仓库)、数据管理(Data Mgmt.,52)、代码工具(Code Tools,15)、Web 开发(Web Dev.,18)、数据可视化(Data Viz.,6)、机器学习/人工智能(ML/AI,14)。数据管理类仓库数量最多。
+
+::: en
+Bug generation strategies vary in cost and yield rate. Of methods relying on LMs, PR Mirrors are more expensive because the task entails rewriting entire files, as opposed to individual functions for LM Modify and LM Rewrite. Yield rates are limited by either lack of test coverage for the change or because the bug candidate did not actually introduce relevant issues. For example, for LM Rewrite, the LM is asked to re-implement the function; it is not explicitly asked for bugs. When requested outright (LM Modify), the yield is higher.
+:::
+
+各 bug 生成策略的成本与**产率(yield rate)**各不相同。在依赖 LM 的方法中,PR 镜像更贵,因为其任务需要重写整个文件,而 LM Modify 与 LM Rewrite 只处理单个函数。产率受限的原因,要么是改动缺乏测试覆盖,要么是 bug 候选并未真正引入相关问题。例如,LM Rewrite 只是被要求重新实现函数,并没有被明确要求造 bug;而当被直接要求造 bug 时(LM Modify),产率更高。
+
+::: en
+**How difficult are SWE-smith task instances?** To determine whether task instances produced by SWE-smith are realistic and challenging, we train a Qwen 2.5 32B model on 1,699 human-annotated (task, label) pairs from Chowdhury et al. (2024) to rate tasks as (easy, medium, hard) by training. To quantify difficulty, each difficulty label corresponds to values of 1/5/9. The model achieves 75.3% test accuracy. We then rate difficulty of task instances from both SWE-smith and prior SWE-bench style datasets (Chowdhury et al., 2024; Jimenez et al., 2024b; Pan et al., 2024; Yang et al., 2024b). SWE-smith task instances span a broad range of difficulties, similar to SWE-bench and SWE-gym. The average difficulty score for SWE-smith (5.27–5.72 across bug generation strategies) is comparable to SWE-bench (5.01) and SWE-gym (5.62). This suggests SWE-smith enables realistic and appropriately challenging evaluation. We discuss why bug strategies yield different levels of difficulty and visualize difficulty per dataset in §E.
+:::
+
+**SWE-smith 任务实例有多难?** 为判断 SWE-smith 产出的任务实例是否真实且具挑战性,我们在 Chowdhury et al. (2024) 的 1,699 条人工标注(任务, 标签)对上训练 Qwen 2.5 32B 模型,把任务评为(简单 easy、中等 medium、困难 hard)。为量化难度,每个难度标签对应 1/5/9 的分值。该模型测试准确率为 75.3%。随后我们对 SWE-smith 与既有 SWE-bench 类数据集(Chowdhury et al., 2024;Jimenez et al., 2024b;Pan et al., 2024;Yang et al., 2024b)的任务实例评定难度。SWE-smith 任务实例横跨宽泛的难度区间,与 SWE-bench 和 SWE-gym 相似;SWE-smith 的平均难度分(各 bug 生成策略 5.27-5.72)与 SWE-bench(5.01)、SWE-gym(5.62)相当。这表明 SWE-smith 支持真实且难度适中的评测。关于各 bug 策略为何产出不同难度、以及各数据集难度可视化的讨论见 §E。
+
+**表 2: 软件工程任务开源训练数据集对比(Comparison of open source training datasets for software engineering tasks)**
+
+| 数据集 | 任务数 # Tasks | 仓库数 # Repos | 可执行? Exec? | 来源 Source | 环境体积 Env. Size |
+|---|---|---|---|---|---|
+| R2E (Jain et al., 2024) | 0.25k | 137 | | 合成 Synth | 270 GBs |
+| R2E-gym(子集)(Jain et al., 2025) | 4.6k | 10 | | 合成 Synth | 4 TBs |
+| SWE-bench-extra (Badertdinov et al., 2024) | 6.38k | 2k | | 真实 Real | - |
+| SWE-bench-train (Jimenez et al., 2024b) | 19k | 37 | | 真实 Real | - |
+| SWE-fixer (Xie et al., 2025a) | 115k | 856 | | 真实 Real | - |
+| SWE-gym (Pan et al., 2024) | 2.4k | 11 | | 真实 Real | 6 TBs |
+| SWE-smith | 50k | 128 | | 两者兼有 Both | 295 GBs |
+
+(原表注:相对既有数据集,SWE-smith 的任务实例数、仓库数与环境数都达数倍,而存储成本仅为零头。SWE-fixer 与 SWE-bench-train 的任务实例没有执行环境,故「环境体积」为空。)
+
+::: en
+**Scaling execution environments.** Unlike SWE-bench which creates a Docker image per task instance, SWE-smith leverages a simpler design where tasks from the same repository share the same environment, reducing storage overhead significantly, as shown in Table 2. This approach not only makes scaling task instances more affordable, but also renders SWE-smith more accessible and maintainable than existing datasets. We estimate that creating a similar quantity of task instances (50k) using SWE-bench would require 50 to 150 TBs of storage for environments, a 500x difference. Extended discussion in §C.1.
+:::
+
+**扩展执行环境。** 与 SWE-bench 为每条任务实例创建一个 Docker 镜像不同,SWE-smith 采用更简单的设计:同一仓库的任务共享同一环境,如表 2 所示,这显著降低了存储开销。该方式不仅让扩展任务实例更可负担,也使 SWE-smith 比既有数据集更易获取、更易维护。我们估计,若用 SWE-bench 的方式创建同等数量(5 万)的任务实例,环境存储将需要 50 到 150 TB——相差约 500 倍。延伸讨论见 §C.1。
+
+### 3 实验(Experiments)
+
+::: en
+To explore the utility of SWE-smith for training software engineering agents, we use rejection sampling fine-tuning (Yuan et al., 2023) as the primary procedure for improving a base LM with SWE-smith. Our experiment workflow is as follows. First, we curate a subset of SWE-smith task instances. Next, we run an agent system with an expert model on this subset. At this step, the trajectory corresponding to each run is recorded. Then, we fine-tune the base (or "student") model on the trajectories corresponding to resolved instances. Finally, we evaluate the agent system run with the student model on a separate, test split.
+:::
+
+为探索 SWE-smith 在训练软件工程智能体上的效用,我们采用**拒绝采样微调(rejection sampling fine-tuning, RFT)**(Yuan et al., 2023)作为用 SWE-smith 提升基座 LM 的主要流程。实验工作流如下:首先,筛选一个 SWE-smith 任务实例子集;接着,在该子集上用**专家模型(expert model)**运行智能体系统,此步会记录每次运行对应的轨迹;然后,在与「已解决(resolved)」实例对应的轨迹上微调基座(或「学生」)模型;最后,在独立的测试划分上评估由学生模型驱动的智能体系统。
+
+::: en
+**Models.** For expert models, we use claude-3-7-sonnet-20250219 (Anthropic, 2025). For fair comparisons with prior works (Pan et al., 2024), we also use claude-3-5-sonnet-20240620 and gpt-4o-2024-08-06. We use the Qwen-2.5-Coder-Instruct (Hui et al., 2024) 7B and 32B series as the base models. Training and hyperparameter details are in §F.1.
+:::
+
+**模型。** 专家模型使用 claude-3-7-sonnet-20250219(Anthropic, 2025);为与先前工作公平对比(Pan et al., 2024),另使用 claude-3-5-sonnet-20240620 与 gpt-4o-2024-08-06。基座模型采用 Qwen-2.5-Coder-Instruct(Hui et al., 2024)7B 与 32B 系列。训练与超参数细节见 §F.1。
+
+::: en
+**Agent system.** We use SWE-agent (Yang et al., 2024a), an agent system for solving GitHub issues. SWE-agent provides a base LM with an Agent Computer Interface (ACI) that enables more effective interactions with a codebase. At each turn, SWE-agent prompts an LM to generate a ReAct (Yao et al., 2023b) style (thought, action) pair, where the action either edits a file or executes a shell command. We choose SWE-agent because, at the time of writing, SWE-agent with Claude 3.7 Sonnet is the top open source solution on SWE-bench. When generating trajectories with expert models, we run SWE-agent for at most 75 steps and $2.00 cost limit. For inference of student models, we impose the same 75 step maximum and fix temperature at 0.0. Full configuration details are in §F.1.
+:::
+
+**智能体系统。** 我们使用 SWE-agent(Yang et al., 2024a)——一个解决 GitHub issue 的智能体系统。SWE-agent 为基座 LM 提供**智能体-计算机接口(Agent Computer Interface, ACI)**,使其能与代码库更有效地交互。每一轮,SWE-agent 提示 LM 生成 ReAct 风格(Yao et al., 2023b)的(思考 thought, 动作 action)对,动作或为编辑文件、或为执行 shell 命令。我们选择 SWE-agent,是因为在撰写本文时,SWE-agent + Claude 3.7 Sonnet 是 SWE-bench 上最强的开源方案。用专家模型生成轨迹时,我们限制 SWE-agent 至多 75 步、成本上限 2.00 美元;学生模型推理时同样施加 75 步上限,温度固定为 0.0。完整配置细节见 §F.1。
+
+::: en
+**Evaluation metrics.** We evaluate on the SWE-bench Lite and Verified (Chowdhury et al., 2024) subsets. SWE-bench evaluates AI systems on their ability to solve software issues from 12 real world GitHub repositories. The Lite split is a subset of 300 instances, curated to be an easier evaluation set that's less costly to run. The Verified split is a human-curated subset of 500 instances, selected for clearer problem statements and more reliable evaluation. To assess generalization beyond Python, we also evaluate on SWE-bench Multilingual, a new dataset introduced in this paper. SWE-Bench Multilingual consists of 300 task instances that cover 9 additional programming languages. See §F.2 for more details. We report the % resolved metric, the proportion of successfully resolved instances.
+:::
+
+**评测指标。** 我们在 SWE-bench 的 Lite 与 Verified(Chowdhury et al., 2024)子集上评测。SWE-bench 评测 AI 系统解决来自 12 个真实 GitHub 仓库的软件 issue 的能力。Lite 划分是 300 条实例的子集,策划为更省钱易跑的评测集;Verified 划分是 500 条实例的人工精选子集,入选标准是题述更清晰、评测更可靠。为考察 Python 以外的泛化能力,我们还在本文新提出的 **SWE-bench Multilingual** 上评测——它由 300 条任务实例组成,覆盖另外 9 种编程语言。详见 §F.2。我们报告 % resolved(解决率)指标,即成功解决实例的占比。
+
+### 4 结果(Results)
+
+::: en
+Table 3 compares the performance of Qwen 2.5 Coder Instruct models (7B and 32B), fine-tuned on 5,016 SWE-smith trajectories. We refer to them as SWE-agent-LM-7B and SWE-agent-LM-32B; the latter achieves state-of-the-art performance.
+:::
+
+表 3 对比了在 5,016 条 SWE-smith 轨迹上微调的 Qwen 2.5 Coder Instruct 模型(7B 与 32B)的性能。我们称之为 SWE-agent-LM-7B 与 SWE-agent-LM-32B;后者取得了最先进性能。
+
+**表 3: SWE-bench Lite 与 Verified 上既有方案的解决率(Resolve rates for existing solutions on SWE-bench Lite and Verified)**
+
+| 模型 | 系统 System | 训练规模 Train Size | Lite | Verified |
+|---|---|---|---|---|
+| **闭权重模型** | | | | |
+| GPT-4o (OpenAI, 2024a) | Agentless | - | 32.0 | 38.8 |
+| | OpenHands | - | 22.0 | - |
+| | SWE-agent | - | 18.3 | 23.0 |
+| Claude 3.5 Sonnet (Anthropic, 2024) | Agentless | - | 40.7 | 50.8 |
+| | AutoCodeRover | - | - | 46.2 |
+| | OpenHands | - | 41.7 | 53.0 |
+| | SWE-agent | - | 23.0 | 33.6 |
+| Claude 3.7 Sonnet (Anthropic, 2025) | SWE-agent | - | 48.0 | 58.2 |
+| Llama3-SWE-RL-70B (Wei et al., 2025) | Agentless | 11M | - | 41.0 |
+| **开放权重模型** | | | | |
+| Lingma-SWE-GPT-72B (Ma et al., 2024) | SWE-SynInfer | - | - | 28.8 |
+| Qwen3-235B-A22B (Qwen et al., 2025) | OpenHands | - | - | 34.4 |
+| R2E-Gym-32B (Jain et al., 2025) | OpenHands | 3.3k | - | 34.4 |
+| SWE-fixer-72B (Xie et al., 2025a) | SWE-Fixer | 110k | 24.7 | 32.8 |
+| SWE-gym-32B (Pan et al., 2024) | OpenHands | 491 | 15.3 | 20.6 |
+| SWE-agent-LM-7B | SWE-agent | 2k | 11.7 | 15.2 |
+| SWE-agent-LM-32B | SWE-agent | 5k | 30.7 | **40.2** |
+
+(原表注:数据收集自 Jimenez et al. (2024a),对比在 SWE-smith 上微调的模型。所有性能数字均为 pass@1;不与使用验证器(verifier)或测试时多次尝试的系统对比。)
+
+::: en
+The final dataset of 5,016 training points was curated as follows. We start by collecting a large pool of expert trajectories. First, we carried out each of the ablations in Section 4.1, giving us an initial set of 5,105 trajectories. Next, based on our observation that PR Mirror and LM Rewrite task instances yield the most effective expert trajectories (discussed below), we run the expert model on all task instances of these types, bumping up the total number to 6,457 task instances. Ultimately, we attempt to generate expert trajectories for 8,686 unique task instances, or 17.3% of the SWE-smith dataset. Reinforcing the difficulty rating findings from Section 2.2, we observe that SWE-smith task instances are non-trivial for the top agent systems today. The final pool of 6,457 represents a 36% resolve rate of all 17,906 attempts to solve one of the 8,686 task instances.
+:::
+
+最终的 5,016 个训练点数据集按如下方式筛选。我们先收集一大池专家轨迹:首先完成第 4.1 节的各项消融实验,得到初始的 5,105 条轨迹;接着,基于「PR 镜像与 LM Rewrite 任务实例产出最有效专家轨迹」这一观察(下文讨论),我们对这两类任务实例的全量运行专家模型,把总数推高到 6,457 个任务实例。最终,我们尝试为 8,686 个唯一任务实例(占 SWE-smith 数据集的 17.3%)生成专家轨迹。这印证了第 2.2 节的难度评级发现:SWE-smith 任务实例对当今顶尖智能体系统也绝非平凡——在求解这 8,686 个任务实例的全部 17,906 次尝试中,最终的 6,457 个代表 36% 的解决率。
+
+::: en
+Next, we perform minor filtering of this collection. As reported in Pan et al. (2024), we also observe that "easier" trajectories – task instances that are repeatedly solved across multiple runs — degrade model performance. Therefore, we limit the number of times any SWE-smith task instance is represented in the training set to 3 trajectories. This leads to the final 5,016 training set. More details in §F.3.
+:::
+
+接下来,我们对这批收集做轻度过滤。与 Pan et al. (2024) 报告一致,我们也观察到「更容易的」轨迹——即在多次运行中被反复解决的任务实例——会损害模型性能。因此,我们把任一 SWE-smith 任务实例在训练集中出现的次数限制为至多 3 条轨迹,由此得到最终的 5,016 条训练集。更多细节见 §F.3。
+
+::: en
+**Performance improves with more data points.** Extending similar graphs from Jain et al. (2025); Pan et al. (2024), Figure 1 shows increasing performance with more trajectories.
+:::
+
+**数据点越多性能越好。** 延伸 Jain et al. (2025) 与 Pan et al. (2024) 的类似曲线,图 1 显示性能随轨迹数增加而上升。
+
+::: en
+**Comparison at the same training set size.** To compare with prior works (Jain et al., 2025; Pan et al., 2024), we run expert trajectory generation on 1000 random SWE-smith task instances with SWE-agent + Claude 3.5 Sonnet (800) or GPT-4o (200). We then fine-tune the 32B model on 500 successful trajectories, a training set size both works report on. Our model achieves a 28.2% resolve rate on SWE-bench Verified, a relative difference of +8.2% with Pan et al. (2024) and +0.7% with Jain et al. (2025).
+:::
+
+**同等训练规模下的对比。** 为与先前工作对比(Jain et al., 2025;Pan et al., 2024),我们在 1,000 个随机抽取的 SWE-smith 任务实例上,用 SWE-agent + Claude 3.5 Sonnet(800 条)或 GPT-4o(200 条)生成专家轨迹,然后在 500 条成功轨迹上微调 32B 模型——这是两篇工作都报告过的训练规模。我们的模型在 SWE-bench Verified 上取得 28.2% 解决率,相对 Pan et al. (2024) 提升 +8.2%,相对 Jain et al. (2025) 提升 +0.7%。
+
+#### 4.1 SWE-smith 消融(Ablations of SWE-smith)
+
+::: en
+We perform several ablations of how SWE-smith's bug and problem statement generation strategies impact the quality of training data. We use Claude 3.7 Sonnet as the expert for fine-tuning Qwen 2.5 7B Coder Instruct, and report the performance on SWE-bench Verified.
+:::
+
+我们进行了多组消融实验,考察 SWE-smith 的 bug 与题目描述生成策略如何影响训练数据质量。我们用 Claude 3.7 Sonnet 作为专家模型微调 Qwen 2.5 7B Coder Instruct,并报告其在 SWE-bench Verified 上的性能。
+
+::: en
+**LM Rewrite and Procedural bugs are comparable to PR mirrors.** We randomly sample 1000 instances per bug generation strategy (LM Modify, LM Rewrite, Procedural Modifications, PR Mirrors). Per instance, we generate issue text with an LM and run expert trajectory generation. We then fine-tune a student model per strategy, capping training points to the minimum number of successful trajectories from any strategy (507) for fair comparison.
+:::
+
+**LM Rewrite 与程序化 bug 可媲美 PR 镜像。** 每种 bug 生成策略(LM Modify、LM Rewrite、程序化修改、PR 镜像)各随机抽取 1,000 个实例;对每个实例,用 LM 生成 issue 文本并运行专家轨迹生成。然后为每种策略微调一个学生模型,并把训练点数对齐到所有策略中最少的成功轨迹数(507),以保证公平比较。
+
+**表 4: 用不同策略创建的 1,000 个 SWE-smith 实例训练之对比(Comparison of training on 1000 SWE-smith instances created with different strategies)**
+
+| 策略 Strategy | 轨迹数 # Trajs. | 解决率 % Resolved |
+|---|---|---|
+| LM Modify | 802 | 5.7 (±1.5) |
+| LM Rewrite | 507 | 8.8 (±1.7) |
+| Procedural(程序化) | 745 | 8.6 (±1.8) |
+| PR Mirror | 557 | 9.2 (±1.7) |
+
+::: en
+Table 4 summarizes the results. Trajectories generated from PR mirrors are empirically the most effective training data — this is expected, since they are most reflective of SWE-bench. What's noteworthy is that trajectories from Procedural Modification and LM Rewrite instances lead to competitive models. There is a steep drop-off with LM Modify bugs.
+:::
+
+表 4 汇总了结果。PR 镜像生成的轨迹在实证上是最有效的训练数据——这符合预期,因为它们最贴近 SWE-bench 的分布。值得注意的是,程序化修改与 LM Rewrite 实例的轨迹同样训出了有竞争力的模型;而 LM Modify bug 则出现明显断崖式下跌。
+
+::: en
+**LM generated issues are comparable to real issues.** We randomly sample 600 PR Mirror task instances. We compare LM generated issues with three alternatives — fixed issue templates, the source code + test logs of a random Fail-to-Pass test, and the original issue text associated with the PR. We again cap training points to the minimum number of successful trajectories (259) for fairness.
+:::
+
+**LM 生成的 issue 可媲美真实 issue。** 我们随机抽取 600 个 PR 镜像任务实例,把 LM 生成的 issue 与三种替代方案对比——固定 issue 模板、一条随机失败转通过(F2P)测试的源码 + 测试日志、以及与该 PR 关联的原始 issue 文本。为公平起见,我们同样把训练点数对齐到最少的成功轨迹数(259)。
+
+**表 5: 用不同 issue 文本的 600 个 PR 镜像实例训练之对比(Comparing training on 600 PR Mirror instances with varied issue text)**
+
+| issue 文本 Issue | 轨迹数 # Trajs. | 解决率 % Resolved |
+|---|---|---|
+| 固定模板 Fixed | 259 | 6.4 (±1.5) |
+| F2P 测试 F2P Test | 390 | 7.3 (±1.9) |
+| LM 生成 LM | 328 | 7.7 (±1.5) |
+| 原始 Original | 319 | 7.8 (±1.8) |
+
+::: en
+As shown in Table 5, training on task instances with LM generated issues is empirically comparable to using the original issue text. Using fixed issue templates not only leads to the fewest successful trajectories, but also results in relatively homogeneous problem solving sequences. The expert trajectories from fixed issue templates have 31% fewer unique actions compared to LM generated text (379 vs. 550). While providing a Fail-to-Pass test case leads to more successful expert trajectories, leaking the evaluation criteria causes the model to skip over writing a reproduction script, which accounts for the performance drop. Of 500 SWE-bench Verified instances, the student model trained on LM-generated issues attempts to reproduce the bug for 379 of the runs. The model trained on test-based issues only does so for 127 cases, a 66% decrease.
+:::
+
+如表 5 所示,用 LM 生成 issue 的任务实例训练,在实证上可与使用原始 issue 文本相媲美。使用固定 issue 模板不仅成功轨迹最少,还会导致解题序列相对同质化:固定模板的专家轨迹相比 LM 生成文本少 31% 的唯一动作(379 对 550)。虽然提供失败转通过测试用例能带来更多成功的专家轨迹,但**泄漏评估标准会让学生模型跳过编写复现脚本**——这解释了性能下降:在 500 个 SWE-bench Verified 实例中,用 LM 生成 issue 训练的学生模型在 379 次运行中尝试复现 bug,而用测试文本训练的模型只有 127 次,下降 66%。
+
+::: en
+**Task difficulty correlates with solvability but not with effectiveness as training data.** First, we run our difficulty rating model on 10k randomly selected SWE-smith task instances. From this pool, we curate subsets of 1000 instances corresponding to the three difficulty levels, then run expert trajectory generation per subset 3 times. For the easy/medium/hard subsets, the resolve rate by the expert model are 58.6%, 41.0%, and 17.0% respectively. Next, from all successful trajectories, we create four fine-tuning datasets of 500 trajectories each corresponding to difficulty scores of 2, 4, 6, and 8. As mentioned in Section 2.2, the corresponding scores for easy/medium/hard are 1/5/9. Therefore, the SFT dataset for score 2 is made up of trajectories corresponding to 375 easy and 125 medium instances, and so on. Somewhat surprisingly, we do not observe strong correlation between increased difficulty and downstream performance. For the student models trained on the 2/4/6/8 difficulty SFT datasets, we get pass@1 scores of 12.4%, 10.8%, 13.6%, and 12.2% on SWE-bench Verified.
+:::
+
+**任务难度与可解性相关,却与训练数据的有效性无关。** 首先,我们对随机抽取的 1 万个 SWE-smith 任务实例运行难度评级模型;从该池中按三个难度等级各策划 1,000 个实例的子集,再对每个子集运行 3 次专家轨迹生成——专家模型在简单/中等/困难子集上的解决率分别为 58.6%、41.0% 与 17.0%。接着,从全部成功轨迹中,我们构建四个各含 500 条轨迹的微调数据集,分别对应难度分 2、4、6、8。如第 2.2 节所述,简单/中等/困难对应的分值是 1/5/9,因此难度分 2 的 SFT 数据集由 375 个简单实例与 125 个中等实例对应的轨迹组成,依此类推。有些出乎意料的是,我们并未观察到难度提升与下游性能之间的强相关:在 2/4/6/8 难度 SFT 数据集上训练的学生模型,在 SWE-bench Verified 上的 pass@1 得分分别为 12.4%、10.8%、13.6% 与 12.2%。
+
+[图 4: We fine-tune a 7B base and our 32B models on 700 trajectories for SymPy. Specialization boosts performance with minor generalization loss.]
+
+图 4 中文说明:在 SymPy 的 700 条轨迹上微调 7B 基座与本文的 32B 模型——特化(specialization)大幅提升目标仓库性能,仅带来轻微泛化损失。柱状对比(三组:SWE-bench Verified 全量 / 剔除 SymPy 后 w/o SymPy / 仅 SymPy 子集 SymPy Only):7B(100 仓库训练)为 15.3% / 14.0% / 13.6%,7B(仅 SymPy)为 — / — / 21.2%;SWE-agent-LM-32B 为 40.2% / 38.3% / 33.3%,32B(+SymPy 特化)为 — / — / 42.4%。
+
+[图 5: At 700 training samples, we observe performance increases logarithmically with repositories.]
+
+图 5 中文说明:在 700 条训练样本规模下,性能随仓库数**对数式**增长——仓库数 4 / 25 / 50 / 100 对应解决率 10.3% / 11.5% / 12.9% / 15.1%(纵轴 % Resolved 9-17)。
+
+::: en
+**Training on more repositories improves general performance.** We train models in four settings by sampling 700 expert trajectories on Procedural Modification tasks from pools of 4, 25, 50, and 100 repositories. Echoing similar findings for code generation tasks (Xie et al., 2025b), we find that increasing repositories represented in the training set improves performance, as shown in Figure 5, with an approximately logarithmic relation between model performance and number of repositories.
+:::
+
+**在更多仓库上训练可提升通用性能。** 我们在四种设定下训练模型:从 4、25、50、100 个仓库的池中,对程序化修改任务采样 700 条专家轨迹。与代码生成任务的类似发现(Xie et al., 2025b)相呼应,我们发现增加训练集所覆盖的仓库数能提升性能(如图 5 所示),且模型性能与仓库数之间呈近似对数关系。
+
+::: en
+**Repository-specialized models excel on the target repository with minor generalization loss.** We experiment with training models to be specialists on one particular repository. To assess performance, we evaluate models on a subset of SWE-bench Verified tasks that are (1) from SymPy, and (2) created after January 1st, 2022, a total of 22 instances. To create SymPy specific training data, we first select a base commit of SymPy just before the cutoff date. Next, we create 1276 Procedural Modification task instances, then generate 700 expert trajectories. We evaluate specialization in two settings: (1) single-repository fine-tuning, and (2) specialist stage fine-tuning, both shown in Figure 4. For single-repository tuning, we compare a model initialized with Qwen-2.5-Coder-Instruct 7B and trained on 700 instances sampled from 100 repositories, to the same Qwen base model but fine-tuned on the 700 SymPy instances only. For specialist stage fine-tuning, we simply compare SWE-agent-LM-32B to the same model further fine-tuned on the 700 SymPy instances.
+:::
+
+**仓库特化模型在目标仓库上出众,泛化损失轻微。** 我们实验把模型训练为特定仓库的「专家」。为评估性能,我们在 SWE-bench Verified 任务的一个子集上评测模型,该子集(1)来自 SymPy,且(2)创建于 2022 年 1 月 1 日之后,共 22 条实例。为创建 SymPy 专属训练数据,我们先选定紧邻截止日期之前的 SymPy 基础提交(base commit),接着创建 1,276 个程序化修改任务实例,再生成 700 条专家轨迹。我们在两种设定下评估特化(均示于图 4):(1)**单仓库微调**;(2)**专家阶段微调**。单仓库微调下,对比「以 Qwen-2.5-Coder-Instruct 7B 初始化、在来自 100 个仓库采样的 700 条实例上训练」与「同一 Qwen 基座、仅在 700 条 SymPy 实例上微调」;专家阶段微调下,直接对比 SWE-agent-LM-32B 与其再在 700 条 SymPy 实例上继续微调的版本。
+
+::: en
+Specialization significantly boosts performance for the target repository with only slight drops in general performance in both the single-repository fine-tuning (21.2% vs. 13.6%) and specialist stage fine-tuning (42.4% vs. 33.3%) settings.
+:::
+
+在两种设定下,特化都显著提升了目标仓库的性能,而通用性能只有轻微下滑:单仓库微调为 21.2% 对 13.6%,专家阶段微调为 42.4% 对 33.3%。
+
+#### 4.2 智能体行为分析(Analysis of Agent Behavior)
+
+::: en
+This section analyzes the behavior, failure modes, and efficiency of SWE-agent when run with SWE-agent-LM-32B or Claude 3.7 Sonnet on SWE-bench verified.
+:::
+
+本节分析在 SWE-bench Verified 上分别以 SWE-agent-LM-32B 或 Claude 3.7 Sonnet 驱动 SWE-agent 时的行为、失败模式与效率。
+
+[图 6: SWE-agent-LM-32B takes fewer steps to submit compared to Claude 3.7 Sonnet for instances resolved by both models.]
+
+图 6 中文说明:在两个模型都解出的实例上,SWE-agent-LM-32B 提交所用步数少于 Claude 3.7 Sonnet——左图为所有已解出实例的步数直方图,右图聚焦于两模型共同解出实例的「提交步数」分布(SWE-agent-LM-32B 24.8 步 vs Claude 3.7 Sonnet 25.6 步)。
+
+[图 7: For unsuccessfully resolved tasks, a frequent failure mode is that SWE-agent-LM-32B will repeat actions.]
+
+图 7 中文说明:对未成功解决的任务,一个高频失败模式是 SWE-agent-LM-32B 会**重复动作**——横轴为重复动作序列的长度阈值 L(0-40),纵轴为包含长度大于 L 的重复动作序列的轨迹占比;SWE-agent-LM-32B 的曲线显著高于 Claude 3.7 Sonnet(长度 10 以上分别为超过 25% 与不足 4%)。
+
+::: en
+**SWE-agent-LM-32B can solve tasks efficiently.** SWE-agent-LM-32B resolves tasks in fewer steps on average (24.9) than Claude 3.7 Sonnet (29.1), though the difference becomes marginal when accounting for different average difficulties of the resolved tasks: On the overlap of tasks that are resolved by both LMs, SWE-agent-LM-32B uses 24.8 steps compared to 25.6 used by Claude 3.7 Sonnet (see Fig. 6). While shorter trajectories are not always preferred (additional actions can be used for additional validation purposes, for example), this shows that SWE-agent-LM-32B solves tasks very efficiently. At the same time SWE-agent-LM-32B also demonstrates that it can remain focused throughout long trajectories, with 31 instances being resolved after 40 steps or more. We further highlight that the accuracy of naturally terminating ¹ agent submissions with SWE-agent-LM-32B achieve an accuracy nearly matching that of Claude 3.7 Sonnet (60% vs 63%), showing that SWE-agent-LM-32B is adept at determining whether an instance has been resolved. As the overall cost and turn count averages scale strongly with the cost and turn limits, we reserve a more thorough analysis for §F.5.1.
+:::
+
+**SWE-agent-LM-32B 能高效解题。** SWE-agent-LM-32B 平均用更少步数解决任务(24.9 步)优于 Claude 3.7 Sonnet(29.1 步);不过当考虑到两者所解任务的平均难度不同时,差距变得很小:在两个 LM 都解出的任务交集上,SWE-agent-LM-32B 用 24.8 步,Claude 3.7 Sonnet 用 25.6 步(见图 6)。虽然更短的轨迹并非总是更优(例如,额外动作可用于额外的验证),但这表明 SWE-agent-LM-32B 解题非常高效。同时,SWE-agent-LM-32B 也展示了在长轨迹中保持专注的能力——有 31 个实例在 40 步以上后仍被解出。我们还要强调:以 SWE-agent-LM-32B **自然终止**¹的智能体提交,准确率(60%)几乎追平 Claude 3.7 Sonnet(63%),说明 SWE-agent-LM-32B 擅长判断实例是否已被解决。由于总成本与轮数均值随成本/轮数上限变化很大,更彻底的分析留待 §F.5.1。
+
+> ¹ 即排除因错误或成本/步数上限而终止的智能体运行。注意在这些情况下 SWE-agent 仍会提取并提交智能体已做的修改,其中一些可能成功(例如智能体在测试已做编辑时因成本被终止)。
+
+::: en
+**Repetitive actions are a key problem.** We observe a tendency for SWE-agent-LM-32B to get stuck in long sequences of repetitive actions, in particular long sequences of calls that display different portions of a file instead of using search commands. ² More than 25% of SWE-agent-LM-32B trajectories have a repetitive sequence of at least length 10, compared to less than 4% for Claude 3.7 Sonnet (see Figure 7). The occurrence of long repetitive sequences correlates strongly with the agent's ability to solve the corresponding task instance, largely because the LM continues issuing similar commands until either the agent cost or turn limit is reached, at which point the run is terminated. For example, repetitive sequences of length 10 correspond to an 89% failure probability. Simple interventions from the agent scaffold can mitigate repetitive actions, but do not seem to improve resolve rates (see §F.5).
+:::
+
+**重复动作是关键问题。** 我们观察到 SWE-agent-LM-32B 有陷入长序列重复动作的倾向,尤其是反复调用查看文件不同片段的命令而不使用搜索命令。² 超过 25% 的 SWE-agent-LM-32B 轨迹含有长度至少为 10 的重复序列,而 Claude 3.7 Sonnet 不足 4%(见图 7)。长重复序列的出现与智能体解决对应任务实例的能力强相关,主要原因是 LM 会持续发出类似命令,直到触及智能体成本或轮数上限、运行被终止为止。例如,长度 10 的重复序列对应 89% 的失败概率。智能体**脚手架(scaffold)**的简单干预可以缓解重复动作,但似乎并不能提升解决率(见 §F.5)。
+
+> ² 事实上,这类 str replace editor 的 view 命令占了最长重复序列的 73%。此分析中,我们统计的是基础命令(即不带任何参数)的重复。详见 §F.5。
+
+[图 8: More than half of the unresolved instances of SWE-agent-LM-32B correspond to runs terminated by cost/step limits, and these limits are frequently reached before source code has been modified. See §F.5 for more.]
+
+图 8 中文说明:SWE-agent-LM-32B 未解出实例中超过一半对应因成本/步数上限而终止的运行,且常常在源码尚未修改前就已触及上限。图为失败原因分布(Error 超出上下文 / Stuck localizing 卡在定位 / Stuck reproducing 卡在复现 / Incorrect localization 定位错误 / Incorrect edit 编辑错误;按 Aborted-errors、Aborted-runtime limits、Normal exit 三种终止方式分组),SWE-agent-LM-32B 的主要构成为:超出上下文 27%(82 个)、定位错误 19%(57 个)、卡在定位 14%(42 个)等;Claude 3.7 Sonnet 未解出实例多为正常退出下的编辑/定位错误(如 50% 即 105 个为定位错误)。详见 §F.5。
+
+::: en
+**Localization is the dominant failure mode.** Guided by a short plan in the system prompt, SWE-agent typically starts by localizing (search and read actions), reproducing (test file creation and execution), before modifying source files and validating the fixes. If the agent gets stuck at any of these stages or keeps on iterating, the agent loop is eventually interrupted by runtime limits (cost, number of LM calls, runtime). While this rarely happens with Claude 3.7 Sonnet, 53% of SWE-agent-LM-32b's failures are associated with such limits (Figure 8). The agent often already gets stuck during localization or initial efforts to reproduce a bug, with endlessly repeated actions being a persistent issue. More on failure modes in §F.5.
+:::
+
+**定位(localization)是主导性失败模式。** 在系统提示中一份简短计划的引导下,SWE-agent 通常先做**定位**(搜索与阅读动作)、**复现**(创建并执行测试文件),然后才修改源文件并验证修复。如果智能体在任何阶段卡住或不停迭代,智能体循环最终会被运行时上限(成本、LM 调用次数、运行时间)打断。虽然 Claude 3.7 Sonnet 很少如此,SWE-agent-LM-32B 有 53% 的失败与这类上限相关(图 8)。智能体往往在定位阶段或复现 bug 的初期就已卡住,无尽重复的动作是持续存在的问题。更多失败模式见 §F.5。
+
+### 5 相关工作(Related Work)
+
+::: en
+**LMs for Software Engineering.** As contemporary LMs have saturated traditional code generation tasks (Austin et al., 2021; Chen et al., 2021), software engineering benchmarks (Jain et al., 2024; Jimenez et al., 2024b; Yang et al., 2024b; Zhao et al., 2024; Zan et al., 2025), notably SWE-bench, have become a new de facto evaluation setting due to their diverse, complex, real-world programming challenges. The most significant source of open source progress on SWE-bench has been the development of LM-based workflows (Orwall, 2024; Xia et al., 2024; Zhang et al., 2024b) and agents (Antoniades et al., 2024; Wang et al., 2024; Yang et al., 2024a; Zhang et al., 2024a). Workflow-based systems are typically human-engineered decompositions of a task into a sequence of sub-goals. Yang et al. (2024b) suggests such pipelines may not generalize effectively to non-Python repositories, requiring additional human intervention to re-adapt. We therefore elect to focus on generating trajectories with and for LM agent systems (Sumers et al., 2024; Yang et al., 2023; Yao et al., 2023b). Because no workflow is imposed, agent systems inherently rely more on the LM to plan and refine its actions, putting more focus on an LM's capabilities, not inference scaffolds.
+:::
+
+**面向软件工程的 LM。** 当代 LM 已使传统代码生成任务趋于饱和(Austin et al., 2021;Chen et al., 2021),软件工程基准(Jain et al., 2024;Jimenez et al., 2024b;Yang et al., 2024b;Zhao et al., 2024;Zan et al., 2025)——尤其是 SWE-bench——凭借其多样、复杂、真实的编程挑战,已成为新的事实上的评测设定。SWE-bench 上开源进展的最大来源,是基于 LM 的**工作流(workflow)**(Orwall, 2024;Xia et al., 2024;Zhang et al., 2024b)与**智能体**(Antoniades et al., 2024;Wang et al., 2024;Yang et al., 2024a;Zhang et al., 2024a)的开发。工作流式系统通常是人工设计的任务分解,把任务拆成子目标序列。Yang et al. (2024b) 指出这类流水线可能难以有效泛化到非 Python 仓库,需要额外人工干预重新适配。因此我们选择专注于「用 LM 智能体系统生成、也为 LM 智能体系统生成」轨迹(Sumers et al., 2024;Yang et al., 2023;Yao et al., 2023b)。由于不强加任何工作流,智能体系统天然更依赖 LM 来规划与改进其动作,从而把重心放在 LM 的能力而非推理脚手架上。
+
+::: en
+**Training Datasets for Coding.** Prior work around training data has focused on instruction following (Luo et al., 2023; Muennighoff et al., 2024; Shypula et al., 2024; Wei et al., 2024a;b; Yu et al., 2024) and preference learning (Liu et al., 2024a;b) for code completion tasks. Several recent works introduce training sets for retrieval augmented generation (Jimenez et al., 2024b; Xie et al., 2025a), workflows (Wei et al., 2025), and agent (Badertdinov et al., 2024; Ma et al., 2024; Pan et al., 2024; Jain et al., 2025) approaches to SWE-bench. Our work applies Haluptzok et al. (2023) at a repository level: by having an LM break a codebase, we drastically reduce the human effort needed to define a task and build its environment. Concurrent to our work, Xie et al. (2025b) (RePOST) also constructs execution environments for repository functions, but differs significantly in methodology and evaluation. RePOST sandboxes a function and its dependencies to a separate script, then generates tests with an LM, removing the original codebase as context. The tasks' source is repository-level; the environments and tasks are not. RePOST evaluates solely on code generation (e.g., HumanEval (Chen et al., 2021)). Jain et al. (2025) (R2E-Gym) improves open source LMs' performance on SWE-bench with inference time scaling and verifiers. R2E-gym's 51% resolve rate is not comparable to Table 3 results, as each instance is attempted 26 times. R2E-gym's 4.6k training instances are collected using SWE-bench's pipeline, with some augmentations around using LMs to synthesize issue text and tests. To our knowledge, we are the first to address the limited scalability of previous approaches.
+:::
+
+**面向编码的训练数据集。** 围绕训练数据的先前工作聚焦于代码补全任务的**指令遵循**(Luo et al., 2023;Muennighoff et al., 2024;Shypula et al., 2024;Wei et al., 2024a;b;Yu et al., 2024)与**偏好学习**(Liu et al., 2024a;b)。近期若干工作为 SWE-bench 的检索增强生成(Jimenez et al., 2024b;Xie et al., 2025a)、工作流(Wei et al., 2025)与智能体(Badertdinov et al., 2024;Ma et al., 2024;Pan et al., 2024;Jain et al., 2025)路线引入了训练集。我们的工作把 Haluptzok et al. (2023) 应用到仓库级别:让 LM 去破坏一个代码库,从而大幅削减定义任务与搭建环境所需的人力。与我们同期,Xie et al. (2025b)(RePOST)也为仓库函数构建执行环境,但在方法论与评测上差异显著:RePOST 把一个函数及其依赖沙箱化到单独脚本中,再用 LM 生成测试,移除了原代码库作为上下文——任务的来源是仓库级的,环境与任务却不是;RePOST 仅在代码生成上评测(如 HumanEval(Chen et al., 2021))。Jain et al. (2025)(R2E-Gym)用推理时扩展与验证器提升开源 LM 在 SWE-bench 上的性能;R2E-gym 的 51% 解决率与表 3 结果不可比,因为其每条实例尝试了 26 次。R2E-gym 的 4.6k 训练实例用 SWE-bench 流水线采集,辅以用 LM 合成 issue 文本与测试的若干增强。据我们所知,我们是首个解决先前方法有限可扩展性的工作。
+
+### 6 讨论(Discussion)
+
+::: en
+**Limitations and future directions.** First, SWE-smith's collection pipeline is Python-centric. The mechanisms to identify programmatic objects (e.g. functions, classes) and perform transformations rely heavily on the Python specific ast library. That said, SWE-smith's collection strategy is transferable to other languages. Second, due to both compute/budget constraints and our work's primary stance as a dataset contribution, we only include fine-tuning as a demonstration of SWE-smith's effectiveness. We do not explore other training techniques such as reasoning capabilities elicited via reinforcement learning.
+:::
+
+**局限与未来方向。** 其一,SWE-smith 的采集流水线以 Python 为中心:识别程序实体(如函数、类)与执行变换的机制重度依赖 Python 特有的 ast 库。话虽如此,SWE-smith 的采集策略可迁移到其他语言。其二,受算力/预算约束以及本文作为「数据集贡献」的首要定位所限,我们只纳入微调作为 SWE-smith 有效性的演示,未探索其他训练技术,例如通过强化学习激发推理能力。
+
+::: en
+**Conclusion.** We introduce SWE-smith, a dataset of 50k software engineering task instances from across 128 real world GitHub repositories. SWE-smith collection pipeline allows us to scale up task instances, environments, and trajectories at a fraction of prior costs without sacrificing faithfulness to open source software development practices. Using SWE-smith, we train SWE-agent-LM-32B, achieving a state-of-the-art 40.2% on SWE-bench Verified. Our experiments show how SWE-smith can be used to identify fundamental trends about developing SWE-agents. We believe SWE-smith provides the foundational data and infrastructure needed to train software engineering agents in a truly scalable manner.
+:::
+
+**结论。** 我们提出 SWE-smith——一个来自 128 个真实 GitHub 仓库、共 5 万个软件工程任务实例的数据集。SWE-smith 采集流水线让我们能以远低于先前的成本扩展任务实例、环境与轨迹,同时不牺牲对开源软件开发实践的忠实性。利用 SWE-smith,我们训练出 SWE-agent-LM-32B,在 SWE-bench Verified 上取得 40.2% 的最先进结果。我们的实验展示了如何用 SWE-smith 识别开发 SWE-agent 的基础规律。我们相信 SWE-smith 提供了以真正可扩展的方式训练软件工程智能体所需的基础数据与基础设施。
+
+### 致谢(Acknowledgments)
+
+::: en
+We thank Princeton Language & Intelligence (PLI) for providing credits for running closed-source API models. Thanks to Samuel Ainsworth for his constant support of bitbop.io (https://bitbop.io/), the compute service for which the majority of the project was carried out with. We'd also like to thank Akshat Bubna, Howard Halim, Andrew Liu, Peyton Walters, and the great team at Modal (https://modal.com/) for providing credits that made fine-tuning and model serving efforts extremely easy for this project. This work is partially supported by ONR grant N000142412532 and NSF grant IIS-2247357. We also thank Open Philanthropy and Andreessen Horowitz for providing funding for this work. Finally, thanks to Tianyu Gao, William Held, Niklas Muennighoff, Rafael Rafailov, Yijia Shao, Chenglei Si, Anikait Singh, Tianyi Zhang, Kexin Pei, and Karthik Narasimhan for constructive discussions and support throughout this project.
+:::
+
+我们感谢 Princeton Language & Intelligence(PLI)为运行闭源 API 模型提供的额度。感谢 Samuel Ainsworth 对 bitbop.io(https://bitbop.io/)的持续支持——本项目的大部分工作就是在这一算力服务上完成的。我们还要感谢 Modal(https://modal.com/)的 Akshat Bubna、Howard Halim、Andrew Liu、Peyton Walters 与整个优秀团队提供的额度,他们使本项目的微调与模型服务变得极为轻松。本工作部分受到 ONR 项目 N000142412532 与 NSF 项目 IIS-2247357 资助;我们也感谢 Open Philanthropy 与 Andreessen Horowitz 提供的资助。最后,感谢 Tianyu Gao、William Held、Niklas Muennighoff、Rafael Rafailov、Yijia Shao、Chenglei Si、Anikait Singh、Tianyi Zhang、Kexin Pei 与 Karthik Narasimhan 在整个项目期间的建设性讨论与支持。
+
+> **译注(完)**:正文(摘要至结论与致谢,原文第 1-10 页)至此结束。之后的 **References** 与**附录 A-G**(A 基础设施与任务实例格式、A.2 仓库选择与许可证、A.3 验证与评测 harness;B 四类 bug 生成策略的完整算法、提示词与表 8 的 13 种 AST 变换清单;C 数据集统计与 SWE-bench 对比案例;D issue 生成技术;E 难度评级细节;F 训练/评测配置、轨迹构成、Pass@k、失败模式决策树与 Multilingual 负结果;G 复刻 SWE-bench 的成本估算)均**未收录未翻译**,可查阅原文 PDF(arXiv:2504.21798,swesmith.com);其要点已浓缩于上方对应小节与文末「要点速览」。
+
+## 要点速览
+
+- **反转采集范式**:SWE-bench「先找任务再建环境」,SWE-smith「先建环境再在环境内合成任务」;核心洞察是执行验证既可验证解,也可反向筛选「能打破既有测试」的 bug 候选。
+- **四种 bug 注入策略**:LM Modify(改写函数引入逻辑 bug,产率 56.0%)、LM Rewrite(仅凭签名重实现,35.0%)、Procedural(13 种 AST 变换,零成本,40.2%)、Combine(合并同文件/同模块 bug,产率最高 96.9%、难度最高)、PR Mirror(用 LM 撤销真实 PR,33.8%);bug 生成主要用 o3-mini。
+- **规模与成本**:128 个真实 PyPI 仓库、50,137 个实例、295 GB 环境;总成本 $1,360、人力约 20 小时——若按 SWE-bench 逐实例镜像的方式需 50–150 TB 存储(约 500 倍)。
+- **数据质量证据**:平均难度分 5.27–5.72,与 SWE-bench(5.01)相当;PR Mirror 复原 django 的 SWE-bench 实例成功率达 92/100。
+- **主结果**:RFT(Claude 3.7 Sonnet 专家轨迹 5,016 条 + Qwen2.5-Coder-32B 学生)→ SWE-agent-LM-32B 在 SWE-bench Verified 40.2%、Lite 30.7%,时为开源 SOTA;每实例限 3 条轨迹以防「容易任务」带偏模型。
+- **策略消融**:PR Mirror(9.2%)最好,但零成本 Procedural(8.6%)与 LM Rewrite(8.8%)同样有效,LM Modify 掉队(5.7%)——合成 bug 不必依赖昂贵 LM。
+- **issue 文本消融**:LM 生成 ≈ 原始 issue(7.7% vs 7.8%);给 F2P 测试会泄漏评估标准、使学生少写复现脚本(-66%)而掉分;固定模板导致轨迹同质化(唯一动作 -31%)。
+- **多样性是免费午餐**:固定 700 条轨迹,仓库数 4→100 使得分 10.3%→15.1%(对数增长);仓库特化(SymPy)可将目标仓库性能大幅提升(33.3%→42.4%)而泛化仅微降(40.2%→38.3%)。
+- **任务难度 ≠ 训练价值**:难度 2/4/6/8 的训练集训出的学生得分 12.4%/10.8%/13.6%/12.2%,无强相关;不要只挑难例训模型。
+- **失败模式分析**:重复动作(≥25% 轨迹含长度 ≥10 的重复,89% 失败概率)与定位失败是主因;脚手架干预能压制重复但不提分——重复是「解不出」的症状;Python 微调几乎不迁移到 Multilingual(8.4% vs Claude 3.7 的 43%),暴露语言过拟合。

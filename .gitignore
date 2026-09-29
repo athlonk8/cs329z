@@ -1,0 +1,7 @@
+# 构建产物(本地预览用)
+source/site/
+__pycache__/
+*.pyc
+
+# 系统
+.DS_Store

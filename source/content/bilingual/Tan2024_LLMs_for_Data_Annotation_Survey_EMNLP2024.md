@@ -1,0 +1,373 @@
+---
+title: "Large Language Models for Data Annotation and Synthesis: A Survey"
+title_zh: "用于数据标注与合成的 LLM:综述"
+authors: Zhen Tan, Dawei Li, Song Wang, et al.
+venue: "EMNLP 2024 · Arizona State / UVA / UIC"
+kind: paper
+importance: recommended
+tags: 数据标注,数据合成,综述,过滤选择,对齐数据
+summary: 系统梳理 LLM 做数据标注/合成的三大环节——标注生成(指令/标签/理由/成对/文本反馈)、标注评估与过滤、标注利用(SFT/对齐/推理),并讨论模型坍塌、幻觉、伦理等挑战。
+---
+
+## 导读
+
+这是第 6 周「数据」一讲的文献综述(EMNLP 2024,28 页)。当 LLM 从"消费者"变成"生产者"——为下游模型生产训练数据——整个数据工程流程都改变了:传统标注昂贵、慢、需要领域专家;GPT-4 级模型却能自动化地打标签、写指令、生成推理链、构造偏好对。本综述把这片快速膨胀的文献组织成一条清晰的流水线:**标注怎么生成 → 生成的东西怎么评估与筛选 → 拿去怎么用**,最后讨论模型坍塌、幻觉、伦理与效率四大挑战。对课程而言,它是"数据飞轮"(同讲 Shankar 博客)与"数据选择"(第 7 周的 LIMA、SWE-smith)之间的理论地图:飞轮的每一圈,都在用这里的某类技术。阅读建议:抓分类框架与代表性方法,不必逐篇记忆。
+
+## 全文对照翻译
+
+> **译注**:覆盖论文正文(摘要至第 7 节结论,原文第 1-9 页),逐段对照。References、正文之后的 Limitations(局限)与附录 A(LLM 标注工具与软件清单)、附录 B(AI 辅助声明)、附录 C(LLM 数据标注论文合集)未收录,请查阅原文 PDF;图 1 分类树以文字概述,图 2 示例图附中文说明。
+
+### 摘要(Abstract)
+
+::: en
+Data annotation and synthesis generally refers to the labeling or generating of raw data with relevant information, which could be used for improving the efficacy of machine learning models. The process, however, is labor-intensive and costly. The emergence of advanced Large Language Models (LLMs), exemplified by GPT-4, presents an unprecedented opportunity to automate the complicated process of data annotation and synthesis. While existing surveys have extensively covered LLM architecture, training, and general applications, we uniquely focus on their specific utility for data annotation. This survey contributes to three core aspects: LLM-Based Annotation Generation, LLM-Generated Annotations Assessment, and LLM-Generated Annotations Utilization. Furthermore, this survey includes an in-depth taxonomy of data types that LLMs can annotate, a comprehensive review of learning strategies for models utilizing LLM-generated annotations, and a detailed discussion of the primary challenges and limitations associated with using LLMs for data annotation and synthesis. Serving as a key guide, this survey aims to assist researchers and practitioners in exploring the potential of the latest LLMs for data annotation, thereby fostering future advancements in this critical field.
+:::
+
+数据标注与合成(data annotation and synthesis)泛指为原始数据标注或生成相关信息,可用于提升机器学习模型的效果;然而这一过程劳动密集且成本高昂。以 GPT-4 为代表的先进大语言模型(Large Language Models, LLM)的出现,为自动化复杂的数据标注与合成过程提供了前所未有的机会。既有综述已广泛覆盖 LLM 的架构、训练与一般应用,而我们独特地聚焦其在数据标注上的具体效用。本综述在三个核心方面做出贡献:基于 LLM 的标注生成(LLM-Based Annotation Generation)、LLM 生成标注的评估(LLM-Generated Annotations Assessment)、LLM 生成标注的利用(LLM-Generated Annotations Utilization)。此外,本综述还包含 LLM 可标注数据类型的深入分类体系(taxonomy)、利用 LLM 生成标注的模型学习策略综述,以及对使用 LLM 进行数据标注与合成的主要挑战与局限的详细讨论。作为一份关键指南,本综述旨在帮助研究者与实践者探索最新 LLM 在数据标注上的潜力,从而推动这一关键领域的未来发展。
+
+### 1 引言(Introduction)
+
+::: en
+In the complex realm of machine learning and natural language processing (NLP), data annotation and synthesis stand out as a critical yet challenging task, extending beyond simple label attachment to encompass a diverse array of fundamental or auxiliary information. This detailed process typically involves ❶ categorizing raw data with class or task labels for basic classification, ❷ adding intermediate labels for contextual depth (Yu et al., 2022), ❸ assigning confidence scores to assess annotation reliability (Lin et al., 2022), ❹ applying alignment or preference labels to tailor outputs to specific criteria or user needs, ❺ annotating entity relationships to understand how entities within a dataset interact with each other (Wadhwa et al., 2023), ❻ marking semantic roles to define the underlying roles that entities play in a sentence (Larionov et al., 2019), ❼ tagging temporal sequences to capture the order of events or actions (Yu et al., 2023), or ❽ Synthesize data in the format of instruction (Wang et al., 2022b), response (Zhang and Yang, 2023a), reasoning (Wang et al., 2022a), pairwise (Bai et al., 2022) and textual feedback (Pan et al., 2024) to for language model tuning.
+:::
+
+在机器学习与自然语言处理(NLP)的复杂领域中,数据标注与合成是一项关键而富有挑战的任务:它远不止简单地贴标签,还涵盖多种基础或辅助信息。这一细致的过程通常包括:❶ 为原始数据标注类别或任务标签以完成基本分类;❷ 添加中间上下文标签以增加上下文深度(Yu et al., 2022);❸ 赋予置信度分数以评估标注可靠性(Lin et al., 2022);❹ 施加对齐(alignment)或偏好(preference)标签,使输出满足特定标准或用户需求;❺ 标注实体关系,以理解数据集中各实体之间如何交互(Wadhwa et al., 2023);❻ 标记语义角色,以定义实体在句子中扮演的底层角色(Larionov et al., 2019);❼ 标注时序序列,以捕捉事件或动作的先后顺序(Yu et al., 2023);或 ❽ 合成(synthesize)指令(instruction)(Wang et al., 2022b)、回复(response)(Zhang and Yang, 2023a)、推理(reasoning)(Wang et al., 2022a)、成对(pairwise)(Bai et al., 2022)与文本反馈(textual feedback)(Pan et al., 2024)形式的数据,用于语言模型调优。
+
+::: en
+Despite its wide applications, data annotation and synthesis poses significant challenges for current machine learning models due to the complexity, subjectivity, and diversity of data (Yang et al., 2023d). This process requires domain expertise and is resource-intensive, particularly when manually labeling or creating large datasets. Advanced LLMs such as GPT-4 (OpenAI, 2023), Gemini (Team et al., 2023), and LLaMA-2 (Touvron et al., 2023b) offer a promising opportunity to revolutionize data annotation. LLMs serve as more than just tools but play a crucial role in improving the effectiveness and precision of data annotation. Their ability to automate annotation tasks (A, 2022), ensure consistency across large volumes of data (Hou et al., 2023), and adapt through fine-tuning or prompting for specific domains (Song et al., 2023; Zhang et al., 2024a), significantly mitigates the challenges encountered with traditional annotation and synthesis methods, setting a new standard for what is achievable in the realm of NLP. This survey delves into the nuances of using LLMs for data annotation and synthesis, exploring methodologies, utilizing strategies, and associated challenges in this transformative approach. Through this exploration, we aim to shed light on the motivations behind embracing LLMs as catalysts for redefining the landscape of data annotation and synthesis in machine learning and NLP. We explore the utilization of LLMs for annotation synthesis in this survey, making four main contributions:
+:::
+
+尽管应用广泛,但由于数据的复杂性、主观性与多样性,数据标注与合成对当前的机器学习模型提出了重大挑战(Yang et al., 2023d)。这一过程需要领域专业知识,且资源密集,在人工标注或创建大规模数据集时尤为如此。GPT-4(OpenAI, 2023)、Gemini(Team et al., 2023)、LLaMA-2(Touvron et al., 2023b)等先进 LLM 为变革数据标注提供了可期的机会。LLM 不仅仅是一种工具,更在提升数据标注的有效性与精确性方面扮演关键角色。它们能够自动化标注任务(A, 2022)、在大体量数据上保持一致性(Hou et al., 2023),并通过微调或提示适配特定领域(Song et al., 2023; Zhang et al., 2024a),显著缓解了传统标注与合成方法所面临的挑战,为 NLP 领域可实现的水平设定了新标准。本综述深入探讨使用 LLM 进行数据标注与合成的种种细节,探索这一变革性方法的方法论、利用策略与相关挑战。通过这一探索,我们希望阐明把 LLM 当作催化剂、重新定义机器学习与 NLP 中数据标注与合成格局的动机所在。我们在本综述中探索 LLM 用于标注合成的利用方式,并做出四项主要贡献:
+
+::: en
+- LLM-Based Annotation Generation: We dive into the process of synthesizing annotations for various data types, including instruction & response, rationale, pairwise feedback, textual feedback, and other domain-specific data. Additionally, we discuss the criteria (e.g., diversity and quality) in the annotation process.
+- Assessing LLM-Generated Annotations: We explore various methods for assessing the quality of annotations and strategies for selecting high-quality annotations from numerous options.
+- LLM-Generated Annotations Utilization: We investigate the methodologies at different stages, including supervised fine-tuning, alignment tuning, and inference time, to train machine learning models based on LLM-generated annotations.
+- Social Impact and Future Work: We discuss issues ranging from ethical dilemmas, such as bias and implications, to technical limitations, including hallucination and efficiency in LLM-generated annotations.
+:::
+
+- **基于 LLM 的标注生成(LLM-Based Annotation Generation)**:我们深入探讨为各类数据类型合成标注的过程,包括指令与回复、推理理由、成对反馈、文本反馈及其他领域特定数据;此外还讨论标注过程中的标准(如多样性与质量)。
+- **评估 LLM 生成的标注(Assessing LLM-Generated Annotations)**:我们探索评估标注质量的多种方法,以及从众多候选中选出高质量标注的策略。
+- **LLM 生成标注的利用(LLM-Generated Annotations Utilization)**:我们研究不同阶段的方法,包括监督微调(supervised fine-tuning)、对齐调优(alignment tuning)与推理时(inference time),以基于 LLM 生成的标注训练机器学习模型。
+- **社会影响与未来工作(Social Impact and Future Work)**:我们讨论从伦理困境(如偏见及其影响)到技术局限(包括 LLM 生成标注中的幻觉与效率)的一系列议题。
+
+::: en
+Focusing on this underrepresented aspect of LLM application, the survey aims to serve as a valuable guide for academics and practitioners who intend to deploy LLMs for annotation purposes. Note that in this survey, we primarily focus on pure language models and do not extensively cover recently emerging multimodal LLMs, such as LLaVA (Liu et al., 2023b). Figure 1 illustrates the general structure of this survey. Additionally, a list of potential tools for utilizing LLMs for annotation is included in Appendix A, along with explanatory examples.
+:::
+
+聚焦 LLM 应用的这一尚未被充分呈现的侧面,本综述旨在为打算部署 LLM 做标注的学者与实践者提供一份有价值的指南。请注意,本综述主要关注纯语言模型,并不深入覆盖近期涌现的多模态 LLM,如 LLaVA(Liu et al., 2023b)。图 1 展示了本综述的总体结构。此外,附录 A 收录了一份可用于 LLM 标注的潜在工具清单,并附解释性示例。
+
+**[图 1: Figure 1: The proposed taxonomy of existing research on LLM for data annotation.]**
+
+图 1 以分类树形式概述全文结构,含三大分支:**(1) 基于 LLM 的标注生成(LLM-Based Annotation Generation)**,下分六类——指令与回复(再分:指令多样性、回复质量)、标签(Label)、推理理由(再分:理由结构、理由质量、类人理由)、成对反馈(再分:用 LLM 排序、直接构造)、文本反馈、领域特定数据;**(2) LLM 生成标注的评估(LLM-Generated Annotations Assessment)**,下分——评估 LLM 生成的标注(再分:通用方法、任务特定评估)、过滤与选择(再分:规则式方法、外部源式方法、LLM 驱动式方法);**(3) LLM 生成标注的利用(LLM-Generated Annotations Utilization)**,下分——监督微调(再分:Self-distillation、蒸馏小模型)、对齐调优(再分:奖励建模、策略训练)、推理时(再分:上下文学习、推理)。正文第 3、4、5 节依次展开这三大分支。
+
+::: en
+Differences from Other LLM-related Surveys. While existing surveys in the NLP domain extensively cover architectural nuances (Zhao et al., 2023a), training methodologies (Liu et al., 2023d), and evaluation protocols (Chang et al., 2023) associated with LLMs, their main focus lies on the capabilities of models for specific end tasks such as machine translation (Min et al., 2021), alignment (Wang et al., 2023g), code generation (Zan et al., 2023), and medical analysis (Thirunavukarasu et al., 2023). In contrast, this survey distinguishes itself by focusing primarily on the application of these potent next-generation LLMs to the intricate realm of annotation synthesis, a domain that is crucial yet underexplored.
+:::
+
+与其他 LLM 相关综述的差异。NLP 领域的既有综述广泛覆盖 LLM 的架构细节(Zhao et al., 2023a)、训练方法(Liu et al., 2023d)与评测协议(Chang et al., 2023),其重点在于模型在特定终端任务上的能力,如机器翻译(Min et al., 2021)、对齐(Wang et al., 2023g)、代码生成(Zan et al., 2023)与医疗分析(Thirunavukarasu et al., 2023)。相比之下,本综述的独特之处在于:它主要关注这些强大的下一代 LLM 在标注合成这一复杂领域中的应用——该领域至关重要,却尚未被充分探索。
+
+### 2 预备概念(Preliminaries)
+
+::: en
+In this section, we delve into our approach to the annotation synthesis process. We introduce two core models: an annotator model, denoted as A, which maps input data to annotations, and a task learner, represented as L, that utilizes or learns from these annotated data to accomplish specific tasks. Our primary focus is on utilizing advanced LLMs like GPT-4 (OpenAI, 2023) and LLaMA (Touvron et al., 2023a) as annotators (A), while the task learner (L) can be another large model (Chiang et al., 2023a) or a less complex one such as BERT (Devlin et al., 2018), which utilizes these annotated data to perform designated tasks. LLM-generated annotations encompass categorical labels and enhance raw data points with a comprehensive array of auxiliary signals. These annotations, including confidence scores, contextual details, and other metadata, extend beyond traditional categorical labels.
+:::
+
+在本节中,我们深入阐述我们对标注合成过程的处理方式。我们引入两个核心模型:**标注器模型(annotator model)**,记作 A,将输入数据映射为标注;**任务学习器(task learner)**,记作 L,利用这些标注数据或从中学习以完成特定任务。我们的重点是使用 GPT-4(OpenAI, 2023)、LLaMA(Touvron et al., 2023a)等先进 LLM 作为标注器(A),而任务学习器(L)可以是另一个大模型(Chiang et al., 2023a),也可以是 BERT(Devlin et al., 2018)这类复杂度较低的模型,由它利用这些标注数据执行指定任务。LLM 生成的标注涵盖类别标签(categorical labels),并以一整套丰富的辅助信号增强原始数据点——这些标注包括置信度分数、上下文细节及其他元数据,超越了传统的类别标签。
+
+### 3 基于 LLM 的标注生成(LLM-Based Annotation Generation)
+
+::: en
+The emergence of LLMs has sparked significant interest in their capacity for high-quality, context-sensitive annotation synthesis. This section discusses various kinds of annotations and data produced via LLMs.
+:::
+
+LLM 的出现激发了人们对其高质量、上下文敏感的标注合成能力的浓厚兴趣。本节讨论经由 LLM 产出的各类标注与数据。
+
+#### 3.1 指令与回复(Instruction & Response)
+
+::: en
+Instruction and response are the two fundamental components that constitute a dataset for LLM fine-tuning and in-context learning (ICL). Previous NLP datasets (Li et al., 2017; Wang et al., 2018; Ouyang et al., 2022) mainly rely on human annotators to construct. Recently, with the advent of LLMs, automatic and generative methods (Meng et al., 2022; Ye et al., 2022a,b; Wang et al., 2024e; Wu et al., 2024b; Liu et al., 2024a) have gained more focus in data annotation.
+:::
+
+指令与回复是构成 LLM 微调与上下文学习(in-context learning, ICL)数据集的两大基本构件。以往的 NLP 数据集(Li et al., 2017; Wang et al., 2018; Ouyang et al., 2022)主要依赖人工标注者构建。近来,随着 LLM 的出现,自动化与生成式方法(Meng et al., 2022; Ye et al., 2022a,b; Wang et al., 2024e; Wu et al., 2024b; Liu et al., 2024a)在数据标注中获得了更多关注。
+
+::: en
+Instruction Diversity. The diversity of instruction has been proven crucial for LLM learning (Li et al., 2023e; Song et al., 2024b,a; Tang et al.). Recent studies have explored various methods to diversify and augment instructions in the original datasets. For example, Yoo et al. (2021) enhance data diversity by mixing two different samples to create a new one. Wang et al. (2022b) use a few manually-written seed instructions and iteratively augment them with a generate-then-filter pipeline. Additionally, Meng et al. (2023); Wang et al. (2023f) train an instruction generation model in the original dataset to augment the diversity of instruction. Gupta et al. (2023) employ a multi-step prompting method to first generate task descriptions, which are then used as instance seeds to guide LLMs in instruction generation. To obtain informative and diverse examples, Wang et al. (2023c) propose an explain-then-generate pipeline with LLMs for iterative data synthesis. Besides, Li et al. (2023a) paraphrase the given sample multiple times to help LLMs understand them from different perspectives. Köksal et al. suggest a clustering-based data selection method to ensure diversity in the initial seed data for augmentation. Recently, Yu et al. (2024) introduce AttrPrompt as an effective way to balance diversity and cost in LLM-based data annotation. Xu et al. (2024) propose to synthesize high-quality instruction data at scale by extracting it directly from an aligned LLM and present a self-synthesis method for generating large-scale alignment data named Magpie. To improve the diversity, Chan et al. (2024) introduce Persona Hub – a collection of 1 billion diverse personas automatically curated from web data, to foster the creation of diverse synthetic data at scale for various scenarios. Zhu et al. (2024) introduce FANNO, a fully autonomous, open-sourced framework that revolutionizes the annotation process without the need for pre-existing annotated data.
+:::
+
+**指令多样性(Instruction Diversity)。** 指令的多样性已被证明对 LLM 学习至关重要(Li et al., 2023e; Song et al., 2024b,a; Tang et al.)。近期研究探索了多种方法来多样化并增广原始数据集中的指令。例如,Yoo et al. (2021) 通过混合两个不同样本以创造新样本来增强数据多样性。Wang et al. (2022b) 使用少量人工编写的种子指令(seed instructions),并以"生成—过滤"(generate-then-filter)流水线迭代增广。此外,Meng et al. (2023) 与 Wang et al. (2023f) 在原始数据集上训练一个指令生成模型来增强指令多样性。Gupta et al. (2023) 采用多步提示方法先生成任务描述,再将其作为实例种子指导 LLM 生成指令。为获得信息丰富且多样的示例,Wang et al. (2023c) 提出基于 LLM 的"先解释后生成"(explain-then-generate)流水线做迭代数据合成。另外,Li et al. (2023a) 对给定样本进行多次改写,帮助 LLM 从不同视角理解它们。Köksal et al. 提出基于聚类的数据选择方法,以保证增广所用初始种子数据的多样性。近期,Yu et al. (2024) 提出 AttrPrompt,作为在基于 LLM 的数据标注中平衡多样性与成本的有效方式。Xu et al. (2024) 提出通过直接从对齐 LLM 中提取指令来规模化合成高质量指令数据,并给出一种生成大规模对齐数据的自合成方法 Magpie。为进一步提升多样性,Chan et al. (2024) 提出 Persona Hub——一个从网络数据中自动整理出的 10 亿多样人格(persona)集合——以促进面向各种场景、大规模多样合成数据的创造。Zhu et al. (2024) 提出 FANNO,一个完全自主的开源框架,无需预存标注数据即可革新标注流程。
+
+::: en
+Response Quality. High-quality responses are essential for effective fine-tuning and ICL (Luo et al., 2024a). To improve the quality of the generated response, Zhang and Yang (2023a) frame the response generation as reading comprehension tasks and create detailed prompts for LLMs. Huang et al. (2023) adopt self-consistency (Wang et al., 2022b) in response generation, selecting from the candidate response with the highest confidence score. Furthermore, Yang et al. (2024b) propose self-distill and augment the instruction tuning dataset by rewriting the original responses. Pang et al. (2024b) conduct social simulations to ensure high-quality, human-valued responses from LLMs. Moreover, Liu et al. (2024c) introduce a multi-step prompting including question analysis, answer guidance and safe answer production in their response generation pipeline. Guo et al. (2024a) enhance the LLMs outputs' quality by implementing retrieval-augmented ICL and providing LLMs with relevant documents. To ensure LLMs provide responses aligned with human values, Sun et al. (2024b) and Wang et al. (2024a) conduct principle-driven prompting, guiding LLMs with well-crafted and detailed principles. Besides, Lupidi et al. (2024) propose Source2Synth, which takes as input a custom data source and produces synthetic data points with intermediate reasoning steps grounded in real-world sources.
+:::
+
+**回复质量(Response Quality)。** 高质量回复对有效的微调与 ICL 至关重要(Luo et al., 2024a)。为提升生成回复的质量,Zhang and Yang (2023a) 将回复生成构建为阅读理解任务,并为 LLM 编写详尽的提示。Huang et al. (2023) 在回复生成中采用自洽性(self-consistency)方法(Wang et al., 2022b),从候选回复中选出置信度分数最高者。进一步,Yang et al. (2024b) 提出自蒸馏(self-distill),通过改写原始回复来增广指令调优数据集。Pang et al. (2024b) 开展社会仿真,以确保 LLM 给出高质量、符合人类价值观的回复。此外,Liu et al. (2024c) 在其回复生成流水线中引入多步提示,包括问题分析、回答引导与安全作答。Guo et al. (2024a) 通过实现检索增强的 ICL(retrieval-augmented ICL)并向 LLM 提供相关文档,来提升 LLM 输出的质量。为确保 LLM 的回复与人类价值观对齐,Sun et al. (2024b) 与 Wang et al. (2024a) 开展原则驱动提示(principle-driven prompting),用精心打磨的详尽原则引导 LLM。另外,Lupidi et al. (2024) 提出 Source2Synth:它以自定义数据源为输入,产出以真实世界来源为依据、附带中间推理步骤的合成数据点。
+
+#### 3.2 标签(Label)
+
+::: en
+Label is an important component of the traditional classification task in NLP. Nowadays, many researchers focus on automating label annotation with the assistance of LLMs Yadav et al. (2024). Chen et al. (2024a) introduce an innovative approach where we employ LLMs as expert annotators for event extraction. Martorana et al. (2024b) propose a method to support metadata enrichment using topic annotations generated by several LLMs. Both Wu et al. (2024a) and Ahmed et al. (2024) explores the potential of large language models (LLMs) as automated data annotators to improve efficiency and consistency in label annotation tasks. One interesting work from Li et al. (2023b) proposes CoAnnotating, a novel paradigm for Human-LLM co-annotation of unstructured texts at scale. Moreover, Tekumalla and Banda (2023) evaluate the utilization of LLM in labeling COVID-19 vaccine-related tweets, with the purpose of comparing performance against human annotators. To address the potential limitation of LLMs' annotation, Törnberg (2024) propose a comprehensive set of standards and best practices for their reliable, reproducible, and ethical use. Additionally, there are also some works that utilize LLMs to improve the original annotation made by human annotators Laskar et al. (2023); Flamholz et al. (2024); Wang et al. (2024d). To reduce costs, Schmidt et al. (2024) argue that domain-agnostic knowledge from LMs, such as linguistic understanding, is sufficient to create a well-curated dataset.
+:::
+
+标签(label)是 NLP 传统分类任务的重要组成部分。如今,许多研究者专注于在 LLM 辅助下自动化标签标注 Yadav et al. (2024)。Chen et al. (2024a) 提出一种创新方法,将 LLM 用作事件抽取(event extraction)的专家标注器。Martorana et al. (2024b) 提出利用多个 LLM 生成的主题标注来支持元数据增强的方法。Wu et al. (2024a) 与 Ahmed et al. (2024) 都探索了大语言模型作为自动数据标注器的潜力,以提升标签标注任务的效率与一致性。Li et al. (2023b) 的一项有趣工作提出 CoAnnotating,一种大规模"人—LLM 协同标注"(Human-LLM co-annotation)非结构化文本的新范式。此外,Tekumalla and Banda (2023) 评估了 LLM 在标注新冠(COVID-19)疫苗相关推文上的应用,目的是与人类标注者比较性能。为应对 LLM 标注的潜在局限,Törnberg (2024) 提出了一整套标准与最佳实践,以确保其可靠、可复现且合乎伦理的使用。此外,还有一些工作利用 LLM 改进人类标注者给出的原始标注 Laskar et al. (2023); Flamholz et al. (2024); Wang et al. (2024d)。为降低成本,Schmidt et al. (2024) 认为,语言模型中与领域无关的知识(如语言理解)已足以构建一个精良整理的数据集。
+
+#### 3.3 推理理由(Rationale)
+
+::: en
+The rationale reflects the detailed thought process and reasoning pathway an individual follows when solving a given question, being considered valuable auxiliary information for the final answer prediction. In early studies (Ling et al., 2017; Cobbe et al., 2021; Wei et al., 2022), the rationale in each dataset was annotated by human experts, significantly limiting its availability and scalability. Kojima et al. (2022) initially confirm the efficacy of the chain-of-thought (CoT) approach in LLMs and boosting LLMs' reasoning through the integration of self-generated rationales.
+:::
+
+推理理由(rationale)反映了个体在求解给定问题时所遵循的详细思考过程与推理路径,被视为对最终答案预测有价值的辅助信息。在早期研究(Ling et al., 2017; Cobbe et al., 2021; Wei et al., 2022)中,各数据集里的推理理由均由人类专家标注,这显著限制了其可得性与可扩展性。Kojima et al. (2022) 率先确认了思维链(chain-of-thought, CoT)方法在 LLM 中的有效性,并通过引入自生成的推理理由来增强 LLM 的推理能力。
+
+::: en
+Rationale Structure. Following Kojima et al. (2022), there is a notable interest in abstracting the reasoning process of LLMs into diverse structures and format, including trees (Hao et al., 2023; Yao et al., 2024), graphs (Besta et al., 2024; Yao et al., 2023), tables (Wang et al., 2024f), programs (Chen et al., 2023e), recursion (Qi et al., 2023), and concepts (Tan et al., 2023).
+:::
+
+**理由结构(Rationale Structure)。** 继 Kojima et al. (2022) 之后,学界对将 LLM 的推理过程抽象为多样结构与格式产生了浓厚兴趣,包括树(Hao et al., 2023; Yao et al., 2024)、图(Besta et al., 2024; Yao et al., 2023)、表(Wang et al., 2024f)、程序(Chen et al., 2023e)、递归(Qi et al., 2023)与概念(Tan et al., 2023)。
+
+::: en
+Rationale Quality. To produce high-quality and fine-grained rationale, diverse methodologies have been employed. Wang et al. (2022a) prompt frozen LLMs to produce choice-specific rationales to elucidate each choice in a sample. Wang et al. (2023b) employ contrastive decoding to foster more plausible rationales, taking into account gold-standard answers. Liu et al. (2023a) curate meticulously designed prompts to derive high-quality rationales from GPT-4 and construct a logical CoT instruction tuning dataset. For attaining fine-grained rationales, Shridhar et al. (2023) introduce Socratic CoT by decomposing the original question into a series of subquestion-solution pairs and generating CoT for them separately. Additionally, Kang et al. (2024) propose a neural reranker to acquire supplementary relevant documents for rationale generation in knowledge-intensive reasoning tasks. Besides, Zhou et al. (2024) explore the potential and limitations of using graph-based synthetic reasoning data as training signals to enhance LLMs' reasoning capabilities.
+:::
+
+**理由质量(Rationale Quality)。** 为产出高质量、细粒度的推理理由,研究者采用了多样的方法。Wang et al. (2022a) 提示冻结的 LLM 生成"选项专属理由"(choice-specific rationales),以阐明样本中的每个选项。Wang et al. (2023b) 采用对比解码(contrastive decoding)来促成更合理的推理理由,并将金标准答案纳入考量。Liu et al. (2023a) 用精心设计的提示从 GPT-4 获取高质量推理理由,并构建了一个逻辑性的 CoT 指令调优数据集。为获得细粒度理由,Shridhar et al. (2023) 提出"苏格拉底 CoT"(Socratic CoT),将原问题分解为一系列"子问题—解答"对,并分别为其生成 CoT。此外,Kang et al. (2024) 提出神经重排器(neural reranker),为知识密集型推理任务的理由生成获取补充性的相关文档。另外,Zhou et al. (2024) 探索了使用基于图的合成推理数据作为训练信号来增强 LLM 推理能力的潜力与局限。
+
+::: en
+Human-like Rationale. Another intriguing avenue in synthesized rationale delves into making the reasoning process more human-like (Gao et al., 2023). Many studies emulate human diverse thinking in problem-solving, sampling multiple reasoning pathways for a given question (Gao et al., 2021; Wang et al., 2022b; Chen et al., 2023f; Liu et al., 2023c). Subsequent studies (Tong et al., 2023; Balepur et al., 2023; Ma and Du, 2023) explore the elimination reasoning in LLMs, checking each reasoning pathway reversely and removing the incorrect candidates. Moreover, various works (Yin et al., 2023; Liang et al., 2023; Xu et al., 2023d; Liu et al., 2023e) explore the peer collaboration and debate among individual LLMs to capture human-like discussions as rationales.
+:::
+
+**类人理由(Human-like Rationale)。** 合成推理理由的另一条有趣路径,是让推理过程更像人类(Gao et al., 2023)。许多研究在解题中模拟人类的多样化思维,为给定问题采样多条推理路径(Gao et al., 2021; Wang et al., 2022b; Chen et al., 2023f; Liu et al., 2023c)。后续研究(Tong et al., 2023; Balepur et al., 2023; Ma and Du, 2023)探索 LLM 中的"消去推理"(elimination reasoning):反向逐一检验每条推理路径,并剔除错误候选。此外,多项工作(Yin et al., 2023; Liang et al., 2023; Xu et al., 2023d; Liu et al., 2023e)探索多个 LLM 个体之间的同伴协作与辩论,以捕捉类人的讨论作为推理理由。
+
+#### 3.4 成对反馈(Pairwise Feedback)
+
+::: en
+While high-quality human feedback is proven to be effective in aligning LLMs' values and preferences with us humans, recent advancements aim to automate this pairwise feedback mechanism.
+:::
+
+高质量的人类反馈已被证明能有效地使 LLM 的价值观与偏好同我们人类对齐;而近期的进展旨在将这一成对反馈机制自动化。
+
+::: en
+Ranking with LLMs. One technique is to sample multiple responses and have the LLM rank these candidates based on various criteria (Bai et al., 2022; Lee et al., 2023b; Yuan et al., 2024). Sun et al. (2023b) sample two responses from the initial policy model and use the model to select the preferred response based on a human-written principle (Sun et al., 2024b). Zhang et al. (2024b) propose a self-evaluation mechanism, generating questions for each response and measuring factuality by the LLM's confidence in the answers. To improve synthetic data quality, Pace et al. (2024) combine the Best-of-N and Worst-of-N sampling strategies and introduce the West-of-N approach. They constructed data pairs by identifying the best- and worst-scored responses according to a pre-trained preference model. In robotics, Zeng et al. (2024) iteratively update the reward function with the self-ranked responses from LLMs, enhancing learning efficiency without human supervision.
+:::
+
+**用 LLM 排序(Ranking with LLMs)。** 一种技术是采样多个回复,让 LLM 依据各种标准对这些候选排序(Bai et al., 2022; Lee et al., 2023b; Yuan et al., 2024)。Sun et al. (2023b) 从初始策略模型采样两个回复,并让模型依据一条人工书写的原则选择偏好的回复(Sun et al., 2024b)。Zhang et al. (2024b) 提出自评估机制:为每个回复生成问题,并以 LLM 对答案的置信度来度量事实性。为提升合成数据质量,Pace et al. (2024) 结合 Best-of-N 与 Worst-of-N 采样策略,提出 West-of-N 方法:依据一个预训练偏好模型找出得分最高与最低的回复,以此构造数据对。在机器人学中,Zeng et al. (2024) 用 LLM 自排序的回复迭代更新奖励函数,在无人类监督的情况下提升学习效率。
+
+**[图 2: Figure 2: The examples for LLM-based annotation generation.]**
+
+图 2 给出 LLM 标注生成的四类示例:**指令与回复**——用户说"我对打乒乓球感兴趣",LLM 回复"乒乓球是很棒的爱好!它是保持活力、与他人社交的好方式……";**推理理由**——对"杂耍者能抛接 16 个球,一半是高尔夫球,高尔夫球的一半是蓝色的,蓝高尔夫球有几个?"的问题,以"让我们一步一步思考"引出推理;**成对反馈**——对指令"假设你是新闻记者,请按以下要求为《纽约时报》撰写一篇平价医疗法案(ACA)的新闻……",生成输出 A 与输出 B 两个回复,由用户选择"更诚实、准确的输出是输出 A";**文本反馈**——对上述乒乓球回复给出结构化反馈("相关性:该回复与用户输入相关,并体现出对用户爱好的兴趣,3/3……")。图中还展示了生成的指令示例("谁将是 2025 年的美国总统?"——用于触发模型知识截止的幻觉)与生成的推理理由示例("共 16 个球,一半是高尔夫球,即 8 个高尔夫球;高尔夫球的一半是蓝色,即 4 个蓝高尔夫球")。
+
+::: en
+Direct Construction. Another effort towards automatic pairwise feedback generation involves directly generating responses of various qualities (Feng et al., 2024; Lee et al., 2024a). To accomplish this, they typically have to make various assumptions when determining the factors influencing response quality. For example, Kim et al. (2023b) assume larger LLM with more shots will give better responses and produce synthetic pairs based on this. Tong et al. (2024b) follow the rule of thumb that the supervised fine-tuning model will perform better than its unfinetuned base model. Adhere to this criterion, they start with a few seed data, iteratively training the model and synthesizing comparison data pairs. Yang et al. (2023c) create quality differences by prompting LLMs to either follow or violate given principles. To measure the response quality more subjectively, Xu et al. (2023c) introduce multiple LLMs and utilize benchmark scores to define superiority.
+:::
+
+**直接构造(Direct Construction)。** 自动成对反馈生成的另一条路径,是直接生成不同质量的回复(Feng et al., 2024; Lee et al., 2024a)。为此,在确定影响回复质量的因素时,通常需要做出各种假设。例如,Kim et al. (2023b) 假设"更大的 LLM 加上更多示例会给出更好的回复",并据此生成合成对。Tong et al. (2024b) 遵循"监督微调模型会优于其未微调基座模型"的经验法则;以此为准绳,他们从少量种子数据出发,迭代地训练模型并合成比较数据对。Yang et al. (2023c) 通过提示 LLM 遵循或违反给定原则来制造质量差异。为了以更主观的方式度量回复质量,Xu et al. (2023c) 引入多个 LLM 并利用基准分数来定义优劣。
+
+#### 3.5 文本反馈(Textual Feedback)
+
+::: en
+Textual feedback (Pan et al., 2024) generated by LLMs typically highlights the shortcomings of the current output or suggests specific improvements, thus offering rich and valuable information for polishing or evaluating the generated response. Many existing works tailor appropriate prompts and instruct LLMs to generate such informative feedback in various tasks, including question answering (Madaan et al., 2024; Shinn et al., 2024), machine translation (Chen et al., 2023c; Raunak et al., 2023) and hallucination detection (Yang et al., 2023d; Manakul et al., 2023). Some investigations have explored leveraging debate and peer review as feedback to enhance LLMs' reasoning (Du et al., 2023a; Xu et al., 2023d; Cohen et al., 2023; Fu et al., 2023) and evaluation (Li et al., 2023d; Chu et al., 2024b; Ning et al., 2024) capabilities. Additionally, efforts have been made to analyze reasons for undesired or incorrect responses produced by LLMs, thus facilitating reflection and learning from their previous mistakes (Wang and Li, 2023; An et al., 2023; Chen et al., 2023a; Tong et al., 2024a).
+:::
+
+LLM 生成的文本反馈(textual feedback)(Pan et al., 2024)通常指出当前输出的不足或给出具体的改进建议,从而为打磨或评估生成的回复提供丰富而宝贵的信息。许多现有工作精心设计提示,指示 LLM 在各类任务中生成此类信息丰富的反馈,包括问答(Madaan et al., 2024; Shinn et al., 2024)、机器翻译(Chen et al., 2023c; Raunak et al., 2023)与幻觉检测(Yang et al., 2023d; Manakul et al., 2023)。一些研究探索利用辩论与同行评审作为反馈,以增强 LLM 的推理(Du et al., 2023a; Xu et al., 2023d; Cohen et al., 2023; Fu et al., 2023)与评估(Li et al., 2023d; Chu et al., 2024b; Ning et al., 2024)能力。此外,还有工作分析 LLM 产生不当或错误回复的原因,从而促进其对既往错误的反思与学习(Wang and Li, 2023; An et al., 2023; Chen et al., 2023a; Tong et al., 2024a)。
+
+#### 3.6 其他领域特定数据(Other Domain-Specific Data)
+
+::: en
+Distilling multi-round conversations from LLMs presents a highly cost-effective approach for constructing high-quality dialogue datasets (Kim et al., 2023a; Xu et al., 2023b; Chen et al., 2023b; Li et al., 2024d; Wang et al., 2024c; Liang et al., 2024a) or enhancing existing ones (Zheng et al., 2023a; Chen et al., 2022; Zhou et al., 2022a; Sun et al., 2024a). In graph and tabular data, several studies prompt LLMs to contextualize these structural data (Xiang et al., 2022; Kim et al., 2023a; Li et al., 2024b; Ronzano and Nanavati, 2024; Xiong et al., 2023b, 2024b) or distill structural insights from raw text (Bi et al., 2024; Li et al., 2024c; Ding et al., 2024; Xiong et al., 2024a; Tuozzo, 2022). Moreover, LLMs have also been widely adopted in the research of robotics and agents, serving as proficient data annotators to generate plans (Huang et al., 2022; Brohan et al., 2023; Rana et al., 2023; Singh et al., 2023; Lin et al., 2023a), simulation tasks (Wang et al., 2023a; Ha et al., 2023) and supervised signal (Kwon et al., 2022; Du et al., 2023b). Besides, LLMs are acting as efficient data annotators in various artificial intelligence domains, including multi-modal (Li et al., 2023f; Yin et al., 2024; Chen et al., 2024b; Luo et al., 2024b; Liu et al., 2024b), recommendation system (Acharya et al., 2023; Shen et al., 2024; Wei et al., 2024; Zhang et al., 2024c), information extraction (Josifoski et al., 2023; Jeronymo et al., 2023; Li et al., 2024a; Ma et al., 2024; Bonn et al., 2024), multilingual annotation (Frei and Kramer, 2023; Hamerlik et al., 2024) and etc (Chu et al., 2024a; Bhattacharjee et al., 2024; Martorana et al., 2024a; Zhao et al.).
+:::
+
+从 LLM 蒸馏多轮对话,是构建高质量对话数据集(Kim et al., 2023a; Xu et al., 2023b; Chen et al., 2023b; Li et al., 2024d; Wang et al., 2024c; Liang et al., 2024a)或增强既有数据集(Zheng et al., 2023a; Chen et al., 2022; Zhou et al., 2022a; Sun et al., 2024a)的高性价比途径。在图数据与表格数据方面,多项研究提示 LLM 为这些结构化数据补充上下文(Xiang et al., 2022; Kim et al., 2023a; Li et al., 2024b; Ronzano and Nanavati, 2024; Xiong et al., 2023b, 2024b),或从原始文本中蒸馏结构性洞察(Bi et al., 2024; Li et al., 2024c; Ding et al., 2024; Xiong et al., 2024a; Tuozzo, 2022)。此外,LLM 也被广泛用于机器人学与智能体研究,作为熟练的数据标注器生成计划(Huang et al., 2022; Brohan et al., 2023; Rana et al., 2023; Singh et al., 2023; Lin et al., 2023a)、仿真任务(Wang et al., 2023a; Ha et al., 2023)与监督信号(Kwon et al., 2022; Du et al., 2023b)。另外,LLM 还在多个人工智能领域充当高效的数据标注器,包括多模态(Li et al., 2023f; Yin et al., 2024; Chen et al., 2024b; Luo et al., 2024b; Liu et al., 2024b)、推荐系统(Acharya et al., 2023; Shen et al., 2024; Wei et al., 2024; Zhang et al., 2024c)、信息抽取(Josifoski et al., 2023; Jeronymo et al., 2023; Li et al., 2024a; Ma et al., 2024; Bonn et al., 2024)、多语言标注(Frei and Kramer, 2023; Hamerlik et al., 2024)等(Chu et al., 2024a; Bhattacharjee et al., 2024; Martorana et al., 2024a; Zhao et al.)。
+
+### 4 LLM 生成标注的评估(LLM-Generated Annotations Assessment)
+
+::: en
+Effective evaluation of annotations generated by LLMs is crucial to fully harness their potential. This section focuses on two main aspects:
+:::
+
+有效评估 LLM 生成的标注,对充分发挥其潜力至关重要。本节聚焦两个主要方面:
+
+#### 4.1 评估 LLM 生成的标注(Evaluating LLM-Generated Annotations)
+
+::: en
+This subsection explores various methods for assessing annotation quality, ranging from human-led to automated approaches.
+:::
+
+本小节探索评估标注质量的多种方法,涵盖从人工主导到自动化的各类途径。
+
+::: en
+General Approaches: Research has investigated diverse methods for evaluating LLM annotations. The "Turking Test" by Efrat and Levy (2020), evaluates LLMs' adherence to data annotation guidelines, with human annotators comparing LLM outputs against benchmarks like SNLI (Bowman et al., 2015), SQuAD (Rajpurkar et al., 2016), and NewsQA (Trischler et al., 2016). Similarly, Honovich et al. (2022) manually examined the originality, accuracy, and variety of datasets created by LLMs, focusing on their response to instructions. Additionally, studies such as by Alizadeh et al. (2023) measure the performance of open-source LLMs against human-annotated labels in tasks like relevance and topic detection.
+:::
+
+**通用方法(General Approaches)。** 研究者已探索了评估 LLM 标注的多种方法。Efrat and Levy (2020) 的"Turking Test"评估 LLM 对数据标注指南的遵循程度,由人类标注者将 LLM 输出与 SNLI(Bowman et al., 2015)、SQuAD(Rajpurkar et al., 2016)、NewsQA(Trischler et al., 2016)等基准进行比较。类似地,Honovich et al. (2022) 人工审查了 LLM 所创建数据集的原创性、准确性与多样性,聚焦其对指令的响应。此外,诸如 Alizadeh et al. (2023) 的研究,在相关性检测、主题检测等任务上度量开源 LLM 相对人类标注标签的表现。
+
+::: en
+Task-Specific Evaluations: Methodologies vary by application. For instance, in knowledge graph enhancement, token ranking metrics assess LLM contributions in fact completion. Additionally, evaluations of counterfactual generation often utilize diversity metrics like Self-BLEU (Chen et al., 2023g), while code generation relies on metrics such as Pass@k (Nijkamp et al., 2022). In scenarios requiring extensive datasets, the quality of LLM-generated annotations is compared to gold standard labels within a small, labeled subset (Zhao et al., 2021; Agrawal et al., 2022; He et al., 2023).
+:::
+
+**任务特定评估(Task-Specific Evaluations)。** 评估方法因应用而异。例如,在知识图谱增强中,用 token 排名指标评估 LLM 在事实补全中的贡献;反事实生成的评估常用 Self-BLEU 等多样性指标(Chen et al., 2023g),而代码生成依赖 Pass@k 等指标(Nijkamp et al., 2022)。在需要大规模数据集的场景中,LLM 生成标注的质量会与一个小规模有标注子集内的金标准(gold standard)标签进行比较(Zhao et al., 2021; Agrawal et al., 2022; He et al., 2023)。
+
+::: en
+LLM-as-a-Judge: LLM-as-a-judge (Wu et al., 2024c; Zheng et al., 2023b) is a commonly used method in automatic generation evaluation. To scale the assessment of the synthetic data or annotation, there are also some works that adopt LLM-as-a-judge to conduct the evaluation. (Li et al., 2024e) employ multiple LLMs to debate with each other to evaluate the synthetic data's quality fairly, iteratively improving response quality, while creating a judge LLM to select preferred responses for enhanced instruction tuning. To enhance the quality of the synthetic instruction tuning data, Liang et al. (2024b) introduce an iterative self-enhancement paradigm (I-SHEEP). During training, they adopt LLM-as-a-judge to score the synthetic responses and set a threshold to collect high-quality query-response pairs for the subsequent training iteration.
+:::
+
+**LLM 即裁判(LLM-as-a-Judge)。** LLM-as-a-judge(Wu et al., 2024c; Zheng et al., 2023b)是自动生成评估中的常用方法。为了规模化地评估合成数据或标注,也有一些工作采用 LLM-as-a-judge 来执行评估。Li et al. (2024e) 让多个 LLM 相互辩论以公平评估合成数据的质量、迭代改进回复质量,同时创建一个裁判 LLM 来选择偏好的回复,以增强指令调优。为提升合成指令调优数据的质量,Liang et al. (2024b) 提出迭代自增强范式 I-SHEEP。训练中,他们采用 LLM-as-a-judge 为合成回复打分并设置阈值,收集高质量的"查询—回复"对用于下一轮训练迭代。
+
+#### 4.2 过滤与选择(Filtering & Selection)
+
+::: en
+Selecting high-quality annotations from numerous options is crucial. In this section, we categorize the filtering and selection methods for LLM-generated data into three types: rule-based filtering, external source utilization, and LLMs-driven selection.
+:::
+
+从众多候选中选出高质量标注至关重要。本节将 LLM 生成数据的过滤与选择方法分为三类:规则式过滤、外部源利用与 LLM 驱动式选择。
+
+::: en
+Rule-Based Methods. Rule-based methods follow various heuristic assumptions concerning sample length (Li et al., 2023f; Kim et al., 2023a), keyword occurrence (Kim et al., 2023b; Zheng et al., 2023a) and specific patterns (Zhang and Yang, 2023a; Guo et al., 2024a; Ding et al., 2024) to filter low-quality or undesiered synthetic data points. Zheng et al. (2023a); Kim et al. (2023a) establish thresholds for the number of rounds in generated conversations to guarantee each synthetic dialogue is informative enough. Ho et al. (2023); Kang et al. (2024) employ ground truth parsing to filter out incorrect CoT rationales within each candidate reasoning sample. To encourage diversity among the generated data points, Wang et al. (2022b); Lee et al. (2023a); Ding et al. (2024) utilize semantic similarity metrics to identify and remove redundant samples.
+:::
+
+**规则式方法(Rule-Based Methods)。** 规则式方法遵循关于样本长度(Li et al., 2023f; Kim et al., 2023a)、关键词出现(Kim et al., 2023b; Zheng et al., 2023a)与特定模式(Zhang and Yang, 2023a; Guo et al., 2024a; Ding et al., 2024)的各种启发式假设,来过滤低质量或不需要的(undesiered,原文如此)合成数据点。Zheng et al. (2023a) 与 Kim et al. (2023a) 为生成对话的轮数设定阈值,以保证每段合成对话足够有信息量。Ho et al. (2023) 与 Kang et al. (2024) 采用真值解析(ground truth parsing),滤除每个候选推理样本中错误的 CoT 理由。为鼓励生成数据点之间的多样性,Wang et al. (2022b)、Lee et al. (2023a)、Ding et al. (2024) 利用语义相似度指标识别并去除冗余样本。
+
+::: en
+External-Source-Based Methods. There are also many works that depend on the external source's feedback to clean and refine synthetic datasets (Kim et al., 2023a). With a pre-trained reward model, Gulcehre et al. (2023); Dong et al. (2023) augment the original dataset only with samples that obtain high reward values. When distilling smaller models, Lin et al. (2023b); Wang et al. (2024e) meticulously select appropriate data through the feedback from the student models. Other approaches (Chen et al., 2023g; Zheng et al., 2023a) utilize pre-trained classification models to discern between target and unwanted data points.
+:::
+
+**外部源式方法(External-Source-Based Methods)。** 还有许多工作依赖外部源的反馈来清洗与精炼合成数据集(Kim et al., 2023a)。借助预训练奖励模型(reward model),Gulcehre et al. (2023) 与 Dong et al. (2023) 仅用获得高奖励值的样本来增广原数据集。在蒸馏较小模型时,Lin et al. (2023b) 与 Wang et al. (2024e) 通过学生模型的反馈精心选取合适的数据。另一些方法(Chen et al., 2023g; Zheng et al., 2023a)利用预训练分类模型来甄别目标数据点与不需要的数据点。
+
+::: en
+LLMs-Driven Methods. The versatility of LLMs has invoked interest in leveraging LLMs themselves to do data selection. Some approaches use signals or features produced by LLMs, such as perplexity score (Wang et al., 2023f), confidence levels (Wang et al., 2022b; Huang et al., 2023), and logits (Pace et al., 2024), as criteria for constructing data selectors. Others directly prompt the LLMs for this task. For instance, Lu et al. (2023) query the target LLM to assess the quality of generated samples. Kim et al. (2023a) leverage ChatGPT to determine if the social common-sense knowledge is appropriately conveyed in the synthetic dialogues. Additionally, there are also works that adopt the LLMs to rank multiple candidate annotations and utilize the top ones in the subsequent stages (Jeronymo et al., 2023; Li et al., 2024c). In pairwise feedback synthesis, Tong et al. (2024b) task the base LLM with judging whether one response genuinely surpasses another. Besides, Jiang et al. (2024b) demonstrate that filtering out correct but with high distribution shift extent (DSE) samples could also benefit the results of self-improvement.
+:::
+
+**LLM 驱动式方法(LLMs-Driven Methods)。** LLM 的多面性引发了"用 LLM 自身做数据选择"的兴趣。一些方法使用 LLM 产生的信号或特征,如困惑度分数(perplexity)(Wang et al., 2023f)、置信度水平(Wang et al., 2022b; Huang et al., 2023)与 logits(Pace et al., 2024),作为构建数据选择器的标准。另一些方法则直接为此任务提示 LLM。例如,Lu et al. (2023) 查询目标 LLM 以评估生成样本的质量;Kim et al. (2023a) 借助 ChatGPT 判断合成对话是否恰当传达了社会常识知识。此外,还有一些工作采用 LLM 对多个候选标注排序,并在后续阶段使用排位靠前的候选(Jeronymo et al., 2023; Li et al., 2024c)。在成对反馈合成中,Tong et al. (2024b) 让基座 LLM 判断一个回复是否真正优于另一个。另外,Jiang et al. (2024b) 证明,过滤掉"正确但分布偏移程度(distribution shift extent, DSE)高"的样本,同样有益于自我改进的结果。
+
+### 5 LLM 生成标注的利用(LLM-Generated Annotations Utilization)
+
+::: en
+LLM-generated annotations provide a valuable resource of labeled data for NLP models in different stages. Hereby we explore the methods for utilizing and learning with LLM-Generated Annotations.
+:::
+
+LLM 生成的标注在不同阶段为 NLP 模型提供了宝贵的标注数据资源。在此我们探索利用 LLM 生成标注、并基于其学习的方法。
+
+#### 5.1 监督微调(Supervised Fine-Tuning)
+
+::: en
+Supervised fine-tuning can effectively enhance models' specific capabilities or knowledge. In this section, we discuss the utilization of generated annotation for supervised fine-tuning.
+:::
+
+监督微调能有效增强模型的特定能力或知识。本节讨论生成的标注在监督微调中的利用。
+
+::: en
+Self-Evolution. Huang et al. (2023) first propose the concept of self-improve that utilizes LLMs as both data annotators and learnable models and iteratively fine-tune LLMs in their self-annotated data. Wang et al. (2023e) also tune a GPT3 in the instruction tuning dataset to improve its zero-shot generalization capability. To foster LLMs' evolution, Lu et al. (2023) iteratively fine-tune the LLMs in self-refined synthetic responses. To mitigate the distribution gap between task datasets and the LLMs, Yang et al. (2024b) use self-distillation which guides fine-tuning with a distilled dataset generated by the model itself. Both Chen et al. (2024c) and Cheng et al. (2024) introduce a self-play mechanism, where the LLM refines its capability by playing against instances of itself. Moreover, Wang et al. (2024b) demonstrate that the reasoning abilities of small-scale LMs can be enhanced through self-training, a process where models learn from their own outputs.
+:::
+
+**自我进化(Self-Evolution)。** Huang et al. (2023) 率先提出 self-improve 概念:将 LLM 同时用作数据标注器与可学习模型,并在其自标注的数据上迭代微调 LLM。Wang et al. (2023e) 也在指令调优数据集上微调 GPT-3,以提升其零样本泛化能力。为促进 LLM 进化,Lu et al. (2023) 在自精炼的合成回复上迭代微调 LLM。为缓解任务数据集与 LLM 之间的分布差距,Yang et al. (2024b) 使用自蒸馏(self-distillation),以模型自身生成的蒸馏数据集来指导微调。Chen et al. (2024c) 与 Cheng et al. (2024) 都引入了自我博弈(self-play)机制:LLM 通过与自身的实例对弈来精进能力。此外,Wang et al. (2024b) 证明,小规模语言模型的推理能力可通过自我训练(self-training)得到增强——即模型从自己的输出中学习的过程。
+
+::: en
+Distill Smaller Models. For efficiency issues, many studies aim to use the data generated by a large and powerful LLM to train a flexible and affordable smaller model. For a better instruction-following ability, many medium and small-sized LLMs are trained on the synthetic dataset produced by larger LLMs (Taori et al., 2023; Chiang et al., 2023b; Xu et al., 2023a). In classification tasks, Meng et al. (2022, 2023); Wang et al. (2023d) augment the original datasets and train smaller bidirectional attention models on them. To foster models' reasoning ability, many studies tune smaller models with synthetic rationales collected from LLMs (Wang et al., 2022a; Shridhar et al., 2023; Liu et al., 2023a; Kang et al., 2024). Other task-specific capabilities distillation from LLMs include dialogue generation (Xu et al., 2023b), information extraction (Josifoski et al., 2023; Jeronymo et al., 2023) and code generation (Chaudhary, 2023; Roziere et al., 2023). Moreover, LLMs have been proven to follow a scaling law in terms of their knowledge capacity. Therefore, there is also a growing interest in distilling vertical and domain-specific knowledge from LLMs, including medicine (Zhang et al., 2023; Xiong et al., 2023a), finance (Zhang and Yang, 2023b) and science (Luo et al., 2023; Zhao et al., 2024), to smaller models.
+:::
+
+**蒸馏较小模型(Distill Smaller Models)。** 出于效率考量,许多研究旨在用大型强大 LLM 生成的数据,训练一个灵活且廉价的小模型。为获得更好的指令遵循能力,许多中小型 LLM 在更大 LLM 产生的合成数据集上训练(Taori et al., 2023; Chiang et al., 2023b; Xu et al., 2023a)。在分类任务中,Meng et al. (2022, 2023) 与 Wang et al. (2023d) 增广原始数据集,并在其上训练较小的双向注意力模型。为培养模型的推理能力,许多研究用从 LLM 收集的合成推理理由调优较小模型(Wang et al., 2022a; Shridhar et al., 2023; Liu et al., 2023a; Kang et al., 2024)。从 LLM 蒸馏的其他任务特定能力还包括对话生成(Xu et al., 2023b)、信息抽取(Josifoski et al., 2023; Jeronymo et al., 2023)与代码生成(Chaudhary, 2023; Roziere et al., 2023)。此外,LLM 的知识容量已被证明遵循缩放定律(scaling law)。因此,将垂直领域与领域特定知识从 LLM 蒸馏到较小模型也日益受到关注,包括医学(Zhang et al., 2023; Xiong et al., 2023a)、金融(Zhang and Yang, 2023b)与科学(Luo et al., 2023; Zhao et al., 2024)。
+
+#### 5.2 对齐调优(Alignment Tuning)
+
+::: en
+Alignment tuning methods, like RLHF (Ouyang et al., 2022), aim to align the output of LLMs with human intentions, ensuring they are helpful, ethical, and reliable. Synthetic data produced by LLMs are widely adopted in these alignment approaches for reward modeling and policy training.
+:::
+
+RLHF(Ouyang et al., 2022)等对齐调优方法旨在使 LLM 的输出与人类意图对齐,确保其有帮助、合乎伦理且可靠。LLM 产生的合成数据被广泛用于这些对齐方法中的奖励建模(reward modeling)与策略训练(policy training)。
+
+::: en
+Reward Modeling. LLMs-generated annotations can be used to train or refine the reward model for better alignment. Xu et al. (2023c) propose a data curriculum method that leverages the pairwise feedback from LLMs to calculate the sample difficulty level and smooth LLMs' learning from simple ones to hard ones. Kim et al. (2023b) design reward model guided self-play to iteratively improve the reward model with synthesized data generated by the policy model. Pace et al. (2024) propose to maximize the probability of correctly labeling a pair of on-policy responses to a given query according to the base preference model. In robotics, Zeng et al. (2024) learns a reward function from scratch using the LLMs' feedback. With synthetic data pair, Sun et al. (2023b) train an instructable reward model to generate reward scores based on arbitrary human-defined principles.
+:::
+
+**奖励建模(Reward Modeling)。** LLM 生成的标注可用于训练或精炼奖励模型,以实现更好的对齐。Xu et al. (2023c) 提出数据课程(data curriculum)方法,利用 LLM 的成对反馈计算样本难度级别,使 LLM 从简单样本到困难样本平滑过渡地学习。Kim et al. (2023b) 设计奖励模型引导的自我博弈,用策略模型生成的合成数据迭代改进奖励模型。Pace et al. (2024) 提出依据基座偏好模型,最大化"正确标注一对给定查询的在线(on-policy)回复"的概率。在机器人学中,Zeng et al. (2024) 利用 LLM 的反馈从零开始学习奖励函数。借助合成数据对,Sun et al. (2023b) 训练了一个可指令(instructable)奖励模型,能基于任意人工定义的原则生成奖励分数。
+
+::: en
+Policy Training. While many direct alignment methods (Rafailov et al., 2024; Zhao et al., 2023b) have emerged recently, some works directly explore the use of annotated feedback for policy training. One common strategy is to directly apply DPO with the synthetic pairwise feedback produced by LLMs (Yuan et al., 2024; Zhang et al., 2024b; Lee et al., 2024b; Tong et al., 2024b; Lee et al., 2024a; Guo et al., 2024b). Besides, Gulcehre et al. (2023); Dong et al. (2023) leverage a pre-trained reward model to filter low-quality synthetic data and iteratively tune LLMs with growing datasets. Wang et al. (2024a) propose a bootstrapping self-alignment method to repeatly utilize the synthetic data. Liu et al. (2024c) introduce the Mixture of insighTful Experts (MoTE) architecture, which applies the mixture of experts to enhance each component of the synthetic response, markedly increasing alignment efficiency. With the reasoning pairwise feedback generated by LLM itself, Pang et al. (2024a) use a modified DPO loss with an additional negative log-likelihood term to tune the LLM.
+:::
+
+**策略训练(Policy Training)。** 尽管近期涌现了许多直接对齐方法(Rafailov et al., 2024; Zhao et al., 2023b),仍有一些工作直接探索将标注后的反馈用于策略训练。一种常见策略是直接将 LLM 产生的合成成对反馈应用于 DPO(Yuan et al., 2024; Zhang et al., 2024b; Lee et al., 2024b; Tong et al., 2024b; Lee et al., 2024a; Guo et al., 2024b)。此外,Gulcehre et al. (2023) 与 Dong et al. (2023) 借助预训练奖励模型过滤低质量合成数据,并以不断增长的数据集迭代调优 LLM。Wang et al. (2024a) 提出自举式(bootstrapping)自对齐方法,反复利用合成数据。Liu et al. (2024c) 提出"富有洞察力的专家混合"(Mixture of insighTful Experts, MoTE)架构,将专家混合应用于增强合成回复的各个成分,显著提升对齐效率。利用 LLM 自身生成的带推理的成对反馈,Pang et al. (2024a) 使用带额外负对数似然项的修改版 DPO 损失来调优 LLM。
+
+#### 5.3 推理(Inference)
+
+::: en
+In-Context Learning. In-context Learning (ICL) consists of three components: a task description (or prompt), several in-context samples (or demonstration), and the test case that needs to be inferred. Current studies have applied the annotations and data generated by LLMs in all these components for refining or augmenting. Zhou et al. (2022b) first showed that with a well-designed pipeline, LLMs can be human-level prompt engineers to generate accurate task descriptions. Following them, Yang et al. (2023b); Li et al. conduct augmentation and expansion to the original task prompt, making it more detailed for LLMs to follow. Demonstration augmentation (Kim et al., 2022; Li et al., 2023c; Chen et al., 2023d; He et al., 2024) is another useful skill to enrich and diversify the provided demonstrations, especially when the labeled data is limited. For the test sample, one augmentation method is to leverage LLMs to rephrase it once (Deng et al., 2023) or multiple times (Li et al., 2023a; Yang et al., 2024a). Other works study how to polish the original test sample (Xi et al., 2023) or decompose it into several sub-questions (Wang et al., 2024b).
+:::
+
+**上下文学习(In-Context Learning)。** 上下文学习(ICL)由三部分组成:任务描述(即提示)、若干上下文样本(即示例/demonstration),以及需要被推断的测试用例。当前研究已将 LLM 生成的标注与数据应用于所有这些组件的精炼或增广。Zhou et al. (2022b) 首先表明,借助精心设计的流水线,LLM 可以成为人类级的提示工程师,生成准确的任务描述。继其之后,Yang et al. (2023b) 与 Li et al. 对原始任务提示进行增广与扩展,使其更详尽、更便于 LLM 遵循。示例增广(demonstration augmentation)(Kim et al., 2022; Li et al., 2023c; Chen et al., 2023d; He et al., 2024)是另一种有用技巧,可丰富并多样化所提供的示例,在标注数据有限时尤其有用。对测试样本,一种增广方法是让 LLM 对其改写一次(Deng et al., 2023)或多次(Li et al., 2023a; Yang et al., 2024a)。另一些工作研究如何润色原始测试样本(Xi et al., 2023),或将其分解为若干子问题(Wang et al., 2024b)。
+
+::: en
+Reasoning. Reasoning plays a crucial role in enhancing the quality and accuracy of the content generated by LLMs. One efficient manner to boost LLMs' reasoning with self-generated annotation is to provide the generated rationale directly before outputting the final answer/ response (Kojima et al., 2022). To improve LLMs' performance with multiple reasoning pathways, majority voting (Wang et al., 2022b; Chen et al., 2023f) and elimination (Tong et al., 2023; Balepur et al., 2023; Ma and Du, 2023) are adopted to decide the final answer among several possible candidates. Post-hoc editing and refining (Madaan et al., 2024; Tong et al., 2024a) is another well-studied direction to utilize textual feedback and analysis for improving LLMs' reasoning capabilities. Additionally, utilization of LLMs-generated annotations sometimes requires additional domain tools. For example, Chen et al. (2023e) use a program interpreter in program-of-thought (PoT) to execute the generated program and convert it to a specific answer. Besta et al. (2024) design a prompter to Build a prompt to be sent to the LLM and a parser to extract information from LLM thought. In tree-of-thought (ToT), Hao et al. (2023); Yao et al. (2024) build an additional state evaluator by designing specific prompts and repurposing the base LLM.
+:::
+
+**推理(Reasoning)。** 推理在提升 LLM 生成内容的质量与准确性方面扮演关键角色。用自生成标注增强 LLM 推理的一种高效方式,是在输出最终答案/回复之前直接给出生成的推理理由(Kojima et al., 2022)。为借助多条推理路径提升 LLM 表现,可采用多数投票(majority voting)(Wang et al., 2022b; Chen et al., 2023f)与消去(elimination)(Tong et al., 2023; Balepur et al., 2023; Ma and Du, 2023),在多个可能候选中决定最终答案。事后编辑与精炼(Madaan et al., 2024; Tong et al., 2024a)是另一个被充分研究的方向,即利用文本反馈与分析来提升 LLM 的推理能力。此外,利用 LLM 生成的标注有时需要额外的领域工具。例如,Chen et al. (2023e) 在思想程序(program-of-thought, PoT)中使用程序解释器执行生成的程序,并将其转换为具体答案;Besta et al. (2024) 设计了向 LLM 发送提示的提示器(prompter),以及从 LLM 思考中提取信息的解析器(parser);在思想树(tree-of-thought, ToT)中,Hao et al. (2023) 与 Yao et al. (2024) 通过设计特定提示并重用基座 LLM,构建了一个额外的状态评估器。
+
+### 6 社会影响与未来工作(Societal Impact and Future Work)
+
+::: en
+In this section, we outline LLM annotation challenges, including societal implications, technical concerns, and bias propagation.
+:::
+
+在本节中,我们概述 LLM 标注面临的挑战,包括社会影响、技术关切与偏见传播。
+
+#### 6.1 伦理考量(Ethics Consideration)
+
+::: en
+One critical concern of LLM-generated annotations is the ethics consideration, especially in high-stakes decision-making tasks like finance (Yang et al., 2023a), jurisprudence (Cui et al., 2023), and healthcare (Eloundou et al., 2023). Despite the efficiency of LLM annotation, the lack of human insight may lead to biased and unfair results (Wu et al., 2023; Abid et al., 2021; Cheng et al., 2021; Li et al., 2023g; Beigi et al., 2024; Das et al., 2024; Shimabucoro et al., 2024). Moreover, LLMs make human annotator roles redundant, potentially increasing social disparities (Dillion et al., 2023). Future studies should harmonize technological advancements with societal consequences, including considering social implications, ensuring ethical use, promoting fairness, and maintaining transparency.
+:::
+
+LLM 生成标注的一个关键关切是伦理考量,尤其是在金融(Yang et al., 2023a)、司法(Cui et al., 2023)与医疗(Eloundou et al., 2023)等高风险决策任务中。尽管 LLM 标注效率可观,人类洞见的缺失仍可能导致带偏见且不公的结果(Wu et al., 2023; Abid et al., 2021; Cheng et al., 2021; Li et al., 2023g; Beigi et al., 2024; Das et al., 2024; Shimabucoro et al., 2024)。此外,LLM 使人类标注者的角色变得冗余,可能加剧社会差距(Dillion et al., 2023)。未来研究应在技术进步与社会后果之间求得协调,包括考虑社会影响、确保合乎伦理的使用、促进公平并保持透明。
+
+#### 6.2 挑战与未来工作(Challenges and Future Work)
+
+::: en
+Model Collapse. Model collapse refers to the gradual performance decrease of an LLM trained on the outputs of other LLMs (Sun et al., 2023a; Gunasekar et al., 2023; Hsieh et al., 2023; Honovich et al., 2022; Chiang et al., 2023a; Geng et al., 2023; Huang et al., 2024a). It is unavoidable since LLM-generated data is occupying the information ecosystem. The imitation model often replicates stylistic elements without achieving the factual precision of superior models (Gudibande et al., 2023; Shumailov et al., 2023). This divergence is caused by statistical approximation error from limited sample sizes and functional approximation error from constrained model capacity. Both errors tend to amplify through successive training cycles (Alemohammad et al., 2023).
+:::
+
+**模型坍塌(Model Collapse)。** 模型坍塌指在被其他 LLM 的输出训练的 LLM 上出现的性能逐渐下降(Sun et al., 2023a; Gunasekar et al., 2023; Hsieh et al., 2023; Honovich et al., 2022; Chiang et al., 2023a; Geng et al., 2023; Huang et al., 2024a)。由于 LLM 生成数据正在占据信息生态,这一问题不可避免。模仿模型常常复制风格要素,却达不到更强模型的事实精度(Gudibande et al., 2023; Shumailov et al., 2023)。这种偏差源自两方面:有限样本规模带来的统计近似误差,以及受限模型容量带来的函数近似误差;两种误差都会在连续的训练循环中被放大(Alemohammad et al., 2023)。
+
+::: en
+Potential Solution. It is important to ensure that the training data is diverse and high-quality, with a significant proportion of human-generated content. Gerstgrasser et al. (2024) avoid model collapse by accumulating real and machine-generated data. This method maintains data diversity, preventing performance degradation across different LLMs.
+:::
+
+**潜在解法(Potential Solution)。** 重要的是确保训练数据多样且高质量,并保留相当比例的人类生成内容。Gerstgrasser et al. (2024) 通过累积真实与机器生成的数据来避免模型坍塌;该方法维持了数据多样性,避免了不同 LLM 的性能退化。
+
+::: en
+Hallucinations. Hallucinations in LLMs significantly undermine the integrity and reliability of their generated annotations (Alkaissi and McFarlane, 2023; Azamfirei et al., 2023; Chaudhary et al., 2024). Hullicinated outputs detached from factual information can cause the proliferation of misinformation (Jiang et al., 2024a; Chen and Shu, 2023; Chen and Shu; Huang et al., 2024b). Addressing hallucinations requires refining the training process and implementing validation mechanisms for annotations through automated and manual verification (Liao and Vaughan, 2023; Pan et al., 2023; Bian et al., 2023). Moreover, the inherent opacity of LLMs complicates efforts to investigate the causes of hallucinations.
+:::
+
+**幻觉(Hallucinations)。** LLM 中的幻觉会严重损害其生成标注的完整性与可靠性(Alkaissi and McFarlane, 2023; Azamfirei et al., 2023; Chaudhary et al., 2024)。脱离事实信息的幻觉输出可能导致错误信息的扩散(Jiang et al., 2024a; Chen and Shu, 2023; Chen and Shu; Huang et al., 2024b)。应对幻觉需要精炼训练过程,并通过自动与人工验证为标注实现校验机制(Liao and Vaughan, 2023; Pan et al., 2023; Bian et al., 2023)。此外,LLM 固有的不透明性使追查幻觉成因的努力更加复杂。
+
+::: en
+Potential Solution. Yang et al. (2023d) addresses hallucinations in LLMs with the Reverse Validation method, detecting hallucinations at the passage level by constructing a query from the response and checking for a match within the LLM's internal knowledge. Bertaglia et al. (2023) uses Chain-of-Thought (CoT) prompting and explanation generation, where CoT prompting produces explanations for predictions, ensuring logical and verifiable outputs. Li et al. (2023b) proposes the CoAnnotating framework, which uses uncertainty-guided work allocation between humans and LLMs, applying self-evaluation and entropy metrics to assess reliability and distribute tasks effectively. Zendel et al. (2024) propose a human-LLM connotation process for better annotation quality.
+:::
+
+**潜在解法(Potential Solution)。** Yang et al. (2023d) 以"反向验证"(Reverse Validation)方法应对 LLM 幻觉:从回复构造查询,并检查其在 LLM 内部知识中是否匹配,从而在段落级检测幻觉。Bertaglia et al. (2023) 使用思维链(CoT)提示与解释生成,其中 CoT 提示为预测生成解释,确保输出合乎逻辑且可验证。Li et al. (2023b) 提出 CoAnnotating 框架,利用不确定性引导的人机工作分配,运用自评估与熵度量来评估可靠性并有效分配任务。Zendel et al. (2024) 提出人机协同标注过程,以获得更好的标注质量。
+
+::: en
+Efficiency of LLMs. Efficiency in LLMs is crucial due to their growing size and complexity, which demand substantial computational resources (Wong et al., 2024). Efficient models reduce inference latency, vital for real-time applications, lower energy consumption for sustainable AI practices, and cut operational costs in cloud environments, making AI more cost-effective for researchers. Efficiency techniques for LLMs, such as pruning, compression, and distillation, are critical for deploying these models in resource-constrained environments.
+:::
+
+**LLM 的效率(Efficiency of LLMs)。** 效率对 LLM 至关重要,因为其不断增长的规模与复杂度需要大量算力资源(Wong et al., 2024)。高效模型能降低推理延迟(对实时应用至关重要)、降低能耗(契合可持续 AI 实践),并削减云环境中的运营成本,使 AI 对研究者而言更具成本效益。剪枝、压缩与蒸馏等 LLM 效率技术,对于在资源受限的环境中部署这些模型十分关键。
+
+::: en
+Potential Solution. Pruning is an efficient technique to reduce the number of parameters in an LLM. For example, Ma et al. (2023) selectively removes redundant neurons based on gradient information while preserving most of the LLM's capability. Mixture of Experts (MoE) is another promising technique that leverages a set of expert sub-models, where only a subset of these experts is activated for any given input (Artetxe et al., 2021). Researchers also adopt LLM Quantization to reduce the precision of the numbers used to represent a model's parameters (Xiao et al., 2023). Instead of using 32-bit floating-point numbers, a quantized model might use 16-bit floats, 8-bit integers, or even lower precision. These techniques can be combined with each other to achieve further efficiencies.
+:::
+
+**潜在解法(Potential Solution)。** 剪枝(pruning)是减少 LLM 参数量的一种高效技术。例如,Ma et al. (2023) 基于梯度信息选择性地移除冗余神经元,同时保留 LLM 的大部分能力。专家混合(Mixture of Experts, MoE)是另一项有前景的技术,它利用一组专家子模型,对任意给定输入只激活其中一部分专家(Artetxe et al., 2021)。研究者还采用 LLM 量化(Quantization)来降低表示模型参数所用数值的精度(Xiao et al., 2023):不使用 32 位浮点数,量化后的模型可能使用 16 位浮点数、8 位整数甚至更低精度。这些技术可以彼此组合,以获得进一步的效率提升。
+
+### 7 结论(Conclusion)
+
+::: en
+The exploration of LLMs for data annotation and synthesis has revealed an exciting frontier in NLP, presenting novel solutions to longstanding challenges like data scarcity, and enhancing annotation quality and process efficiency. This survey meticulously reviews methodologies, applications, and hurdles associated with LLM employment, including detailed taxonomy from annotation generation to utilization. It evaluates the effects of LLM-generated annotations on training machine learning models while addressing both technical and ethical concerns like bias and societal ramifications. Highlighting our novel taxonomy of LLM methodologies, strategies for utilizing LLM-generated annotations, and a critical discussion on the challenges, this work aims to steer future progress in this crucial area. Additionally, we introduce a comprehensive categorization of techniques and compile extensive benchmark datasets to support ongoing research endeavors, concluding with an examination of persistent challenges and open questions, paving the way for future investigative pursuits in the domain.
+:::
+
+对 LLM 用于数据标注与合成的探索,揭示了 NLP 中一片令人兴奋的前沿:它为数据稀缺等长期难题提供了新颖解法,并提升了标注质量与流程效率。本综述细致回顾了使用 LLM 的方法论、应用与障碍,包括从标注生成到利用的详细分类体系;评估了 LLM 生成标注对训练机器学习模型的影响,同时探讨了偏见与社会影响等技术及伦理关切。通过呈现我们提出的 LLM 方法新分类体系、利用 LLM 生成标注的策略,以及对挑战的批判性讨论,本工作旨在引导这一关键领域的未来进展。此外,我们还引入了全面的技术分类,并汇编了大量基准数据集以支持持续的研究工作;最后考察了悬而未决的挑战与开放问题,为该领域的未来探索铺平道路。
+
+> **译注(文末)**:本页译至第 7 节结论为止。原文其后的 Limitations(采样偏差与幻觉、社会偏见与伦理困境、对高质量数据的依赖、调参与提示工程的复杂性、泛化与过拟合、算力与资源需求六项局限)、References 及附录 A(LLM 标注工具与软件清单)、附录 B(AI 辅助声明)、附录 C(LLM 数据标注论文合集)未收录,请查阅原文 PDF。文中个别原文拼写(如 "undesiered"、"Hullicinated"、小节 5.3 图 1 分类树中的 "Self-distillation")照录未改。
+
+## 要点速览
+
+- 总框架:**生成(5 类标注)→ 评估/过滤(3 类选择)→ 利用(3 个阶段)**——任何"用 LLM 造数据"的系统都可对号入座。
+- 五类标注:指令+回复、标签、推理理由(结构/质量/类人三个维度)、成对反馈(排序 vs 直接构造)、文本反馈;外加对话/图/机器人等领域数据。
+- 过滤三招:规则启发式、外部模型信号(奖励模型/学生反馈)、LLM 自评(困惑度/置信度/排序)——**合成数据必须过滤,不过滤不如不合成**。
+- 利用三阶段:SFT(自我进化 + 蒸馏小模型)、对齐调优(奖励建模 + DPO 式策略训练)、推理时(ICL 增强 + CoT/ToT 推理)。
+- 四大挑战与解法:模型坍塌(保留人类数据、混合累积)、幻觉(反向验证、CoT 可验证解释、人机分工)、效率(剪枝/MoE/量化)、伦理(高风险领域人机协同)。
+- 与课程关联:向上承接"数据飞轮"(Shankar 博客)的闭环叙事,向下衔接第 7 周 LIMA(质量>数量)与 SWE-smith(规模化合成 SWE 数据);LLM-as-a-Judge 评估一节与第 8 周评测讲直接相连。

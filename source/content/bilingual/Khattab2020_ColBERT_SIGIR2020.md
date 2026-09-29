@@ -1,0 +1,636 @@
+---
+title: "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
+title_zh: ColBERT：基于 BERT 上下文化延迟交互的高效段落检索
+authors: Omar Khattab, Matei Zaharia
+venue: "SIGIR 2020 · Stanford University"
+kind: paper
+importance: recommended
+tags: 延迟交互, 神经信息检索, 段落重排序, MaxSim, 向量相似度检索, MS MARCO
+summary: 提出"延迟交互"范式：查询与文档各自编码为 token 级嵌入后用 MaxSim 聚合打分，以 BERT 级效果换来数量级更低的延迟，并支持端到端检索。
+---
+
+## 导读
+
+本文是第 2 周"检索增强生成 RAG"专题的配套检索侧论文，也是神经信息检索的里程碑之作。RAG 一文回答"生成器如何利用检索"，本文回答"检索器本身如何又准又快"：提出延迟交互（late interaction）架构，在 BERT 交叉编码器的效果与双编码器的效率之间找到关键折中。
+
+背景是：BERT 类排序模型要把每个"查询—文档"对整体喂入大网络算分，成本比此前方法高两三个数量级、延迟以万毫秒计，无法实用。ColBERT 保留 token 级细粒度交互的表达力，但把交互推迟到编码之后——查询与文档各自编码为嵌入袋，再用极廉价的 MaxSim 算子聚合打分。文档表示可离线预计算、查询只编码一次，打分机制又对剪枝友好，可借 FAISS 向量索引从千万级文档库直接端到端检索。结果：效果与 BERT-base 持平（MS MARCO MRR@10 34.9），延迟快 170 倍以上、FLOPs 少约 4 个数量级；后续 ColBERTv2 等稠密检索均源于此。
+
+## 全文对照翻译
+
+以下为论文正文（Abstract 至结论与致谢）的逐段中英对照翻译。英文段一律原样收录（还原 PDF 连字提取瑕疵），每段英文之后紧跟完整中文译文；References 部分不收录。
+
+::: en
+ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT
+
+Omar Khattab
+Stanford University
+okhattab@stanford.edu
+
+Matei Zaharia
+Stanford University
+matei@cs.stanford.edu
+:::
+
+**标题与作者**：《ColBERT：基于 BERT 上下化延迟交互的高效且有效的段落检索》。作者 Omar Khattab（斯坦福大学，okhattab@stanford.edu）、Matei Zaharia（斯坦福大学，matei@cs.stanford.edu）。
+
+### 摘要（Abstract）
+
+::: en
+Recent progress in Natural Language Understanding (NLU) is driving fast-paced advances in Information Retrieval (IR), largely owed to fine-tuning deep language models (LMs) for document ranking. While remarkably effective, the ranking models based on these LMs increase computational cost by orders of magnitude over prior approaches, particularly as they must feed each query–document pair through a massive neural network to compute a single relevance score. To tackle this, we present ColBERT, a novel ranking model that adapts deep LMs (in particular, BERT) for efficient retrieval. ColBERT introduces a late interaction architecture that independently encodes the query and the document using BERT and then employs a cheap yet powerful interaction step that models their fine-grained similarity. By delaying and yet retaining this fine-granular interaction, ColBERT can leverage the expressiveness of deep LMs while simultaneously gaining the ability to pre-compute document representations offline, considerably speeding up query processing. Beyond reducing the cost of re-ranking the documents retrieved by a traditional model, ColBERT's pruning-friendly interaction mechanism enables leveraging vector-similarity indexes for end-to-end retrieval directly from a large document collection. We extensively evaluate ColBERT using two recent passage search datasets. Results show that ColBERT's effectiveness is competitive with existing BERT-based models (and outperforms every non-BERT baseline), while executing two orders-of-magnitude faster and requiring four orders-of-magnitude fewer FLOPs per query.
+:::
+
+自然语言理解（Natural Language Understanding, NLU）的最新进展正在驱动信息检索（Information Retrieval, IR）的快速进步，这在很大程度上归功于为文档排序微调深度语言模型（LM）。这些基于 LM 的排序模型虽然效果显著，但计算成本比先前方法高出若干数量级，尤其是因为它们必须把每个"查询—文档"对送入一个庞大的神经网络来计算单一相关性分数。为解决这一问题，我们提出 ColBERT，一种为高效检索改造深度 LM（尤其是 BERT）的新型排序模型。ColBERT 引入延迟交互（late interaction）架构：用 BERT 独立编码查询与文档，再采用一个廉价而强大的交互步骤来建模二者之间细粒度的相似度。通过推迟但保留这种细粒度交互，ColBERT 既能利用深度 LM 的表达力，又获得了离线预计算文档表示的能力，从而显著加快查询处理。除了降低对传统模型检索结果的重排序成本之外，ColBERT 剪枝友好的交互机制还使其能够利用向量相似度索引，直接从大型文档库进行端到端检索。我们在两个最新的段落检索数据集上对 ColBERT 做了广泛评估。结果表明，ColBERT 的效果与现有基于 BERT 的模型相当（并优于所有非 BERT 基线），同时执行速度快两个数量级、每查询所需 FLOPs 少四个数量级。
+
+> 译注：正式版首页还载有 ACM 引用格式信息（Omar Khattab and Matei Zaharia. 2020. ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT. In Proceedings of the 43rd International ACM SIGIR Conference on Research and Development in Information Retrieval, Virtual Event, China, July 25–30, 2020 (SIGIR '20), 10 pages. DOI: 10.1145/3397271.3401075）与 ACM 版权声明，属排版套话，不另全文翻译。
+
+### 1 引言（Introduction）
+
+::: en
+Over the past few years, the Information Retrieval (IR) community has witnessed the introduction of a host of neural ranking models, including DRMM [7], KNRM [4, 36], and Duet [20, 22]. In contrast to prior learning-to-rank methods that rely on hand-crafted features, these models employ embedding-based representations of queries and documents and directly model local interactions (i.e., fine-grained relationships) between their contents. Among them, a recent approach has emerged that fine-tunes deep pre-trained language models (LMs) like ELMo [29] and BERT [5] for estimating relevance. By computing deeply-contextualized semantic representations of query–document pairs, these LMs help bridge the pervasive vocabulary mismatch [21, 42] between documents and queries [30]. Indeed, in the span of just a few months, a number of ranking models based on BERT have achieved state-of-the-art results on various retrieval benchmarks [3, 18, 25, 39] and have been proprietarily adapted for deployment by Google1 and Bing2.
+:::
+
+过去几年，信息检索（IR）社区见证了一大批神经排序模型（neural ranking models）的问世，包括 DRMM [7]、KNRM [4, 36] 与 Duet [20, 22]。与依赖手工特征的先前学习排序（learning-to-rank）方法不同，这些模型采用基于嵌入的查询与文档表示，并直接建模其内容之间的局部交互（即细粒度关系）。其中，近期兴起的一类方法是微调 ELMo [29]、BERT [5] 等深度预训练语言模型（LM）来估计相关性：通过计算"查询—文档"对深层上下文化的语义表示，这些 LM 有助于弥合文档与查询之间普遍存在的词汇失配（vocabulary mismatch）[21, 42] 问题 [30]。事实上，短短数月之间，多个基于 BERT 的排序模型已在不同检索基准上取得最优（state-of-the-art）结果 [3, 18, 25, 39]，并被 Google¹ 与 Bing² 专有化改造后部署上线。
+
+> 译注（脚注 1、2）：分别指 Google 与 Bing 官方博客介绍其搜索引擎部署 BERT 的文章（Search language understanding BERT；Bing delivers its largest improvement in search experience using Azure GPUs）。
+
+::: en
+However, the remarkable gains delivered by these LMs come at a steep increase in computational cost. Hofstätter et al. [9] and MacAvaney et al. [18] observe that BERT-based models in the literature are 100-1000× more computationally expensive than prior models—some of which are arguably not inexpensive to begin with [13]. This quality–cost tradeoff is summarized by Figure 1, which compares two BERT-based rankers [25, 27] against a representative set of ranking models. The figure uses MS MARCO Ranking [24], a recent collection of 9M passages and 1M queries from Bing's logs. It reports retrieval effectiveness (MRR@10) on the official validation set as well as average query latency (log-scale) using a high-end server that dedicates one Tesla V100 GPU per query for neural re-rankers. Following the re-ranking setup of MS MARCO, ColBERT (re-rank), the Neural Matching Models, and the Deep LMs re-rank the MS MARCO's official top-1000 documents per query. Other methods, including ColBERT (full retrieval), directly retrieve the top-1000 results from the entire collection.
+:::
+
+然而，这些 LM 带来的显著收益伴随着计算成本的陡增。Hofstätter et al. [9] 与 MacAvaney et al. [18] 观察到，文献中基于 BERT 的模型比先前模型贵 100–1000 倍——而其中一些先前的模型本身就谈不上便宜 [13]。图 1 概括了这一质量–成本折中：它在 MS MARCO Ranking [24]（一个近期推出的、来自 Bing 日志的 900 万段落、100 万查询的数据集）上，把两个基于 BERT 的排序器 [25, 27] 与一组有代表性的排序模型进行比较；在官方验证集上报告检索效果（MRR@10），并在一台为每个神经重排序查询独占一块 Tesla V100 GPU 的高端服务器上报告平均查询延迟（对数刻度）。遵循 MS MARCO 的重排序设定，ColBERT（re-rank）、神经匹配模型与深度 LM 重排序的是 MS MARCO 每查询的官方 top-1000 文档；其他方法（包括 ColBERT（full retrieval））则直接从整个文档库检索 top-1000 结果。
+
+[图 1: Figure 1: Effectiveness (MRR@10) versus Mean Query Latency (log-scale) for a number of representative ranking models on MS MARCO Ranking [24]. The figure also shows ColBERT. Neural re-rankers run on top of the official BM25 top-1000 results and use a Tesla V100 GPU. Methodology and detailed results are in §4.]
+
+中文说明：图 1 在 MS MARCO Ranking 上比较若干代表性排序模型的效果（MRR@10，纵轴 0.15–0.40）与平均查询延迟（毫秒，横轴对数刻度 10¹–10⁵）。图例把模型分为几类：词袋（Bag-of-Words, BoW）模型（BM25）、经 NLU 增强的 BoW 模型（doc2query、DeepCT、docTTTTTquery）、神经匹配模型（KNRM、Duet、fT+ConvKNRM）、深度语言模型（BERT-base、BERT-large），以及 ColBERT（re-rank 与 full retrieval 两种用法）。图中可见 BERT-base/large 效果最好但延迟高达数万毫秒量级，而 ColBERT 以几十毫秒的延迟取得接近 BERT 的效果。神经重排序器在官方 BM25 top-1000 结果之上运行并使用一块 Tesla V100 GPU；方法与详细结果见 §4。
+
+::: en
+As the figure shows, BERT considerably improves search precision, raising MRR@10 by almost 7% against the best previous methods; simultaneously, it increases latency by up to tens of thousands of milliseconds even with a high-end GPU. This poses a challenging tradeoff since raising query response times by as little as 100ms is known to impact user experience and even measurably diminish revenue [17]. To tackle this problem, recent work has started exploring using Natural Language Understanding (NLU) techniques to augment traditional retrieval models like BM25 [32]. For example, Nogueira et al. [26, 28] expand documents with NLU-generated queries before indexing with BM25 scores and Dai & Callan [2] replace BM25's term frequency with NLU-estimated term importance. Despite successfully reducing latency, these approaches generally reduce precision substantially relative to BERT.
+:::
+
+如图所示，BERT 显著提升了搜索精度，MRR@10 较此前最好方法提高近 7%；与此同时，即便使用高端 GPU，其延迟也增加至多达数万毫秒。这构成一个棘手的折中：已知查询响应时间哪怕只提高 100ms 也会影响用户体验、甚至可测地损害收入 [17]。为解决该问题，近期工作开始探索用自然语言理解（NLU）技术增强 BM25 [32] 等传统检索模型。例如，Nogueira et al. [26, 28] 在用 BM25 分数建立索引之前，先用 NLU 生成的查询扩展文档；Dai & Callan [2] 则用 NLU 估计的词项重要性替换 BM25 的词频。这些方法虽然成功降低了延迟，但相对 BERT 通常会大幅损失精度。
+
+::: en
+To reconcile efficiency and contextualization in IR, we propose ColBERT, a ranking model based on contextualized late interaction over BERT. As the name suggests, ColBERT proposes a novel late interaction paradigm for estimating relevance between a query q and a document d. Under late interaction, q and d are separately encoded into two sets of contextual embeddings, and relevance is evaluated using cheap and pruning-friendly computations between both sets—that is, fast computations that enable ranking without exhaustively evaluating every possible candidate.
+:::
+
+为了在 IR 中调和效率与上下文化，我们提出 ColBERT——一个基于 BERT 上下化延迟交互（contextualized late interaction）的排序模型。顾名思义，ColBERT 提出了一种新颖的延迟交互范式来估计查询 $q$ 与文档 $d$ 之间的相关性。在延迟交互下，$q$ 与 $d$ 被分别编码为两组上下文嵌入，相关性则通过两组嵌入之间廉价且剪枝友好（pruning-friendly）的计算来评估——即无需穷举评估每个可能候选即可完成排序的快速计算。
+
+::: en
+Figure 2 contrasts our proposed late interaction approach with existing neural matching paradigms. On the left, Figure 2 (a) illustrates representation-focused rankers, which independently compute an embedding for q and another for d and estimate relevance as a single similarity score between two vectors [12, 41]. Moving to the right, Figure 2 (b) visualizes typical interaction-focused rankers. Instead of summarizing q and d into individual embeddings, these rankers model word- and phrase-level relationships across q and d and match them using a deep neural network (e.g., with CNNs/MLPs [22] or kernels [36]). In the simplest case, they feed the neural network an interaction matrix that reflects the similarity between every pair of words across q and d. Further right, Figure 2 (c) illustrates a more powerful interaction-based paradigm, which models the interactions between words within as well as across q and d at the same time, as in BERT's transformer architecture [25].
+:::
+
+图 2 将我们提出的延迟交互方法与既有神经匹配范式进行对比。左侧的图 2 (a) 展示表示导向（representation-focused）的排序器：为 $q$、$d$ 各自独立计算一个嵌入，并把相关性估计为两个向量之间的单一相似度得分 [12, 41]。向右，图 2 (b) 是典型的交互导向（interaction-focused）排序器：它们不把 $q$、$d$ 各自压缩成单个嵌入，而是建模 $q$ 与 $d$ 之间词级、短语级的关系，并用深度神经网络（如 CNN/MLP [22] 或核函数 [36]）进行匹配。最简单的情形下，它们喂给神经网络一个反映 $q$ 与 $d$ 中每一对词之间相似度的交互矩阵。更靠右，图 2 (c) 展示一种更强大的基于交互的范式：同时建模 $q$ 与 $d$ 内部以及相互之间的词间交互，如 BERT 的 Transformer 架构 [25]。
+
+[图 2: Figure 2: Schematic diagrams illustrating query–document matching paradigms in neural IR. The figure contrasts existing approaches (sub-figures (a), (b), and (c)) with the proposed late interaction paradigm (sub-figure (d)).]
+
+中文说明：图 2 以示意图展示神经 IR 中的四类"查询—文档"匹配范式：(a) 基于表示的相似度（Representation-based Similarity，如 DSSM、SNRM）——查询与文档各自经编码器压缩为单个向量，再算一次相似度得分数 $s$；(b) 查询—文档交互（Query-Document Interaction，如 DRMM、KNRM、Conv-KNRM）——查询与文档的词嵌入两两做点积构成交互矩阵，再经 CNN / Match Kernels / MLP 等网络输出 $s$；(c) 全对全交互（All-to-all Interaction，如 BERT）——查询与文档拼接后整体送入 Transformer，同时建模内部与跨体的交互；(d) 延迟交互（Late Interaction，即本文提出的 ColBERT）——查询与文档分别经查询编码器、文档编码器得到嵌入袋，每个查询嵌入对全部文档嵌入取 MaxSim（图中多个 MaxSim 节点），标量输出求和（$\sum$）得最终分数。
+
+::: en
+These increasingly expressive architectures are in tension. While interaction-based models (i.e., Figure 2 (b) and (c)) tend to be superior for IR tasks [8, 21], a representation-focused model—by isolating the computations among q and d—makes it possible to pre-compute document representations offline [41], greatly reducing the computational load per query. In this work, we observe that the fine-grained matching of interaction-based models and the pre-computation of document representations of representation-based models can be combined by retaining yet judiciously delaying the query–document interaction. Figure 2 (d) illustrates an architecture that precisely does so. As illustrated, every query embedding interacts with all document embeddings via a MaxSim operator, which computes maximum similarity (e.g., cosine similarity), and the scalar outputs of these operators are summed across query terms. This paradigm allows ColBERT to exploit deep LM-based representations while shifting the cost of encoding documents offline and amortizing the cost of encoding the query once across all ranked documents. Additionally, it enables ColBERT to leverage vector-similarity search indexes (e.g., [1, 15]) to retrieve the top-k results directly from a large document collection, substantially improving recall over models that only re-rank the output of term-based retrieval.
+:::
+
+这些表达力渐强的架构之间存在张力。虽然基于交互的模型（即图 2 (b)、(c)）在 IR 任务上往往更优 [8, 21]，但表示导向的模型——通过把 $q$ 与 $d$ 之间的计算隔离开——使离线预计算文档表示成为可能 [41]，从而大幅降低每查询的计算负载。在本文中，我们观察到：交互导向模型的细粒度匹配与表示导向模型的文档表示预计算，可以通过"保留但审慎推迟查询—文档交互"来兼得。图 2 (d) 展示了恰好做到这一点的架构。如图所示，每个查询嵌入通过 MaxSim 算子与全部文档嵌入交互——该算子计算最大相似度（如余弦相似度）——这些算子的标量输出再按查询词求和。该范式让 ColBERT 得以利用基于深度 LM 的表示，同时把文档编码的成本转移到离线，并把查询只编码一次的成本摊销到所有被排序的文档上。此外，它还使 ColBERT 能利用向量相似度搜索索引（如 [1, 15]）直接从大型文档库检索 top-$k$ 结果，相比只重排序词项检索输出的模型大幅提升召回。
+
+::: en
+As Figure 1 illustrates, ColBERT can serve queries in tens or few hundreds of milliseconds. For instance, when used for re-ranking as in “ColBERT (re-rank)”, it delivers over 170× speedup (and requires 14,000× fewer FLOPs) relative to existing BERT-based models, while being more effective than every non-BERT baseline (§4.2 & 4.3). ColBERT's indexing—the only time it needs to feed documents through BERT—is also practical: it can index the MS MARCO collection of 9M passages in about 3 hours using a single server with four GPUs (§4.5), retaining its effectiveness with a space footprint of as little as few tens of GiBs. Our extensive ablation study (§4.4) shows that late interaction, its implementation via MaxSim operations, and crucial design choices within our BERT-based encoders are all essential to ColBERT's effectiveness.
+:::
+
+如图 1 所示，ColBERT 能以几十或几百毫秒服务查询。例如，当像"ColBERT（re-rank）"那样用于重排序时，相对现有基于 BERT 的模型，它带来超过 170 倍加速（且所需 FLOPs 减少 14,000 倍），同时效果优于所有非 BERT 基线（§4.2 与 §4.3）。ColBERT 的索引——唯一需要把文档送入 BERT 的环节——也很实用：用一台配备四块 GPU 的单服务器约 3 小时即可索引完 MS MARCO 的 900 万段落（§4.5），并以最少几十 GiB 的空间占用保持其效果。我们广泛的消融研究（§4.4）表明：延迟交互、其经 MaxSim 运算的实现，以及我们基于 BERT 的编码器中的关键设计选择，对 ColBERT 的效果都不可或缺。
+
+::: en
+Our main contributions are as follows.
+
+(1) We propose late interaction (§3.1) as a paradigm for efficient and effective neural ranking.
+
+(2) We present ColBERT (§3.2 & 3.3), a highly-effective model that employs novel BERT-based query and document encoders within the late interaction paradigm.
+
+(3) We show how to leverage ColBERT both for re-ranking on top of a term-based retrieval model (§3.5) and for searching a full collection using vector similarity indexes (§3.6).
+
+(4) We evaluate ColBERT on MS MARCO and TREC CAR, two recent passage search collections.
+:::
+
+我们的主要贡献如下。
+
+（1）我们提出延迟交互（§3.1），作为高效且有效的神经排序范式。
+
+（2）我们提出 ColBERT（§3.2 与 §3.3），一个在延迟交互范式中采用新颖的基于 BERT 的查询与文档编码器的高效模型。
+
+（3）我们展示如何在词项检索模型之上用 ColBERT 做重排序（§3.5），以及如何用向量相似度索引检索整个文档库（§3.6）。
+
+（4）我们在 MS MARCO 与 TREC CAR 两个近期段落检索数据集上评估 ColBERT。
+
+### 2 相关工作（Related Work）
+
+::: en
+Neural Matching Models. Over the past few years, IR researchers have introduced numerous neural architectures for ranking. In this work, we compare against KNRM [4, 36], Duet [20, 22], ConvKNRM [4], and fastText+ConvKNRM [10]. KNRM proposes a differentiable kernel-pooling technique for extracting matching signals from an interaction matrix, while Duet combines signals from exact-match-based as well as embedding-based similarities for ranking. Introduced in 2018, ConvKNRM learns to match n-grams in the query and the document. Lastly, fastText+ConvKNRM (abbreviated fT+ConvKNRM) tackles the absence of rare words from typical word embeddings lists by adopting sub-word token embeddings.
+:::
+
+**神经匹配模型（Neural Matching Models）**。过去几年，IR 研究者提出了大量用于排序的神经架构。本文与 KNRM [4, 36]、Duet [20, 22]、ConvKNRM [4] 以及 fastText+ConvKNRM [10] 进行比较。KNRM 提出一种可微的核池化（kernel pooling）技术，从交互矩阵中提取匹配信号；Duet 则把基于精确匹配与基于嵌入相似度的信号结合起来用于排序。ConvKNRM 于 2018 年提出，学习匹配查询与文档中的 n-gram。最后，fastText+ConvKNRM（缩写为 fT+ConvKNRM）通过采用子词 token 嵌入，解决典型词嵌入列表中罕见词缺失的问题。
+
+::: en
+In 2018, Zamani et al. [41] introduced SNRM, a representation-focused IR model that encodes each query and each document as a single, sparse high-dimensional vector of “latent terms”. By producing a sparse-vector representation for each document, SNRM is able to use a traditional IR inverted index for representing documents, allowing fast end-to-end retrieval. Despite highly promising results and insights, SNRM's effectiveness is substantially outperformed by the state of the art on the datasets with which it was evaluated (e.g., see [18, 38]). While SNRM employs sparsity to allow using inverted indexes, we relax this assumption and compare a (dense) BERT-based representation-focused model against our late-interaction ColBERT in our ablation experiments in §4.4. For a detailed overview of existing neural ranking models, we refer the readers to two recent surveys of the literature [8, 21].
+:::
+
+2018 年，Zamani et al. [41] 提出 SNRM，一种表示导向的 IR 模型，把每个查询和每篇文档编码为单个稀疏的高维"潜在词项"向量。通过为每篇文档产生稀疏向量表示，SNRM 能使用传统 IR 倒排索引（inverted index）表示文档，实现快速端到端检索。尽管结果与洞见都颇具前景，SNRM 在其评测数据集上的效果被当时最优方法大幅超越（如见 [18, 38]）。SNRM 利用稀疏性以使用倒排索引，而我们放松这一假设，并在 §4.4 的消融实验中用一个（稠密）基于 BERT 的表示导向模型与我们延迟交互的 ColBERT 相比较。关于既有神经排序模型的详细概览，我们建议读者参阅两篇近期的文献综述 [8, 21]。
+
+::: en
+Language Model Pretraining for IR. Recent work in NLU emphasizes the importance pre-training language representation models in an unsupervised fashion before subsequently fine-tuning them on downstream tasks. A notable example is BERT [5], a bi-directional transformer-based language model whose fine-tuning advanced the state of the art on various NLU benchmarks. Nogueira et al. [25], MacAvaney et al. [18], and Dai & Callan [3] investigate incorporating such LMs (mainly BERT, but also ELMo [29]) on different ranking datasets. As illustrated in Figure 2 (c), the common approach (and the one adopted by Nogueira et al. on MS MARCO and TREC CAR) is to feed the query–document pair through BERT and use an MLP on top of BERT's [CLS] output token to produce a relevance score. Subsequent work by Nogueira et al. [27] introduced duoBERT, which fine-tunes BERT to compare the relevance of a pair of documents given a query. Relative to their single-document BERT, this gives duoBERT a 1% MRR@10 advantage on MS MARCO while increasing the cost by at least 1.4×.
+:::
+
+**面向 IR 的语言模型预训练（Language Model Pretraining for IR）**。NLU 的近期工作强调：先以无监督方式预训练语言表示模型、再在下游任务上微调的重要性。一个著名例子是 BERT [5]——一个双向 Transformer 语言模型，其微调在多个 NLU 基准上刷新纪录。Nogueira et al. [25]、MacAvaney et al. [18] 与 Dai & Callan [3] 研究在不同排序数据集上引入此类 LM（主要是 BERT，也包括 ELMo [29]）。如图 2 (c) 所示，常见做法（也是 Nogueira et al. 在 MS MARCO 与 TREC CAR 上采用的做法）是把"查询—文档"对送入 BERT，并在 BERT 的 [CLS] 输出 token 之上用一个 MLP 产生相关性分数。Nogueira et al. [27] 的后续工作提出 duoBERT，微调 BERT 以比较"给定查询下一对文档"的相对相关性。相对其单文档 BERT，这为 duoBERT 在 MS MARCO 上带来 1% 的 MRR@10 优势，但成本至少增加 1.4 倍。
+
+::: en
+BERT Optimizations. As discussed in §1, these LM-based rankers can be highly expensive in practice. While ongoing efforts in the NLU literature for distilling [14, 33], compressing [40], and pruning [19] BERT can be instrumental in narrowing this gap, they generally achieve significantly smaller speedups than our re-designed architecture for IR, due to their generic nature, and more aggressive optimizations often come at the cost of lower quality.
+:::
+
+**BERT 优化（BERT Optimizations）**。如 §1 所述，这些基于 LM 的排序器在实践中可能非常昂贵。尽管 NLU 文献中蒸馏 [14, 33]、压缩 [40]、剪枝 [19] BERT 的持续努力有助于缩小这一差距，但由于其通用性质，它们通常达不到我们为 IR 重新设计的架构那样的加速幅度，且更激进的优化往往以质量下降为代价。
+
+::: en
+Efficient NLU-based Models. Recently, a direction emerged that employs expensive NLU computation offline. This includes doc2query [28] and DeepCT [2]. The doc2query model expands each document with a pre-defined number of synthetic queries generated by a seq2seq transformer model that is trained to generate queries given a document. It then relies on a BM25 index for retrieval from the (expanded) documents. DeepCT uses BERT to produce the term frequency component of BM25 in a context-aware manner, essentially representing a feasible realization of the term-independence assumption with neural networks [23]. Lastly, docTTTTTquery [26] is identical to doc2query except that it fine-tunes a pre-trained model (namely, T5 [31]) for generating the predicted queries.
+:::
+
+**高效的基于 NLU 的模型（Efficient NLU-based Models）**。近期出现了一个把昂贵的 NLU 计算移到离线（offline）的方向，包括 doc2query [28] 与 DeepCT [2]。doc2query 模型用一个 seq2seq Transformer 模型（训练目标为给定文档生成查询）为每篇文档生成预设数量的合成查询，以此扩展文档，然后依赖 BM25 索引来从（扩展后的）文档中检索。DeepCT 用 BERT 以上下文感知的方式产生 BM25 的词频分量，本质上是用神经网络实现了词项独立性（term-independence）假设的一种可行方案 [23]。最后，docTTTTTquery [26] 与 doc2query 完全相同，只是它微调一个预训练模型（即 T5 [31]）来生成预测的查询。
+
+::: en
+Concurrently with our drafting of this paper, Hofstätter et al. [11] published their Transformer-Kernel (TK) model. At a high level, TK improves the KNRM architecture described earlier: while KNRM employs kernel pooling on top of word-embedding-based interaction, TK uses a Transformer [34] component for contextually encoding queries and documents before kernel pooling. TK establishes a new state-of-the-art for non-BERT models on MS MARCO (Dev); however, the best non-ensemble MRR@10 it achieves is 31% while ColBERT reaches up to 36%. Moreover, due to indexing document representations offline and employing a MaxSim-based late interaction mechanism, ColBERT is much more scalable, enabling end-to-end retrieval which is not supported by TK.
+:::
+
+在本文撰写同期，Hofstätter et al. [11] 发表了他们的 Transformer-Kernel（TK）模型。概括而言，TK 改进了前述 KNRM 架构：KNRM 在基于词嵌入的交互之上采用核池化，而 TK 在核池化之前用一个 Transformer [34] 组件对查询与文档做上下文化编码。TK 在 MS MARCO（Dev）上为非 BERT 模型创下新纪录；然而其最好的非集成（non-ensemble）MRR@10 为 31%，而 ColBERT 最高可达 36%。此外，由于把文档表示放到离线索引并采用基于 MaxSim 的延迟交互机制，ColBERT 的可扩展性好得多，支持端到端检索——这是 TK 不支持的。
+
+### 3 ColBERT
+
+::: en
+ColBERT prescribes a simple framework for balancing the quality and cost of neural IR, particularly deep language models like BERT. As introduced earlier, delaying the query–document interaction can facilitate cheap neural re-ranking (i.e., through pre-computation) and even support practical end-to-end neural retrieval (i.e., through pruning via vector-similarity search). ColBERT addresses how to do so while still preserving the effectiveness of state-of-the-art models, which condition the bulk of their computations on the joint query–document pair.
+:::
+
+ColBERT 为平衡神经 IR（尤其是 BERT 这类深度语言模型）的质量与成本提供了一个简单框架。如前所述，推迟查询—文档交互既可以促成廉价的神经重排序（即借助预计算），甚至还能支持实用的端到端神经检索（即借助向量相似度搜索进行剪枝）。ColBERT 要回答的问题是：如何在做到这些的同时，仍然保住那些把绝大部分计算都条件化于"查询—文档"联合对之上的最优模型的效果。
+
+::: en
+Even though ColBERT's late-interaction framework can be applied to a wide variety of architectures (e.g., CNNs, RNNs, transformers, etc.), we choose to focus this work on bi-directional transformer-based encoders (i.e., BERT) owing to their state-of-the-art effectiveness yet very high computational cost.
+:::
+
+尽管 ColBERT 的延迟交互框架可应用于多种架构（如 CNN、RNN、Transformer 等），我们仍选择在本文中聚焦于双向 Transformer 编码器（即 BERT），因为它们效果最优、计算成本也极高。
+
+#### 3.1 架构（Architecture）
+
+[图 3: Figure 3: The general architecture of ColBERT given a query q and a document d.]
+
+中文说明：图 3 展示 ColBERT 的总体架构：查询 $q$ 经查询编码器 $f_Q$ 得到一组查询嵌入 $E_q$，文档 $d$ 经文档编码器 $f_D$ 与"离线索引（Offline Indexing）"流程得到一组文档嵌入 $E_d$；随后每个查询嵌入通过一个 MaxSim 节点与全部文档嵌入交互（取最大相似度），各 MaxSim 的标量输出求和（$\sum$）得到相关性分数（score）。
+
+::: en
+Figure 3 depicts the general architecture of ColBERT, which comprises: (a) a query encoder fQ, (b) a document encoder fD, and (c) the late interaction mechanism. Given a query q and document d, fQ encodes q into a bag of fixed-size embeddings Eq while fD encodes d into another bag Ed. Crucially, each embeddings in Eq and Ed is contextualized based on the other terms in q or d, respectively. We describe our BERT-based encoders in §3.2.
+:::
+
+图 3 描绘了 ColBERT 的总体架构，它包括：（a）查询编码器 $f_Q$；（b）文档编码器 $f_D$；以及（c）延迟交互机制。给定查询 $q$ 与文档 $d$，$f_Q$ 把 $q$ 编码为一袋固定大小的嵌入 $E_q$，$f_D$ 把 $d$ 编码为另一袋嵌入 $E_d$。关键在于，$E_q$ 与 $E_d$ 中的每个嵌入都分别基于 $q$ 或 $d$ 中的其他词项做了上下文化。我们的基于 BERT 的编码器在 §3.2 描述。
+
+::: en
+Using Eq and Ed, ColBERT computes the relevance score between q and d via late interaction, which we define as a summation of maximum similarity (MaxSim) operators. In particular, we find the maximum cosine similarity of each v ∈ Eq with vectors in Ed, and combine the outputs via summation. Besides cosine, we also evaluate squared L2 distance as a measure of vector similarity. Intuitively, this interaction mechanism softly searches for each query term tq—in a manner that reflects its context in the query—against the document's embeddings, quantifying the strength of the "match" via the largest similarity score between tq and a document term td. Given these term scores, it then estimates the document relevance by summing the matching evidence across all query terms.
+:::
+
+利用 $E_q$ 与 $E_d$，ColBERT 通过延迟交互计算 $q$ 与 $d$ 之间的相关性分数；我们把延迟交互定义为最大相似度（MaxSim）算子之和。具体而言，我们为 $E_q$ 中的每个向量 $v$ 求出它与 $E_d$ 中各向量的最大余弦相似度，再用求和合并这些输出。除余弦外，我们还评估了平方 L2 距离作为向量相似度的度量。直观上，这一交互机制让每个查询词 $t_q$——以反映其在查询中上下文的方式——对文档的嵌入做"软搜索"，并用 $t_q$ 与某个文档词 $t_d$ 之间最大的相似度分数来量化"匹配"的强度。得到这些词项分数后，再对所有查询词的匹配证据求和来估计文档相关性。
+
+::: en
+While more sophisticated matching is possible with other choices such as deep convolution and attention layers (i.e., as in typical interaction-focused models), a summation of maximum similarity computations has two distinctive characteristics. First, it stands out as a particularly cheap interaction mechanism, as we examine its FLOPs in §4.2. Second, and more importantly, it is amenable to highly-efficient pruning for top-k retrieval, as we evaluate in §4.3. This enables using vector-similarity algorithms for skipping documents without materializing the full interaction matrix or even considering each document in isolation. Other cheap choices (e.g., a summation of average similarity scores, instead of maximum) are possible; however, many are less amenable to pruning. In §4.4, we conduct an extensive ablation study that empirically verifies the advantage of our MaxSim-based late interaction against alternatives.
+:::
+
+虽然选用深度卷积、注意力层等其他做法可以实现更复杂的匹配（即典型交互导向模型中的做法），但"最大相似度计算之和"有两个鲜明特性。其一，它是一种格外廉价的交互机制，我们在 §4.2 考察其 FLOPs。其二（也更重要），它非常适合针对 top-$k$ 检索的高效剪枝，我们在 §4.3 评估。这使得我们可以用向量相似度算法跳过某些文档，既不必物化完整的交互矩阵，甚至也不必逐篇考察每个文档。其他廉价选择（例如对平均相似度而非最大相似度求和）也是可能的，但许多不便于剪枝。在 §4.4 中，我们进行了广泛的消融研究，从经验上验证了基于 MaxSim 的延迟交互相对各种替代方案的优势。
+
+#### 3.2 查询与文档编码器（Query & Document Encoders）
+
+::: en
+Prior to late interaction, ColBERT encodes each query or document into a bag of embeddings, employing BERT-based encoders. We share a single BERT model among our query and document encoders but distinguish input sequences that correspond to queries and documents by prepending a special token [Q] to queries and another token [D] to documents.
+:::
+
+在延迟交互之前，ColBERT 用基于 BERT 的编码器把每个查询或文档编码为一袋嵌入。我们在查询编码器与文档编码器之间共享同一个 BERT 模型，但通过在查询前加特殊标记 [Q]、在文档前加另一个标记 [D]，来区分查询与文档各自对应的输入序列。
+
+::: en
+Query Encoder. Given a textual query q, we tokenize it into its BERT-based WordPiece [35] tokens q1q2...ql. We prepend the token [Q] to the query. We place this token right after BERT's sequence-start token [CLS]. If the query has fewer than a pre-defined number of tokens Nq, we pad it with BERT's special [mask] tokens up to length Nq (otherwise, we truncate it to the first Nq tokens). This padded sequence of input tokens is then passed into BERT's deep transformer architecture, which computes a contextualized representation of each token.
+:::
+
+**查询编码器（Query Encoder）**。给定文本查询 $q$，我们先把它切分为基于 BERT 的 WordPiece [35] 词块 $q_1 q_2 ... q_l$。我们把标记 [Q] 加在查询之前，且让它紧跟在 BERT 的序列起始标记 [CLS] 之后。若查询的 token 数少于预设数量 $N_q$，就用 BERT 特殊的 [mask] token 填充到长度 $N_q$（否则截断为前 $N_q$ 个 token）。这个填充后的输入 token 序列随后被送入 BERT 的深层 Transformer 架构，由后者为每个 token 计算上下文化表示。
+
+::: en
+We denote the padding with masked tokens as query augmentation, a step that allows BERT to produce query-based embeddings at the positions corresponding to these masks. Query augmentation is intended to serve as a soft, differentiable mechanism for learning to expand queries with new terms or to re-weigh existing terms based on their importance for matching the query. As we show in §4.4, this operation is essential for ColBERT's effectiveness.
+:::
+
+我们把用 mask token 进行的填充称为查询增强（query augmentation）：这一步让 BERT 在这些 mask 对应的位置上产生基于查询的嵌入。查询增强意在作为一种软性、可微的机制，供模型学习用新词扩展查询、或依据各查询词对匹配查询的重要程度重新加权。如 §4.4 所示，该操作对 ColBERT 的效果至关重要。
+
+::: en
+Given BERT's representation of each token, our encoder passes the contextualized output representations through a linear layer with no activations. This layer serves to control the dimension of ColBERT's embeddings, producing m-dimensional embeddings for the layer's output size m. As we discuss later in more detail, we typically fix m to be much smaller than BERT's fixed hidden dimension.
+:::
+
+得到 BERT 对每个 token 的表示后，我们的编码器把这些上下文化输出表示送入一个无激活函数的线性层。该层用于控制 ColBERT 嵌入的维度：以该层的输出大小 $m$ 产生 $m$ 维嵌入。正如我们稍后更详细讨论的那样，通常把 $m$ 固定为远小于 BERT 固定隐藏维度的值。
+
+::: en
+While ColBERT's embedding dimension has limited impact on the efficiency of query encoding, this step is crucial for controlling the space footprint of documents, as we show in §4.5. In addition, it can have a significant impact on query execution time, particularly the time taken for transferring the document representations onto the GPU from system memory (where they reside before processing a query). In fact, as we show in §4.2, gathering, stacking, and transferring the embeddings from CPU to GPU can be the most expensive step in re-ranking with ColBERT. Finally, the output embeddings are normalized so each has L2 norm equal to one. The result is that the dot-product of any two embeddings becomes equivalent to their cosine similarity, falling in the [−1, 1] range.
+:::
+
+虽然 ColBERT 的嵌入维度对查询编码效率的影响有限，但如 §4.5 所示，这一步对控制文档的空间占用至关重要。此外，它还可能显著影响查询执行时间，尤其是把文档表示从系统内存（处理查询前它们驻留的地方）传输到 GPU 的时间。事实上，如 §4.2 所示，收集、堆叠并把嵌入从 CPU 传到 GPU，可能是用 ColBERT 做重排序时最昂贵的一步。最后，对输出嵌入做归一化，使每个嵌入的 L2 范数等于 1。这样一来，任意两个嵌入的点积就等价于它们的余弦相似度，取值落在 $[-1, 1]$ 区间内。
+
+::: en
+Document Encoder. Our document encoder has a very similar architecture. We first segment a document d into its constituent tokens d1d2...dm, to which we prepend BERT's start token [CLS] followed by our special token [D] that indicates a document sequence. Unlike queries, we do not append [mask] tokens to documents. After passing this input sequence through BERT and the subsequent linear layer, the document encoder filters out the embeddings corresponding to punctuation symbols, determined via a pre-defined list. This filtering is meant to reduce the number of embeddings per document, as we hypothesize that (even contextualized) embeddings of punctuation are unnecessary for effectiveness.
+:::
+
+**文档编码器（Document Encoder）**。我们的文档编码器架构与此非常相似。先把文档 $d$ 切分为其组成 token $d_1 d_2 ... d_m$，在前面依次加上 BERT 的起始标记 [CLS] 与表示文档序列的特殊标记 [D]。与查询不同，我们不给文档追加 [mask] token。该输入序列经过 BERT 与随后的线性层之后，文档编码器会依据一个预定义列表过滤掉标点符号对应的嵌入。这一过滤意在减少每篇文档的嵌入数量，因为我们的假设是：标点（哪怕是上下文化后的）的嵌入对效果并无必要。
+
+::: en
+In summary, given q = q0q1...ql and d = d0d1...dn, we compute the bags of embeddings Eq and Ed in the following manner, where # refers to the [mask] tokens:
+
+Eq := Normalize( CNN( BERT(“[Q] q0 q1 ... ql ##...#”))) (1)
+
+Ed := Filter( Normalize( CNN( BERT(“[D] d0 d1 ... dn”)))) (2)
+:::
+
+总结起来，给定 $q = q_0 q_1 ... q_l$ 与 $d = d_0 d_1 ... d_n$，我们按如下方式计算嵌入袋 $E_q$ 与 $E_d$，其中 \# 指 [mask] token：
+
+$$E_q := \text{Normalize}(\text{CNN}(\text{BERT}(\text{“[Q]}\ q_0 q_1 ... q_l\ \#\#...\#\text{”}))) \tag{1}$$
+
+$$E_d := \text{Filter}(\text{Normalize}(\text{CNN}(\text{BERT}(\text{“[D]}\ d_0 d_1 ... d_n\text{”})))) \tag{2}$$
+
+> 译注：式中 CNN 为论文原文记法，指代本节所述编码器（BERT 加无激活线性层）；Normalize 为 L2 归一化，Filter 为标点过滤，均按原文照录。
+
+#### 3.3 延迟交互（Late Interaction）
+
+::: en
+Given the representation of a query q and a document d, the relevance score of d to q, denoted as Sq,d, is estimated via late interaction between their bags of contextualized embeddings. As mentioned before, this is conducted as a sum of maximum similarity computations, namely cosine similarity (implemented as dot-products due to the embedding normalization) or squared L2 distance.
+
+Sq,d := Σi∈[|Eq|] maxj∈[|Ed|] Eqi · EdjT (3)
+
+ColBERT is differentiable end-to-end. We fine-tune the BERT encoders and train from scratch the additional parameters (i.e., the linear layer and the [Q] and [D] markers' embeddings) using the Adam [16] optimizer. Notice that our interaction mechanism has no trainable parameters. Given a triple ⟨q, d+, d−⟩ with query q, positive document d+ and negative document d−, ColBERT is used to produce a score for each document individually and is optimized via pairwise softmax cross-entropy loss over the computed scores of d+ and d−.
+:::
+
+给定查询 $q$ 与文档 $d$ 的表示，$d$ 对 $q$ 的相关性分数（记作 $S_{q,d}$）通过二者上下文嵌入袋之间的延迟交互来估计。如前所述，这是以"最大相似度计算之和"的方式进行的，相似度即余弦相似度（由于嵌入已做归一化，实现为点积）或平方 L2 距离。
+
+$$S_{q,d} := \sum_{i \in [|E_q|]} \max_{j \in [|E_d|]} E_{q_i} \cdot E_{d_j}^{\top} \tag{3}$$
+
+ColBERT 端到端可微。我们用 Adam [16] 优化器微调 BERT 编码器，并从头训练新增参数（即线性层以及 [Q]、[D] 标记的嵌入）。注意，我们的交互机制没有任何可训练参数。给定三元组 $\langle q, d^+, d^- \rangle$（查询 $q$、正文档 $d^+$ 与负文档 $d^-$），ColBERT 对每篇文档独立产生分数，并通过对 $d^+$ 与 $d^-$ 所计算分数施加成对 softmax 交叉熵损失（pairwise softmax cross-entropy loss）来优化。
+
+#### 3.4 离线索引：计算并存储文档嵌入（Offline Indexing: Computing & Storing Document Embeddings）
+
+::: en
+By design, ColBERT isolates almost all of the computations between queries and documents, largely to enable pre-computing document representations offline. At a high level, our indexing procedure is straightforward: we proceed over the documents in the collection in batches, running our document encoder fD on each batch and storing the output embeddings per document. Although indexing a set of documents is an offline process, we incorporate a few simple optimizations for enhancing the throughput of indexing. As we show in §4.5, these optimizations can considerably reduce the offline cost of indexing.
+:::
+
+在设计上，ColBERT 把查询与文档之间的计算几乎完全隔离，主要是为了能够离线预计算文档表示。宏观来看，我们的索引流程很直接：分批遍历文档库中的文档，对每批运行文档编码器 $f_D$，并逐篇存储输出的嵌入。尽管给一组文档建索引是离线过程，我们仍加入了若干简单优化来提升索引吞吐。如 §4.5 所示，这些优化能显著降低索引的离线成本。
+
+::: en
+To begin with, we exploit multiple GPUs, if available, for faster encoding of batches of documents in parallel. When batching, we pad all documents to the maximum length of a document within the batch.3 To make capping the sequence length on a per-batch basis more effective, our indexer proceeds through documents in groups of B (e.g., B = 100,000) documents. It sorts these documents by length and then feeds batches of b (e.g., b = 128) documents of comparable length through our encoder. This length-based bucketing is sometimes referred to as a BucketIterator in some libraries (e.g., allenNLP). Lastly, while most computations occur on the GPU, we found that a non-trivial portion of the indexing time is spent on pre-processing the text sequences, primarily BERT's WordPiece tokenization. Exploiting that these operations are independent across documents in a batch, we parallelize the pre-processing across the available CPU cores.
+:::
+
+首先，如果有多块 GPU 可用，我们便利用多卡并行、更快地编码文档批次。组批时，我们把批内所有文档填充到该批中最长文档的长度。³ 为让"按批次截断序列长度"更有效，我们的索引器以 $B$（如 $B = 100{,}000$）篇文档为一组依次处理：先把这些文档按长度排序，再把长度相近的 $b$（如 $b = 128$）篇文档组成批次送入编码器。这种按长度的分桶（bucketing）在一些库（如 allenNLP）中有时被称为 BucketIterator。最后，虽然大多数计算发生在 GPU 上，我们发现索引时间中不小的一部分花在文本序列的预处理上，主要是 BERT 的 WordPiece 分词。考虑到这些操作对批内各文档相互独立，我们把预处理并行化到所有可用的 CPU 核心上。
+
+> 译注（脚注 3）：我们所见的公开 BERT 实现只是简单地填充到一个预设长度。
+
+::: en
+Once the document representations are produced, they are saved to disk using 32-bit or 16-bit values to represent each dimension. As we describe in §3.5 and 3.6, these representations are either simply loaded from disk for ranking or are subsequently indexed for vector-similarity search, respectively.
+:::
+
+文档表示生成后，以每维 32 位或 16 位的数值存盘。如 §3.5 与 §3.6 所述，这些表示或被直接从磁盘加载用于排序，或随后被建为向量相似度搜索的索引。
+
+#### 3.5 用 ColBERT 做 top-k 重排序（Top-k Re-ranking with ColBERT）
+
+::: en
+Recall that ColBERT can be used for re-ranking the output of another retrieval model, typically a term-based model, or directly for end-to-end retrieval from a document collection. In this section, we discuss how we use ColBERT for ranking a small set of k (e.g., k = 1000) documents given a query q. Since k is small, we rely on batch computations to exhaustively score each document (unlike our approach in §3.6). To begin with, our query serving subsystem loads the indexed documents representations into memory, representing each document as a matrix of embeddings.
+:::
+
+回顾一下，ColBERT 既可用于重排序另一个检索模型（通常是词项模型）的输出，也可直接从文档库进行端到端检索。本节讨论在给定查询 $q$ 时，我们如何用 ColBERT 对数量较少的 $k$（如 $k = 1000$）篇文档排序。由于 $k$ 较小，我们依赖批量计算对每篇文档穷举打分（与我们在 §3.6 的做法不同）。首先，我们的查询服务子系统把已索引的文档表示载入内存，把每篇文档表示为一个嵌入矩阵。
+
+::: en
+Given a query q, we compute its bag of contextualized embeddings Eq (Equation 1) and, concurrently, gather the document representations into a 3-dimensional tensor D consisting of k document matrices. We pad the k documents to their maximum length to facilitate batched operations, and move the tensor D to the GPU's memory. On the GPU, we compute a batch dot-product of Eq and D, possibly over multiple mini-batches. The output materializes a 3-dimensional tensor that is a collection of cross-match matrices between q and each document. To compute the score of each document, we reduce its matrix across document terms via a max-pool (i.e., representing an exhaustive implementation of our MaxSim computation) and reduce across query terms via a summation. Finally, we sort the k documents by their total scores.
+:::
+
+给定查询 $q$，我们计算其上下文嵌入袋 $E_q$（式 1），同时把文档表示汇聚成一个由 $k$ 个文档矩阵组成的三维张量 $D$。为便于批量运算，把 $k$ 篇文档填充到它们之中的最大长度，并把张量 $D$ 搬入 GPU 内存。在 GPU 上，我们计算 $E_q$ 与 $D$ 的批量点积（可能分多个 mini-batch 进行）。输出物化为一个三维张量，即 $q$ 与每篇文档的交叉匹配（cross-match）矩阵的集合。为计算每篇文档的分数，先沿文档词维对其矩阵做 max 池化（即 MaxSim 计算的穷举实现）做归约，再沿查询词维做求和归约。最后按总分对这 $k$ 篇文档排序。
+
+::: en
+Relative to existing neural rankers (especially, but not exclusively, BERT-based ones), this computation is very cheap that, in fact, its cost is dominated by the cost of gathering and transferring the pre-computed embeddings. To illustrate, ranking k documents via typical BERT rankers requires feeding BERT k different inputs each of length l = |q| + |di| for query q and documents di, where attention has quadratic cost in the length of the sequence. In contrast, ColBERT feeds BERT only a single, much shorter sequence of length l = |q|. Consequently, ColBERT is not only cheaper, it also scales much better with k as we examine in §4.2.
+:::
+
+相对既有的神经排序器（尤其是但不仅限于基于 BERT 的），这一计算非常便宜；事实上，其成本主要由收集与传输预计算嵌入的开销主导。举例说明：用典型的 BERT 排序器对 $k$ 篇文档排序，需要给 BERT 喂入 $k$ 个不同输入、每个长度为 $l = |q| + |d_i|$（$q$ 为查询、$d_i$ 为文档），而注意力机制的成本随序列长度呈平方增长。相比之下，ColBERT 只给 BERT 喂入一个短得多的序列，长度 $l = |q|$。因此，ColBERT 不仅更便宜，而且如 §4.2 所考察，它随 $k$ 的扩展性也远好于 BERT。
+
+#### 3.6 用 ColBERT 做端到端 top-k 检索（End-to-end Top-k Retrieval with ColBERT）
+
+::: en
+As mentioned before, ColBERT's late-interaction operator is specifically designed to enable end-to-end retrieval from a large collection, largely to improve recall relative to term-based retrieval approaches. This section is concerned with cases where the number of documents to be ranked is too large for exhaustive evaluation of each possible candidate document, particularly when we are only interested in the highest scoring ones. Concretely, we focus here on retrieving the top-k results directly from a large document collection with N (e.g., N = 10,000,000) documents, where k ≪ N.
+:::
+
+如前所述，ColBERT 的延迟交互算子正是为支持从大型文档库端到端检索而专门设计的，主要是为了相对词项检索方法提升召回率。本节讨论的是：待排序文档数量过大、无法穷举评估每个可能候选的情形，尤其是我们只关心得分最高的那些文档时。具体来说，这里聚焦于从含 $N$（如 $N = 10{,}000{,}000$）篇文档的大型文档库直接检索 top-$k$ 结果，其中 $k \ll N$。
+
+::: en
+To do so, we leverage the pruning-friendly nature of the MaxSim operations at the backbone of late interaction. Instead of applying MaxSim between one of the query embeddings and all of one document's embeddings, we can use fast vector-similarity data structures to efficiently conduct this search between the query embedding and all document embeddings across the full collection. For this, we employ an off-the-shelf library for large-scale vector-similarity search, namely faiss [15] from Facebook.4 In particular, at the end of offline indexing (§3.4), we maintain a mapping from each embedding to its document of origin and then index all document embeddings into faiss.
+:::
+
+为此，我们利用处在延迟交互核心位置的 MaxSim 运算所具有的剪枝友好性质。与其在"某个查询嵌入"与"某一篇文档的全部嵌入"之间应用 MaxSim，我们可以用快速的向量相似度数据结构，在"该查询嵌入"与"全库所有文档嵌入"之间高效执行这一搜索。为实现这一点，我们采用一个现成的大规模向量相似度搜索库，即 Facebook 的 faiss [15]。⁴ 具体而言，在离线索引（§3.4）结束时，我们维护一个"每个嵌入 → 其来源文档"的映射，然后把所有文档嵌入灌入 faiss 建立索引。
+
+> 译注（脚注 4）：即 https://github.com/facebookresearch/faiss。
+
+::: en
+Subsequently, when serving queries, we use a two-stage procedure to retrieve the top-k documents from the entire collection. Both stages rely on ColBERT's scoring: the first is an approximate stage aimed at filtering while the second is a refinement stage. For the first stage, we concurrently issue Nq vector-similarity queries (corresponding to each of the embeddings in Eq) onto our faiss index. This retrieves the top-k′ (e.g., k′ = k/2) matches for that vector over all document embeddings. We map each of those to its document of origin, producing Nq × k′ document IDs, only K ≤ Nq × k′ of which are unique. These K documents likely contain one or more embeddings that are highly similar to the query embeddings. For the second stage, we refine this set by exhaustively re-ranking only those K documents in the usual manner described in §3.5.
+:::
+
+随后，在服务查询时，我们用两阶段流程从整个文档库检索 top-$k$ 文档。两个阶段都依赖 ColBERT 的打分：第一阶段是以过滤为目标的近似（approximate）阶段，第二阶段是精炼（refinement）阶段。第一阶段，我们把 $N_q$ 个向量相似度查询（对应 $E_q$ 中的每个嵌入）并发地发到 faiss 索引上，为该向量取回在全部文档嵌入中最相似的 top-$k'$（如 $k' = k/2$）个匹配。我们把每个匹配映射回其来源文档，得到 $N_q \times k'$ 个文档 ID，其中仅有 $K \le N_q \times k'$ 个互不相同。这 $K$ 篇文档很可能含有一个或多个与查询嵌入高度相似的嵌入。第二阶段，我们按 §3.5 所述的常规方式，只对这 $K$ 篇文档穷举重排序，从而精炼这一候选集。
+
+::: en
+In our faiss-based implementation, we use an IVFPQ index ("inverted file with product quantization"). This index partitions the embedding space into P (e.g., P = 1000) cells based on k-means clustering and then assigns each document embedding to its nearest cell based on the selected vector-similarity metric. For serving queries, when searching for the top-k′ matches for a single query embedding, only the nearest p (e.g., p = 10) partitions are searched. To improve memory efficiency, every embedding is divided into s (e.g., s = 16) sub-vectors, each represented using one byte. Moreover, the index conducts the similarity computations in this compressed domain, leading to cheaper computations and thus faster search.
+:::
+
+在我们基于 faiss 的实现中，使用的是 IVFPQ 索引（"倒排文件 + 乘积量化"，inverted file with product quantization）。该索引基于 k-means 聚类把嵌入空间划分为 $P$（如 $P = 1000$）个胞元，再依据所选的向量相似度度量把每个文档嵌入归入最近的胞元。服务查询时，为单个查询嵌入搜索 top-$k'$ 匹配，只搜最近的 $p$（如 $p = 10$）个分区。为提升内存效率，每个嵌入被切成 $s$（如 $s = 16$）个子向量，每个子向量用 1 字节表示。此外，该索引在这一压缩域中执行相似度计算，计算更廉价，搜索因而更快。
+
+### 4 实验评估（Experimental Evaluation）
+
+::: en
+We now turn our attention to empirically testing ColBERT, addressing the following research questions.
+
+RQ1: In a typical re-ranking setup, how well can ColBERT bridge the existing gap (highlighted in §1) between highly-efficient and highly-effective neural models? (§4.2)
+
+RQ2: Beyond re-ranking, can ColBERT effectively support end-to-end retrieval directly from a large collection? (§4.3)
+
+RQ3: What does each component of ColBERT (e.g., late interaction, query augmentation) contribute to its quality? (§4.4)
+
+RQ4: What are ColBERT's indexing-related costs in terms of offline computation and memory overhead? (§4.5)
+:::
+
+我们现在转向对 ColBERT 的实证检验，回答以下研究问题。
+
+RQ1：在典型的重排序设定下，ColBERT 能多大程度地弥合 §1 所强调的高效神经模型与高效能神经模型之间的差距？（§4.2）
+
+RQ2：在重排序之外，ColBERT 能否有效支持直接从大型文档库进行的端到端检索？（§4.3）
+
+RQ3：ColBERT 的各组件（如延迟交互、查询增强）分别对其质量贡献多少？（§4.4）
+
+RQ4：ColBERT 与索引相关的成本——离线计算与内存开销——如何？（§4.5）
+
+#### 4.1 实验方法（Methodology）
+
+##### 4.1.1 数据集与指标（Datasets & Metrics）
+
+::: en
+Datasets & Metrics. Similar to related work [2, 27, 28], we conduct our experiments on the MS MARCO Ranking [24] (henceforth, MS MARCO) and TREC Complex Answer Retrieval (TREC-CAR) [6] datasets. Both of these recent datasets provide large training data of the scale that facilitates training and evaluating deep neural networks. We describe both in detail below.
+:::
+
+**数据集与指标（Datasets & Metrics）**。与相关工作 [2, 27, 28] 类似，我们在 MS MARCO Ranking [24]（下文简称 MS MARCO）与 TREC Complex Answer Retrieval（TREC-CAR）[6] 两个数据集上开展实验。这两个近期数据集都提供了大规模训练数据，其规模便于训练与评估深度神经网络。下面分别详述。
+
+::: en
+MS MARCO. MS MARCO is a dataset (and a corresponding competition) introduced by Microsoft in 2016 for reading comprehension and adapted in 2018 for retrieval. It is a collection of 8.8M passages from Web pages, which were gathered from Bing's results to 1M real-world queries. Each query is associated with sparse relevance judgements of one (or very few) documents marked as relevant and no documents explicitly indicated as irrelevant. Per the official evaluation, we use MRR@10 to measure effectiveness.
+:::
+
+**MS MARCO**。MS MARCO 是微软 2016 年为阅读理解推出的数据集（及相应竞赛），2018 年被改造用于检索。它是来自网页的 880 万（8.8M）个段落的合集，这些段落收集自 Bing 对 100 万条真实查询的检索结果。每个查询只带有稀疏的相关性标注：一（或极少数）篇文档被标为相关，且没有任何文档被显式标为不相关。按照官方评测，我们用 MRR@10 衡量效果。
+
+::: en
+We use three sets of queries for evaluation. The official development and evaluation sets contain roughly 7k queries. However, the relevance judgements of the evaluation set are held-out by Microsoft and effectiveness results can only be obtained by submitting to the competition's organizers. We submitted our main re-ranking ColBERT model for the results in §4.2. In addition, the collection includes roughly 55k queries (with labels) that are provided as additional validation data. We re-purpose a random sample of 5k queries among those (i.e., ones not in our development or training sets) as a "local" evaluation set. Along with the official development set, we use this held-out set for testing our models as well as baselines in §4.3. We do so to avoid submitting multiple variants of the same model at once, as the organizers discourage too many submissions by the same team.
+:::
+
+我们用三个查询集做评估。官方开发集与评估集各含约 7000 条查询。但评估集的相关性标注由微软保留，效果结果只能通过向竞赛主办方提交获得。我们为 §4.2 的结果提交了主重排序 ColBERT 模型。此外，该数据集还含约 5.5 万条（带标注的）查询，作为额外验证数据提供。我们从其中（即不在我们开发集或训练集里的那部分查询中）随机抽取 5000 条，改造成一个"本地（local）"评估集。连同官方开发集，我们用这个保留集来测试 §4.3 中的模型与基线。这样做是为了避免同时提交同一模型的多个变体，因为主办方不鼓励同一团队过多提交。
+
+::: en
+TREC CAR. Introduced by Dietz et al. [6] in 2017, TREC CAR is a synthetic dataset based on Wikipedia that consists of about 29M passages. Similar to related work [25], we use the first four of five pre-defined folds for training and the fifth for validation. This amounts to roughly 3M queries generated by concatenating the title of a Wikipedia page with the heading of one of its sections. That section's passages are marked as relevant to the corresponding query. Our evaluation is conducted on the test set used in TREC 2017 CAR, which contains 2,254 queries.
+:::
+
+**TREC CAR**。TREC CAR 由 Dietz et al. [6] 于 2017 年提出，是一个基于维基百科的合成数据集，含约 2900 万个段落。与相关工作 [25] 类似，我们把预定义五折中的前四折用于训练、第五折用于验证。这相当于约 300 万条查询，每条由"维基百科页面标题 + 该页某一小节的标题"拼接生成，该小节的段落被标为对应查询的相关文档。评估在 TREC 2017 CAR 所用的测试集上进行，含 2254 条查询。
+
+##### 4.1.2 实现（Implementation）
+
+::: en
+Implementation. Our ColBERT models are implemented using Python 3 and PyTorch 1. We use the popular transformers5 library for the pre-trained BERT model. Similar to [25], we fine-tune all ColBERT models with learning rate 3×10−6 with a batch size 32. We fix the number of embeddings per query at Nq = 32. We set our ColBERT embedding dimension m to be 128; §4.5 demonstrates ColBERT's robustness to a wide range of embedding dimensions.
+:::
+
+**实现（Implementation）**。我们的 ColBERT 模型用 Python 3 与 PyTorch 1 实现，预训练 BERT 模型使用流行的 transformers 库。⁵ 与 [25] 类似，我们以学习率 $3\times10^{-6}$、批大小 32 微调所有 ColBERT 模型。每查询的嵌入数固定为 $N_q = 32$；ColBERT 嵌入维度 $m$ 设为 128——§4.5 会展示 ColBERT 对很宽的嵌入维度范围都很鲁棒。
+
+> 译注（脚注 5）：即 https://github.com/huggingface/transformers。
+
+::: en
+For MS MARCO, we initialize the BERT components of the ColBERT query and document encoders using Google's official pre-trained BERTbase model. Further, we train all models for 200k iterations. For TREC CAR, we follow related work [2, 25] and use a different pre-trained model to the official ones. To explain, the official BERT models were pre-trained on Wikipedia, which is the source of TREC CAR's training and test sets. To avoid leaking test data into train, Nogueira and Cho's [25] pre-train a randomly-initialized BERT model on the Wiki pages corresponding to training subset of TREC CAR. They release their BERTlarge pre-trained model, which we fine-tune for ColBERT's experiments on TREC CAR. Since fine-tuning this model is significantly slower than BERTbase, we train on TREC CAR for only 125k iterations.
+:::
+
+在 MS MARCO 上，ColBERT 查询与文档编码器中的 BERT 组件用 Google 官方预训练 BERT-base 模型初始化，且所有模型训练 200k 步。在 TREC CAR 上，我们遵循相关工作 [2, 25]，使用与官方模型不同的预训练模型。原因在于：官方 BERT 模型是在维基百科上预训练的，而维基百科正是 TREC CAR 训练集与测试集的来源。为避免测试数据泄漏进训练，Nogueira 与 Cho [25] 在 TREC CAR 训练子集对应的维基页面上预训练了一个随机初始化的 BERT 模型，并发布了该 BERT-large 预训练模型；我们在 TREC CAR 的 ColBERT 实验中微调的就是它。由于微调该模型明显慢于 BERT-base，我们在 TREC CAR 上只训练 125k 步。
+
+::: en
+In our re-ranking results, unless stated otherwise, we use 4 bytes per dimension in our embeddings and employ cosine as our vector-similarity function. For end-to-end ranking, we use (squared) L2 distance, as we found our faiss index was faster at L2-based retrieval. For our faiss index, we set the number of partitions to P = 2,000, and search the nearest p = 10 to each query embedding to retrieve k′ = k = 1000 document vectors per query embedding. We divide each embedding into s = 16 sub-vectors, each encoded using one byte. To represent the index used for the second stage of our end-to-end retrieval procedure, we use 16-bit values per dimension.
+:::
+
+在重排序结果中，除非另有说明，嵌入每维用 4 字节表示，向量相似度函数用余弦。端到端排序用（平方）L2 距离，因为我们发现我们的 faiss 索引做基于 L2 的检索更快。对我们的 faiss 索引，分区数设为 $P = 2{,}000$；对每个查询嵌入只搜其最近的 $p = 10$ 个分区，每个查询嵌入取回 $k' = k = 1000$ 个文档向量；每个嵌入切成 $s = 16$ 个子向量，各用 1 字节编码。端到端检索流程第二阶段所用的表示，每维用 16 位数值。
+
+##### 4.1.3 硬件与时间测量（Hardware & Time Measurements）
+
+::: en
+Hardware & Time Measurements. To evaluate the latency of neural re-ranking models in §4.2, we use a single Tesla V100 GPU that has 32 GiBs of memory on a server with two Intel Xeon Gold 6132 CPUs, each with 14 physical cores (24 hyperthreads), and 469 GiBs of RAM. For the mostly CPU-based retrieval experiments in §4.3 and the indexing experiments in §4.5, we use another server with the same CPU and system memory specifications but which has four Titan V GPUs attached, each with 12 GiBs of memory. Across all experiments, only one GPU is dedicated per query for retrieval (i.e., for methods with neural computations) but we use up to all four GPUs during indexing.
+:::
+
+**硬件与时间测量（Hardware & Time Measurements）**。为评估 §4.2 中神经重排序模型的延迟，我们使用一台服务器上的单块 Tesla V100 GPU（32 GiB 显存），该服务器配两颗 Intel Xeon Gold 6132 CPU（每颗 14 个物理核、24 超线程）与 469 GiB 内存。§4.3 以 CPU 为主的检索实验与 §4.5 的索引实验使用另一台服务器：CPU 与内存规格相同，但挂载四块 Titan V GPU（各 12 GiB 显存）。所有实验中，检索（即对含神经计算的方法）每条查询只独占一块 GPU，而索引时最多用满四块 GPU。
+
+#### 4.2 质量–成本权衡：top-k 重排序（Quality–Cost Tradeoff: Top-k Re-ranking）
+
+::: en
+In this section, we examine ColBERT's efficiency and effectiveness at re-ranking the top-k results extracted by a bag-of-words retrieval model, which is the most typical setting for testing and deploying neural ranking models. We begin with the MS MARCO dataset. We compare against KNRM, Duet, and fastText+ConvKNRM, a representative set of neural matching models that have been previously tested on MS MARCO. In addition, we compare against the natural adaptation of BERT for ranking by Nogueira and Cho [25], in particular, BERTbase and its deeper counterpart BERTlarge. We also report results for "BERTbase (our training)", which is based on Nogueira and Cho's base model (including hyperparameters) but is trained with the same loss function as ColBERT (§3.3) for 200k iterations, allowing for a more direct comparison of the results.
+:::
+
+本节考察 ColBERT 在重排序"词袋检索模型取出的 top-$k$ 结果"上的效率与效果——这是测试与部署神经排序模型最常见的设定。我们先从 MS MARCO 数据集开始。对比对象包括 KNRM、Duet 与 fastText+ConvKNRM——一组此前曾在 MS MARCO 上测试过的代表性神经匹配模型；此外，还对比 Nogueira 与 Cho [25] 对 BERT 的自然排序适配，特别是 BERT-base 及其更深的版本 BERT-large。我们还报告"BERT-base（our training，本文训练）"的结果：它基于 Nogueira 与 Cho 的 base 模型（含超参数），但用与 ColBERT 相同的损失函数（§3.3）训练 200k 步，以便更直接地比较结果。
+
+::: en
+We report the competition's official metric, namely MRR@10, on the validation set (Dev) and the evaluation set (Eval). We also report the re-ranking latency, which we measure using a single Tesla V100 GPU, and the FLOPs per query for each neural ranking model. For ColBERT, our reported latency subsumes the entire computation from gathering the document representations, moving them to the GPU, tokenizing then encoding the query, and applying late interaction to compute document scores. For the baselines, we measure the scoring computations on the GPU and exclude the CPU-based text preprocessing (similar to [9]). In principle, the baselines can pre-compute the majority of this preprocessing (e.g., document tokenization) offline and parallelize the rest across documents online, leaving only a negligible cost. We estimate the FLOPs per query of each model using the torchprofile6 library.
+:::
+
+我们报告竞赛的官方指标 MRR@10，分别落在验证集（Dev）与评估集（Eval）上。我们还报告重排序延迟（用单块 Tesla V100 GPU 测量）以及各神经排序模型的每查询 FLOPs。对 ColBERT，所报延迟涵盖全部计算：从收集文档表示、搬到 GPU、对查询分词并编码，到应用延迟交互计算文档分数。对基线模型，我们只测 GPU 上的打分计算，排除基于 CPU 的文本预处理（与 [9] 类似）。原则上，基线可以把这类预处理的大部分（如文档分词）离线预计算，其余部分在在线阶段跨文档并行，只留下可忽略的成本。我们用 torchprofile 库估计每个模型的每查询 FLOPs。⁶
+
+> 译注（脚注 6）：即 https://github.com/mit-han-lab/torchprofile。
+
+::: en
+We now proceed to study the results, which are reported in Table 1. To begin with, we notice the fast progress from KNRM in 2017 to the BERT-based models in 2019, manifesting itself in over 16% increase in MRR@10. As described in §1, the simultaneous increase in computational cost is difficult to miss. Judging by their rather monotonic pattern of increasingly larger cost and higher effectiveness, these results appear to paint a picture where expensive models are necessary for high-quality ranking.
+:::
+
+现在来研究表 1 报告的结果。首先注意到从 2017 年的 KNRM 到 2019 年基于 BERT 的模型的快速进步，体现为 MRR@10 提升超过 16%。如 §1 所述，与之相伴的计算成本增加也显而易见。从"成本越来越高、效果也越来越高"这一相当单调的模式来看，这些结果似乎描绘出这样一幅图景：昂贵的模型是高质量排序的必要条件。
+
+[表 1: Table 1: "Re-ranking" results on MS MARCO. Each neural model re-ranks the official top-1000 results produced by BM25. Latency is reported for re-ranking only. To obtain the end-to-end latency in Figure 1, we add the BM25 latency from Table 2.]
+
+| 方法 | MRR@10 (Dev) | MRR@10 (Eval) | 重排延迟 (ms) | FLOPs/查询 |
+|---|---|---|---|---|
+| BM25（官方） | 16.7 | 16.5 | - | - |
+| KNRM | 19.8 | 19.8 | 3 | 592M（0.085×） |
+| Duet | 24.3 | 24.5 | 22 | 159B（23×） |
+| fastText+ConvKNRM | 29.0 | 27.7 | 28 | 78B（11×） |
+| BERT-base [25] | 34.7 | - | 10,700 | 97T（13,900×） |
+| BERT-base（本文训练） | 36.0 | - | 10,700 | 97T（13,900×） |
+| BERT-large [25] | 36.5 | 35.9 | 32,900 | 340T（48,600×） |
+| ColBERT（基于 BERT-base） | 34.9 | 34.9 | 61 | 7B（1×） |
+
+中文说明：表 1 为 MS MARCO 上的"重排序"结果，每个神经模型重排 BM25 产生的官方 top-1000 结果；延迟只统计重排序本身，要得到图 1 中的端到端延迟，需再加上表 2 中 BM25 的延迟；FLOPs 列括号内为相对 ColBERT 的倍数。
+
+::: en
+In contrast with this trend, ColBERT (which employs late-interaction over BERTbase) performs no worse than the original adaptation of BERTbase for ranking by Nogueira and Cho [25, 27] and is only marginally less effective than BERTlarge and our training of BERTbase (described above). While highly competitive in effectiveness, ColBERT is orders of magnitude cheaper than BERTbase, in particular, by over 170× in latency and 13,900× in FLOPs. This highlights the expressiveness of our proposed late interaction mechanism, particularly when coupled with a powerful pre-trained LM like BERT. While ColBERT's re-ranking latency is slightly higher than the non-BERT re-ranking models shown (i.e., by 10s of milliseconds), this difference is explained by the time it takes to gather, stack, and transfer the document embeddings to the GPU. In particular, the query encoding and interaction in ColBERT consume only 13 milliseconds of its total execution time. We note that ColBERT's latency and FLOPs can be considerably reduced by padding queries to a shorter length, using smaller vector dimensions (the MRR@10 of which is tested in §4.5), employing quantization of the document vectors, and storing the embeddings on GPU if sufficient memory exists. We leave these directions for future work.
+:::
+
+与这一趋势相反，ColBERT（在 BERT-base 之上采用延迟交互）不逊于 Nogueira 与 Cho [25, 27] 最初的 BERT-base 排序适配，仅略逊于 BERT-large 与我们训练的 BERT-base（上文已述）。尽管效果极具竞争力，ColBERT 却比 BERT-base 便宜若干个数量级：具体而言，延迟低逾 170 倍、FLOPs 少 13,900 倍。这凸显了我们提出的延迟交互机制的表达力，尤其是与 BERT 这样强大的预训练 LM 相结合时。虽然 ColBERT 的重排延迟略高于所示的非 BERT 重排模型（即高出几十毫秒），这一差别可以由收集、堆叠文档嵌入并把它们传到 GPU 的时间来解释。具体来说，ColBERT 中的查询编码与交互只消耗其总执行时间中的 13 毫秒。我们指出，ColBERT 的延迟与 FLOPs 还可大幅降低：把查询填充到更短的长度、使用更小的向量维度（其 MRR@10 在 §4.5 检验）、对文档向量做量化，以及在显存充足时把嵌入存在 GPU 上。这些方向留作未来工作。
+
+[图 4: Figure 4: FLOPs (in millions) and MRR@10 as functions of the re-ranking depth k. Since the official BM25 ranking is not ordered, the initial top-k retrieval is conducted with Anserini's BM25.]
+
+中文说明：图 4 绘出重排深度 $k$ 变化时 FLOPs（百万计，纵轴对数刻度 10³–10⁹）与 MRR@10（0.27–0.37）的关系曲线，比较 ColBERT 与 BERT-base（本文训练），各曲线上标注 k=10、20、50、100、200、500、1000、2000。由于官方 BM25 排名不提供顺序，初始的 top-$k$ 检索用 Anserini 的 BM25 完成。
+
+::: en
+Diving deeper into the quality–cost tradeoff between BERT and ColBERT, Figure 4 demonstrates the relationships between FLOPs and effectiveness (MRR@10) as a function of the re-ranking depth k when re-ranking the top-k results by BM25, comparing ColBERT and BERTbase (our training). We conduct this experiment on MS MARCO (Dev). We note here that as the official top-1000 ranking does not provide the BM25 order (and also lacks documents beyond the top-1000 per query), the models in this experiment re-rank the Anserini [37] toolkit's BM25 output. Consequently, both MRR@10 values at k = 1000 are slightly higher from those reported in Table 1.
+:::
+
+更深入地审视 BERT 与 ColBERT 之间的质量–成本折中：图 4 展示了重排 BM25 top-$k$ 结果时，FLOPs 与效果（MRR@10）随重排深度 $k$ 变化的关系，比较 ColBERT 与 BERT-base（本文训练）。该实验在 MS MARCO（Dev）上进行。这里要指出：由于官方 top-1000 排名不提供 BM25 的顺序（也缺少每查询 top-1000 之外的文档），本实验中的模型重排的是 Anserini [37] 工具包的 BM25 输出。因此，$k = 1000$ 处两者的 MRR@10 都略高于表 1 所报的数值。
+
+::: en
+Studying the results in Figure 4, we notice that not only is ColBERT much cheaper than BERT for the same model size (i.e., 12-layer "base" transformer encoder), it also scales better with the number of ranked documents. In part, this is because ColBERT only needs to process the query once, irrespective of the number of documents evaluated. For instance, at k = 10, BERT requires nearly 180× more FLOPs than ColBERT; at k = 1000, BERT's overhead jumps to 13,900×. It then reaches 23,000× at k = 2000. In fact, our informal experimentation shows that this orders-of-magnitude gap in FLOPs makes it practical to run ColBERT entirely on the CPU, although CPU-based re-ranking lies outside our scope.
+:::
+
+研究图 4 的结果可以注意到：在相同模型规模（即 12 层"base" Transformer 编码器）下，ColBERT 不仅比 BERT 便宜得多，而且随被排序文档数量的扩展性也更好。部分原因在于，ColBERT 只需处理查询一次，与被评估文档的数量无关。例如，$k = 10$ 时，BERT 所需 FLOPs 约为 ColBERT 的 180 倍；$k = 1000$ 时跳到 13,900 倍；$k = 2000$ 时达到 23,000 倍。事实上，我们的非正式实验表明，这一数量级的 FLOPs 差距使得完全在 CPU 上运行 ColBERT 也变得可行——不过基于 CPU 的重排序不在本文研究范围之内。
+
+::: en
+Having studied our results on MS MARCO, we now consider TREC CAR, whose official metric is MAP. Results are summarized in Table 3, which includes a number of important baselines (BM25, doc2query, and DeepCT) in addition to re-ranking baselines that have been tested on this dataset. These results directly mirror those with MS MARCO.
+:::
+
+研究过 MS MARCO 上的结果后，我们再看 TREC CAR，其官方指标是 MAP。结果汇总于表 3，其中除已在此数据集上测试过的重排序基线外，还纳入了若干重要基线（BM25、doc2query 与 DeepCT）。这些结果与 MS MARCO 上的情况如出一辙。
+
+[表 3: Table 3: Results on TREC CAR.]
+
+| 方法 | MAP | MRR@10 |
+|---|---|---|
+| BM25（Anserini） | 15.3 | - |
+| doc2query | 18.1 | - |
+| DeepCT | 24.6 | 33.2 |
+| BM25 + BERT-base | 31.0 | - |
+| BM25 + BERT-large | 33.5 | - |
+| BM25 + ColBERT | 31.3 | 44.3 |
+
+中文说明：表 3 为 TREC CAR 上的结果：BM25+ColBERT（MAP 31.3）与 BM25+BERT-base（31.0）相当、略低于 BM25+BERT-large（33.5），远超非 BERT 基线；其 MRR@10 达 44.3。
+
+#### 4.3 端到端 top-k 检索（End-to-end Top-k Retrieval）
+
+::: en
+Beyond cheap re-ranking, ColBERT is amenable to top-k retrieval directly from a full collection. Table 2 considers full retrieval, wherein each model retrieves the top-1000 documents directly from MS MARCO's 8.8M documents per query. In addition to MRR@10 and latency in milliseconds, the table reports Recall@50, Recall@200, and Recall@1000, important metrics for a full-retrieval model that essentially filters down a large collection on a per-query basis.
+:::
+
+在廉价重排序之外，ColBERT 也适合直接从整个文档库做 top-$k$ 检索。表 2 考察全量检索：每个模型对每条查询直接从 MS MARCO 的 880 万文档中取回 top-1000。除 MRR@10 与毫秒计的延迟外，该表还报告 Recall@50、Recall@200 与 Recall@1000——对本质上"按查询过滤掉大型文档库绝大部分"的全量检索模型而言，这些是重要指标。
+
+::: en
+We compare against BM25, in particular MS MARCO's official BM25 ranking as well as a well-tuned baseline based on the Anserini toolkit.7 While many other traditional models exist, we are not aware of any that substantially outperform Anserini's BM25 implementation (e.g., see RM3 in [28], LMDir in [2], or Microsoft's proprietary feature-based RankSVM on the leaderboard).
+:::
+
+我们与 BM25 对比，特别是 MS MARCO 的官方 BM25 排名，以及一个基于 Anserini 工具包精调的基线。⁷ 虽然还有许多其他传统模型，但我们不知道有哪个能大幅超过 Anserini 的 BM25 实现（例如可参见 [28] 中的 RM3、[2] 中的 LMDir，或排行榜上微软专有的、基于特征的 RankSVM）。
+
+> 译注（脚注 7）：即 http://anserini.io/。
+
+::: en
+We also compare against doc2query, DeepCT, and docTTTTTquery. All three rely on a traditional bag-of-words model (primarily BM25) for retrieval. Crucially, however, they re-weigh the frequency of terms per document and/or expand the set of terms in each document before building the BM25 index. In particular, doc2query expands each document with a pre-defined number of synthetic queries generated by a seq2seq transformer model (which docTTTTquery replaced with a pre-trained language model, T5 [31]). In contrast, DeepCT uses BERT to produce the term frequency component of BM25 in a context-aware manner.
+:::
+
+我们还与 doc2query、DeepCT 与 docTTTTTquery 对比。三者都依赖传统词袋模型（主要是 BM25）做检索；但关键在于，它们在建立 BM25 索引之前，会重新加权每篇文档的词项频率和/或扩展每篇文档的词项集合。具体来说，doc2query 用一个 seq2seq Transformer 模型生成预设数量的合成查询来扩展每篇文档（docTTTTTquery 把该生成器换成了预训练语言模型 T5 [31]）；相比之下，DeepCT 用 BERT 以上下文感知的方式产生 BM25 的词频分量。
+
+::: en
+For the latency of Anserini's BM25, doc2query, and docTTTTTquery, we use the authors' [26, 28] Anserini-based implementation. While this implementation supports multi-threading, it only utilizes parallelism across different queries. We thus report single-threaded latency for these models, noting that simply parallelizing their computation over shards of the index can substantially decrease their already-low latency. For DeepCT, we only estimate its latency using that of BM25 (as denoted by (est.) in the table), since DeepCT re-weighs BM25's term frequency without modifying the index otherwise.8 As discussed in §4.1, we use ColBERT L2 for end-to-end retrieval, which employs negative squared L2 distance as its vector-similarity function. For its latency, we measure the time for faiss-based candidate filtering and the subsequent re-ranking. In this experiment, faiss uses all available CPU cores.
+:::
+
+Anserini BM25、doc2query 与 docTTTTTquery 的延迟采用作者们 [26, 28] 基于 Anserini 的实现。该实现虽支持多线程，但只在不同的查询之间利用并行。因此我们对这些模型报告单线程延迟，并指出：只要把计算按索引分片（shard）简单并行，它们本就很低的延迟还能大幅下降。DeepCT 的延迟只用 BM25 的延迟来估计（表中以 (est.) 标注），因为 DeepCT 只是重新加权 BM25 的词频、并不以其他方式改动索引。⁸ 如 §4.1 所述，端到端检索使用 ColBERT-L2，它以负的平方 L2 距离作为向量相似度函数。其延迟测量的是基于 faiss 的候选过滤加上随后重排序的时间。本实验中，faiss 用满所有可用 CPU 核。
+
+> 译注（脚注 8）：实践中，种种原因仍可能使 DeepCT 的延迟与 BM25 的略有差异。例如，所采用的 top-$k$ 剪枝策略（若有）可能会与改变后的分数分布产生不同的相互作用。
+
+[表 2: Table 2: End-to-end retrieval results on MS MARCO. Each model retrieves the top-1000 documents per query directly from the entire 8.8M document collection.]
+
+| 方法 | MRR@10 (Dev) | MRR@10 (本地评估) | 延迟 (ms) | Recall@50 | Recall@200 | Recall@1000 |
+|---|---|---|---|---|---|---|
+| BM25（官方） | 16.7 | - | - | - | - | 81.4 |
+| BM25（Anserini） | 18.7 | 19.5 | 62 | 59.2 | 73.8 | 85.7 |
+| doc2query | 21.5 | 22.8 | 85 | 64.4 | 77.9 | 89.1 |
+| DeepCT | 24.3 | - | 62（估） | 69 [2] | 82 [2] | 91 [2] |
+| docTTTTTquery | 27.7 | 28.4 | 87 | 75.6 | 86.9 | 94.7 |
+| ColBERT-L2（重排） | 34.8 | 36.4 | - | 75.3 | 80.5 | 81.4 |
+| ColBERT-L2（端到端） | 36.0 | 36.7 | 458 | 82.9 | 92.3 | 96.8 |
+
+中文说明：表 2 为 MS MARCO 上的端到端检索结果，每个模型对每条查询直接从整个 880 万文档库取回 top-1000 文档；DeepCT 行的 Recall 值取自 [2]，"(est.)" 表示其延迟为按 BM25 估计的值。
+
+::: en
+Looking at Table 2, we first see Anserini's BM25 baseline at 18.7 MRR@10, noticing its very low latency as implemented in Anserini (which extends the well-known Lucene system), owing to both very cheap operations and decades of bag-of-words top-k retrieval optimizations. The three subsequent baselines, namely doc2query, DeepCT, and docTTTTquery, each brings a decisive enhancement to effectiveness. These improvements come at negligible overheads in latency, since these baselines ultimately rely on BM25-based retrieval. The most effective among these three, docTTTTquery, demonstrates a massive 9% gain over vanilla BM25 by fine-tuning the recent language model T5.
+:::
+
+看表 2，首先看到 Anserini 的 BM25 基线为 18.7 MRR@10，并注意到其在 Anserini（著名 Lucene 系统的扩展）中的实现延迟极低——这既归功于非常廉价的基本操作，也归功于数十年词袋 top-$k$ 检索优化的积累。随后的三个基线，即 doc2query、DeepCT 与 docTTTTTquery，各自带来决定性的效果提升。这些提升带来的延迟开销可以忽略，因为这些基线最终都依赖基于 BM25 的检索。三者中最有效的 docTTTTTquery 通过微调近期的语言模型 T5，比原始（vanilla）BM25 高出多达 9%。
+
+::: en
+Shifting our attention to ColBERT's end-to-end retrieval effectiveness, we see its major gains in MRR@10 over all of these end-to-end models. In fact, using ColBERT in the end-to-end setup is superior in terms of MRR@10 to re-ranking with the same model due to the improved recall. Moving beyond MRR@10, we also see large gains in Recall@k for k equals to 50, 200, and 1000. For instance, its Recall@50 actually exceeds the official BM25's Recall@1000 and even all but docTTTTTquery's Recall@200, emphasizing the value of end-to-end retrieval (instead of just re-ranking) with ColBERT.
+:::
+
+把注意力转向 ColBERT 端到端检索的效果，可以看到其 MRR@10 相对所有这些端到端模型都有巨大优势。事实上，得益于召回的提升，端到端设定下使用 ColBERT 的 MRR@10 甚至优于用同一模型做重排序。在 MRR@10 之外，$k$ 为 50、200、1000 的 Recall@$k$ 同样有大幅提升。例如，其 Recall@50 实际上超过了官方 BM25 的 Recall@1000，甚至超过除 docTTTTTquery 之外所有方法的 Recall@200——这凸显了用 ColBERT 做端到端检索（而不只是重排序）的价值。
+
+#### 4.4 消融研究（Ablation Studies）
+
+::: en
+The results from §4.2 indicate that ColBERT is highly effective despite the low cost and simplicity of its late interaction mechanism. To better understand the source of this effectiveness, we examine a number of important details in ColBERT's interaction and encoder architecture. For this ablation, we report MRR@10 on the validation set of MS MARCO in Figure 5, which shows our main re-ranking ColBERT model [E], with MRR@10 of 34.9%.
+:::
+
+§4.2 的结果表明，尽管延迟交互机制成本低廉且简单，ColBERT 依然非常有效。为更好理解这一效果的来源，我们考察 ColBERT 交互与编码器架构中的若干重要细节。在这项消融中，我们在图 5 中报告 MS MARCO 验证集上的 MRR@10，其中展示了我们的主重排序 ColBERT 模型 [E]，其 MRR@10 为 34.9%。
+
+[图 5: Figure 5: Ablation results on MS MARCO (Dev). Between brackets is the number of BERT layers used in each model.]
+
+中文说明：图 5 以条形图展示 MS MARCO（Dev）上的消融结果（横轴 MRR@10，0.22–0.36），各模型名括号内为其所用 BERT 层数：[A] 基于 BERT [CLS] 的点积（5 层）、[B] 平均相似度版 ColBERT（5 层）、[C] 无查询增强的 ColBERT（5 层）、[D] ColBERT（5 层）、[E] ColBERT（12 层）、[F] ColBERT + 端到端检索（12 层）。[A]、[B]、[C] 均明显低于 [D]，说明细粒度延迟交互、MaxSim 与查询增强各有贡献；[F] 高于 [E]，说明端到端检索还能提升 MRR@10。
+
+::: en
+Due to the cost of training all models, we train a copy of our main model that retains only the first 5 layers of BERT out of 12 (i.e., model [D]) and similarly train all our ablation models for 200k iterations with five BERT layers. To begin with, we ask if the fine-granular interaction in late interaction is necessary. Model [A] tackles this question: it uses BERT to produce a single embedding vector for the query and another for the document, extracted from BERT's [CLS] contextualized embedding and expanded through a linear layer to dimension 4096 (which equals Nq × 128 = 32 × 128). Relevance is estimated as the inner product of the query's and the document's embeddings, which we found to perform better than cosine similarity for single-vector re-ranking. As the results show, this model is considerably less effective than ColBERT, reinforcing the importance of late interaction.
+:::
+
+由于训练所有模型的成本高昂，我们训练了主模型的一个只保留 BERT 12 层中前 5 层的副本（即模型 [D]），所有消融模型也类似地以 5 层 BERT 训练 200k 步。首先我们问：延迟交互中的细粒度（fine-granular）交互是否必要？模型 [A] 回答这个问题：它用 BERT 为查询和文档各产生一个单一的嵌入向量——从 BERT 的 [CLS] 上下文化嵌入提取、经一个线性层扩展到 4096 维（等于 $N_q \times 128 = 32 \times 128$）——相关性估计为查询嵌入与文档嵌入的内积；我们发现对单向量重排序，内积比余弦相似度表现更好。如结果所示，该模型的效果明显低于 ColBERT，印证了延迟交互的重要性。
+
+::: en
+Subsequently, we ask if our MaxSim-based late interaction is better than other simple alternatives. We test a model [B] that replaces ColBERT's maximum similarity with average similarity. The results suggest the importance of individual terms in the query paying special attention to particular terms in the document. Similarly, the figure emphasizes the importance of our query augmentation mechanism: without query augmentation [C], ColBERT has a noticeably lower MRR@10. Lastly, we see the impact of end-to-end retrieval not only on recall but also on MRR@10. By retrieving directly from the full collection, ColBERT is able to retrieve to the top-10 documents missed entirely from BM25's top-1000.
+:::
+
+接着我们问：基于 MaxSim 的延迟交互是否优于其他简单替代方案？我们测试了模型 [B]，把 ColBERT 的最大相似度换成平均相似度。结果表明"查询中的各个词特别关注文档中的特定词"这一点很重要。类似地，该图凸显了查询增强机制的重要性：去掉查询增强的 [C] 的 MRR@10 明显更低。最后，我们看到端到端检索的影响不仅体现在召回上，也体现在 MRR@10 上：通过直接从全库检索，ColBERT 能把被 BM25 top-1000 完全漏掉的文档检索进 top-10。
+
+#### 4.5 索引吞吐与空间占用（Indexing Throughput & Footprint）
+
+::: en
+Lastly, we examine the indexing throughput and space footprint of ColBERT. Figure 6 reports indexing throughput on MS MARCO documents with ColBERT and four other ablation settings, which individually enable optimizations described in §3.4 on top of basic batched indexing. Based on these throughputs, ColBERT can index MS MARCO in about three hours. Note that any BERT-based model must incur the computational cost of processing each document at least once. While ColBERT encodes each document with BERT exactly once, existing BERT-based rankers would repeat similar computations on possibly hundreds of documents for each query.
+:::
+
+最后，我们考察 ColBERT 的索引吞吐与空间占用。图 6 报告了 ColBERT 及另外四种消融设定在 MS MARCO 文档上的索引吞吐：这些设定在基础批量索引之上逐项启用 §3.4 描述的优化。基于这些吞吐，ColBERT 约三小时即可索引完 MS MARCO。注意，任何基于 BERT 的模型都必然承担"每篇文档至少过一次 BERT"的计算成本：ColBERT 恰好只把每篇文档用 BERT 编码一次，而既有的基于 BERT 的排序器会在每条查询上对可能数百篇文档重复类似计算。
+
+[图 6: Figure 6: Effect of ColBERT's indexing optimizations on the offline indexing throughput.]
+
+中文说明：图 6 以柱状图展示各优化对离线索引吞吐（横轴，文档/分钟，0–50,000）的影响：在"基础 ColBERT 索引（Basic ColBERT Indexing）"之上依次叠加"+多 GPU 文档处理""+按批最大序列长度""+按长度分桶""+多核预处理"，吞吐逐级显著提升。
+
+::: en
+Table 4 reports the space footprint of ColBERT under various settings as we reduce the embeddings dimension and/or the bytes per dimension. Interestingly, the most space-efficient setting, that is, re-ranking with cosine similarity with 24-dimensional vectors stored as 2-byte floats, is only 1% worse in MRR@10 than the most space-consuming one, while the former requires only 27 GiBs to represent the MS MARCO collection.
+:::
+
+表 4 报告了随嵌入维度和/或每维字节数降低、ColBERT 在各种设定下的空间占用。有趣的是，最省空间的设定——用余弦相似度做重排序、24 维向量、以 2 字节浮点存储——其 MRR@10 只比最耗空间的设定差 1%，而前者表示整个 MS MARCO 文档库只需 27 GiB。
+
+[表 4: Table 4: Space Footprint vs MRR@10 (Dev) on MS MARCO.]
+
+| 设定 | 相似度 | 维度 (m) | 每维字节 | 空间 (GiB) | MRR@10 |
+|---|---|---|---|---|---|
+| 重排（Re-rank） | 余弦 | 128 | 4 | 286 | 34.9 |
+| 端到端（End-to-end） | L2 | 128 | 2 | 154 | 36.0 |
+| 重排（Re-rank） | L2 | 128 | 2 | 143 | 34.8 |
+| 重排（Re-rank） | 余弦 | 48 | 4 | 54 | 34.4 |
+| 重排（Re-rank） | 余弦 | 24 | 2 | 27 | 33.9 |
+
+中文说明：表 4 为 MS MARCO（Dev）上空间占用与 MRR@10 的对比：最省空间的设定（重排 + 余弦 + 24 维 + 每维 2 字节，27 GiB）只比最耗空间的设定（286 GiB）低 1% 的 MRR@10。
+
+### 5 结论（Conclusions）
+
+::: en
+In this paper, we introduced ColBERT, a novel ranking model that employs contextualized late interaction over deep LMs (in particular, BERT) for efficient retrieval. By independently encoding queries and documents into fine-grained representations that interact via cheap and pruning-friendly computations, ColBERT can leverage the expressiveness of deep LMs while greatly speeding up query processing. In addition, doing so allows using ColBERT for end-to-end neural retrieval directly from a large document collection. Our results show that ColBERT is more than 170× faster and requires 14,000× fewer FLOPs/query than existing BERT-based models, all while only minimally impacting quality and while outperforming every non-BERT baseline.
+:::
+
+本文提出了 ColBERT：一种在深度 LM（尤其是 BERT）之上采用上下文化延迟交互的新型排序模型，面向高效检索。通过把查询与文档独立编码为细粒度表示、再经廉价且剪枝友好的计算进行交互，ColBERT 既能利用深度 LM 的表达力，又大幅加快了查询处理。此外，这一设计还使 ColBERT 可以直接从大型文档库进行端到端神经检索。我们的结果表明：ColBERT 比现有基于 BERT 的模型快逾 170 倍、每查询 FLOPs 少 14,000 倍，同时对质量的影响微乎其微，并优于所有非 BERT 基线。
+
+### 致谢（Acknowledgments）
+
+::: en
+Acknowledgments. OK was supported by the Eltoukhy Family Graduate Fellowship at the Stanford School of Engineering. This research was supported in part by affiliate members and other supporters of the Stanford DAWN project—Ant Financial, Facebook, Google, Infosys, NEC, and VMware—as well as Cisco, SAP, and the NSF under CAREER grant CNS-1651570. Any opinions, findings, and conclusions or recommendations expressed in this material are those of the authors and do not necessarily reflect the views of the National Science Foundation.
+:::
+
+**致谢（Acknowledgments）**。OK（第一作者 Omar Khattab）受斯坦福工程学院 Eltoukhy Family Graduate Fellowship 资助。本研究部分受到斯坦福 DAWN 项目的附属成员及其他支持者——Ant Financial、Facebook、Google、Infosys、NEC 与 VMware——以及 Cisco、SAP 和 NSF（CAREER 基金 CNS-1651570）的资助。本材料中表达的所有观点、发现、结论或建议均属作者本人，不一定反映美国国家科学基金会（NSF）的观点。
+
+> 译注：正文至此结束。References（参考文献 [1]–[42]）按体例不收录；本提取版不含附录（论文亦无附录）。
+
+## 要点速览
+
+- 核心思想是延迟交互（late interaction）：查询与文档各自独立编码为 token 级上下文嵌入袋，相关性 = 每个查询嵌入对全部文档嵌入取最大余弦相似度（MaxSim）后按查询词求和；交互机制本身零可训练参数。
+- 编码器细节：单一 BERT 共享给查询与文档，用 [Q]/[D] 标记区分；查询用 [mask] 填充到 $N_q=32$ 实现"查询增强"（软性查询扩展/重加权）；文档过滤标点嵌入；线性层降维到 $m=128$ 并做 L2 归一化。
+- 训练用查询-正/负文档三元组的成对 softmax 交叉熵损失，学习率 3e-6、批 32，MS MARCO 上训练 200k 步（BERT-base 初始化）。
+- 重排序结果：MS MARCO Dev MRR@10 34.9（与 BERT-base 相当、略低于 BERT-large 36.5），延迟 61ms vs BERT-base 的 10,700ms（快逾 170 倍），FLOPs 7B vs 97T（少 13,900 倍）；其中查询编码+交互仅占 13ms。
+- 延迟优势随候选数放大：k=10 时 BERT 需约 180 倍 FLOPs，k=1000 时 13,900 倍，k=2000 时 23,000 倍——ColBERT 对查询只编码一次，与被排序文档数无关。
+- 端到端检索两阶段：faiss IVFPQ（乘积量化压缩、只搜最近分区）对每个查询嵌入做 ANN 过滤，再对去重后的候选集穷举 MaxSim 重排；端到端 MRR@10 达 36.0，甚至高于同模型重排序（34.8），Recall@1000 达 96.8 vs BM25 的 85.7。
+- 消融证明三件事都重要：token 级延迟交互（对比 [CLS] 单向量）、MaxSim（对比平均相似度）、查询增强（去掉即降）。
+- 索引实用性强：四 GPU 单服务器约 3 小时索引完 880 万段落；嵌入降到 24 维、每维 2 字节时全库仅占 27 GiB，MRR@10 只损失 1%。
+- 与 RAG 的关系：ColBERT/DPR 一系解决"检索器"的效率与效果，是 RAG 类系统与后续 Agent 检索模块（如 ColBERTv2）的底层组件。

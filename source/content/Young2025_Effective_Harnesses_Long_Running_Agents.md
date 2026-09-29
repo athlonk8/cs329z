@@ -1,0 +1,154 @@
+---
+title: "Effective harnesses for long-running agents"
+title_zh: "长时运行智能体的高效 Harness 设计"
+authors: Justin Young (Anthropic)
+venue: "Anthropic Engineering Blog · 2025-11-26"
+kind: blog
+importance: recommended
+tags: 长时运行,智能体harness,增量开发,测试,上下文窗口
+summary: Anthropic 工程实践:让智能体跨多个上下文窗口持续数小时工作——初始化智能体(建特性清单/init 脚本/进度文件)+ 编码智能体(每次只做一个特性、留下干净状态、像人类一样端到端测试)。
+---
+
+## 导读
+
+这是第 9 周「编程智能体」的工程实践博客(Anthropic,2025-11),与同讲 Claude Code Best Practices 互补:那篇讲单会话交互,这篇讲**跨多个上下文窗口的长时任务**(数小时甚至数天)。核心困难被比作"轮班制的软件团队,每个新工程师上岗时对上一班毫无记忆"。作者的解法朴素得漂亮:向优秀的人类工程师取经——用**初始化智能体**搭好环境(功能清单、init.sh、进度文件、git 初始提交),再用**编码智能体**每个会话只推进一个特性、收尾时留下"可合并到主分支"的干净状态。四个失效模式(过早宣布完成、留下烂摊子、未经测试标记完成、浪费时间搞清怎么跑应用)各有对应解法,全部是 prompt + 文件约定层面的工程设计,可直接照抄到自己的 harness 里。
+
+## 全文中译
+
+*(Anthropic 工程博客,发布于 2025 年 11 月 26 日;作者 Justin Young)*
+
+智能体在跨多个上下文窗口工作时仍面临挑战。我们向人类工程师寻求灵感,为长时运行智能体构建更有效的 harness。
+
+随着 AI 智能体能力增强,开发者越来越多地要求它们承担需要数小时甚至数天工作的复杂任务。然而,让智能体在多个上下文窗口之间保持一致的进度,仍是一个开放问题。
+
+长时运行智能体的核心挑战在于:它们必须在离散的会话中工作,而每个新会话开始时对之前发生的事毫无记忆。想象一个由轮班工程师组成的软件项目,每位新工程师到岗时都不记得上一班发生了什么。由于上下文窗口有限,而大多数复杂项目无法在单个窗口内完成,智能体需要一种在编码会话之间弥合鸿沟的方法。
+
+我们为 Claude Agent SDK 开发了一套双管齐下的方案,使其能跨多个上下文窗口有效工作:一个**初始化智能体(initializer agent)**在首次运行时搭建环境;一个**编码智能体(coding agent)**负责在每个会话中取得增量进展,同时为下一个会话留下清晰的工件。代码示例见配套的 quickstart。
+
+### 长时运行智能体问题
+
+Claude Agent SDK 是一个强大的通用智能体 harness,擅长编码以及其他需要模型使用工具来收集上下文、规划和执行的任务。它具备上下文管理能力(如压缩 compaction),使智能体能在不耗尽上下文窗口的情况下持续工作。理论上,照此设置,智能体应该可以在任意长的时间内持续做有用的事。
+
+然而,compaction 并不够。开箱即用时,即便是 Opus 4.5 这样的前沿编码模型,在 Claude Agent SDK 上跨多个上下文窗口循环运行,如果只给一个"做一个 claude.ai 的克隆"这样的高层提示,也做不出生产级质量的 Web 应用。
+
+Claude 的失败表现为两种模式。**第一,智能体倾向于一次做太多**——本质上是想一步到位(one-shot)整个应用。这常常导致模型在实现中途耗尽上下文,下一个会话只能带着"实现了一半且无文档"的功能开始,只能猜测之前发生了什么,并花大量时间让基本的应用重新跑起来。即便有 compaction 也会发生这种情况——它传给下一个智能体的指令并不总是足够清晰。
+
+**第二种失效模式出现在项目后期**。一些功能已经建成后,后续的智能体实例环顾四周,看到已有进展,便宣布大功告成。
+
+由此问题分解为两部分:第一,需要搭建一个为提示所要求的**所有功能**奠定基础的初始环境,让智能体得以一步一步、一个特性一个特性地工作;第二,应提示每个智能体向目标**增量推进**,并在会话结束时让环境保持**干净状态**。所谓干净状态,是指那种适合合并到主分支的代码:没有重大 bug、代码整洁且有文档,总的来说,开发者可以直接开始做新功能而无须先收拾无关的烂摊子。
+
+在内部实验中,我们用两部分方案解决这些问题:
+
+- **初始化智能体**:第一个智能体会话使用专门的提示,要求模型搭建初始环境:一个 `init.sh` 脚本、一个记录各智能体所做工作的 `claude-progress.txt` 文件,以及展示新增文件的初始 git 提交。
+- **编码智能体**:后续每个会话要求模型取得增量进展,然后留下结构化的更新。
+
+这里的关键洞察,是找到一种方法让智能体在全新上下文窗口开始时**快速理解工作状态**——这靠 `claude-progress.txt` 文件与 git 历史共同实现。这些实践的灵感来自高效软件工程师每天都在做的事。
+
+### 环境管理
+
+在更新版的 Claude 4 提示指南中,我们分享了多上下文窗口工作流的最佳实践,包括"为第一个上下文窗口使用不同提示"的 harness 结构。这个"不同的提示"要求初始化智能体搭建好未来编码智能体有效工作所需的全部环境。这里我们深入剖析其中几个关键组件。
+
+**特性清单(feature list)**
+
+为了解决智能体一步到位或过早认为项目完成的问题,我们提示初始化智能体基于用户初始提示写一份**全面的功能需求文件**。在 claude.ai 克隆的例子中,这意味着超过 200 个特性,例如"用户可以打开新聊天、输入查询、按回车、看到 AI 回复"。这些特性最初全部标记为 "failing"(未通过),这样后续编码智能体就有了完整功能形态的清晰大纲。
+
+```json
+{
+  "category": "functional",
+  "description": "New chat button creates a fresh conversation",
+  "steps": [
+    "Navigate to main interface",
+    "Click the 'New Chat' button",
+    "Verify a new conversation is created",
+    "Check that chat area shows welcome state",
+    "Verify conversation appears in sidebar"
+  ],
+  "passes": false
+}
+```
+
+我们提示编码智能体只能通过修改 `passes` 字段的状态来编辑此文件,并使用措辞强硬的指令,例如"删除或编辑测试是不可接受的,因为这可能导致功能缺失或存在 bug"。经过一些实验,我们最终选择用 JSON 而非 Markdown 来存这份清单——模型对 JSON 文件不当修改或覆盖的概率更低。
+
+**增量进展**
+
+有了初始环境脚手架,编码智能体的下一个迭代被要求**一次只做一个特性**。这种增量方式对于纠正"一次做太多"的倾向至关重要。
+
+一旦开始增量工作,模型在改动代码后让环境保持干净状态仍然必不可少。实验中,诱发这种行为的最好方式是:要求模型用**描述性的提交信息**把进度提交到 git,并在进度文件中写下总结。这使模型可以用 git 回滚糟糕的改动、恢复代码库的可用状态。
+
+这些做法也提高了效率,因为智能体不再需要猜测之前发生了什么、把时间花在让基本应用重新跑起来上。
+
+**测试**
+
+我们观察到的最后一个主要失效模式,是 Claude 倾向于**未经妥善测试就把特性标记为完成**。在没有明确提示的情况下,Claude 会改代码,甚至用单元测试或对开发服务器跑 `curl` 做一些测试,但意识不到该特性端到端并不工作。
+
+在构建 Web 应用的场景中,一旦明确提示 Claude 使用浏览器自动化工具、像人类用户一样做所有测试,它在端到端验证特性方面表现相当好。
+
+*[图:Claude 通过 Puppeteer MCP 服务器在测试 claude.ai 克隆时截取的截图]*
+
+为 Claude 提供这类测试工具显著提升了表现,因为智能体能发现单看代码不明显的问题。
+
+仍有一些遗留问题,比如 Claude 的视觉与浏览器自动化工具的局限,使它难以识别所有类型的 bug。例如 Claude 无法通过 Puppeteer MCP 看到浏览器原生 alert 弹窗,依赖这类弹窗的特性因此更容易有 bug。
+
+**进入状态(Getting up to speed)**
+
+把上述一切都就位后,每个编码智能体都会被提示执行一系列步骤来找到状态感,有些相当基础但依然有用:
+
+- 运行 `pwd` 查看工作目录——你只能编辑该目录下的文件;
+- 阅读 git 日志与进度文件,了解最近在做什么;
+- 阅读特性清单文件,选择尚未完成的最高优先级特性来做。
+
+这种方式在每个会话都为 Claude 节省 token(不必自己摸索怎么测试代码)。让初始化智能体写一个能启动开发服务器的 `init.sh` 脚本,并在实现新功能前先跑一遍基本的端到端测试,也很有帮助。
+
+在 claude.ai 克隆的例子中,这意味着智能体每次都会启动本地开发服务器,并用 Puppeteer MCP 新开一个聊天、发一条消息、收到一条回复。这确保 Claude 能快速发现应用是否处于损坏状态,并立即修复已有的 bug——如果智能体直接开始实现新功能,问题很可能被越弄越糟。
+
+有了这一切,一个典型会话的开头是这样的助手消息:
+
+```
+[Assistant] I'll start by getting my bearings and understanding the current state of the project.
+[Tool Use] <bash - pwd>
+[Tool Use] <read - claude-progress.txt>
+[Tool Use] <read - feature_list.json>
+[Assistant] Let me check the git log to see recent work.
+[Tool Use] <bash - git log --oneline -20>
+[Assistant] Now let me check if there's an init.sh script to restart the servers.
+<Starts the development server>
+[Assistant] Excellent! Now let me navigate to the application and verify that some fundamental features are still working.
+<Tests basic functionality>
+[Assistant] Based on my verification testing, I can see that the fundamental functionality is working well. The core chat features, theme switching, conversation loading, and error handling are all functioning correctly. Now let me review the tests.json file more comprehensively to understand what needs to be implemented next.
+<Starts work on a new feature>
+```
+
+### 智能体失效模式与解法
+
+| 问题 | 初始化智能体的行为 | 编码智能体的行为 |
+| --- | --- | --- |
+| Claude 过早宣布整个项目完成 | 根据输入规格搭建特性清单:一个包含端到端功能描述列表的结构化 JSON 文件 | 会话开始时读特性清单;选择单个特性开始做 |
+| Claude 留下有 bug 或无文档进度的环境 | 写入初始 git 仓库与进度笔记文件 | 会话开始时读进度笔记与 git 提交日志,并对开发服务器跑基本测试以捕获未记录的 bug;会话结束时写 git 提交与进度更新 |
+| Claude 过早把特性标记为完成 | 搭建特性清单文件 | 自我验证所有特性;只有仔细测试后才标记为"通过" |
+| Claude 得花时间搞清怎么运行应用 | 写一个能启动开发服务器的 `init.sh` 脚本 | 会话开始时读 `init.sh` |
+
+*——概括长时运行 AI 智能体的四种常见失效模式与解法。*
+
+### 未来工作
+
+本研究展示了长时运行智能体 harness 中的一套可行解法,使模型能跨多个上下文窗口增量推进。但开放问题依然存在。
+
+最突出的:目前仍不清楚单一通用编码智能体是否在各情境下都表现最佳,还是多智能体架构能取得更好效果。合理推测是,专门的智能体——如测试智能体、质量保障智能体、代码清理智能体——或许能在软件开发生命周期的子任务上做得更好。
+
+此外,本演示针对全栈 Web 应用开发做了优化。把发现推广到其他领域是未来方向——这些经验中的部分或全部,很可能也适用于诸如科研、金融建模等领域的长时智能体任务。
+
+*致谢(略):作者 Justin Young;感谢 David Hershey 等多人贡献;这项工作反映了 Anthropic 多个团队(尤其是 code RL 与 Claude Code 团队)的集体努力。*
+
+> 译注 1:文中"两个智能体"仅在初始用户提示上不同——系统提示、工具集与整体 harness 完全一致。
+> 译注 2:compaction(压缩)指 SDK 把冗长上下文摘要压缩以腾出窗口空间的能力。
+
+## 要点速览
+
+- 问题本质:**跨上下文窗口 = 轮班制无记忆团队**;compaction 不解决"下一个会话不知道该干什么"。
+- 双智能体方案:**Initializer**(特性清单 JSON + init.sh + 进度文件 + 初始 git 提交)+ **Coder**(每会话一个特性、干净收尾)。
+- 特性清单用 **JSON 而非 Markdown**(模型更不易乱改),编码智能体只能改 `passes` 字段,配"删除或编辑测试不可接受"的强指令。
+- 干净状态 = 可合并主分支:描述性 commit + 进度文件;git 用于回滚恢复。
+- 测试要"像人类用户一样":给浏览器自动化工具(Puppeteer MCP)后端到端验证才可靠;单元测试/curl 不够。
+- 每会话开场白固定:pwd → 读进度/特性清单 → git log → init.sh 起服务 → 冒烟测试 → 再动手做新特性。
+- 四个失效模式对四个解法:过早完成→特性清单;烂摊子→git+进度文件;假完成→自验证后才改 passes;浪费时间→init.sh。
+- 与课程关联:与 Claude Code Best Practices(同讲)组成 harness 设计的"单会话版/多会话版";其"增量+干净状态+真测试"哲学正是 SWE-agent 的 ACI 设计与 OpenHands 事件流的宏观对应物。

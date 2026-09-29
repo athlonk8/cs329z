@@ -1,0 +1,202 @@
+---
+title: "Fine-Tuning and Prompt Optimization: Two Great Steps that Work Better Together"
+title_zh: "微调与提示优化:单打都不如组合拳(BetterTogether)"
+authors: Dilara Soylu, Christopher Potts, Omar Khattab
+venue: "EMNLP 2024 · Stanford University"
+kind: paper
+importance: recommended
+tags: 微调,提示优化,DSPy,自举,交替优化
+summary: 首次提出交替进行提示优化与权重微调来优化 LM 流水线:同一模型"自己教自己",在 3 任务 × 3 模型上,联合策略平均比仅优化权重/提示分别高出最多 60% 与 6%。
+---
+
+## 导读
+
+"该微调还是该优化提示?"是每个 LLM 应用团队都会遇到的问题,而本讲(第 5 周·优化)三篇论文恰好构成三种答案:GEPA 说提示优化够强、MIPRO 说提示要联合优化指令与示例、本文(BetterTogether)则说**两个都要、交替着做**。这是 DSPy 系列的实证研究:在模块化 LM 流水线(RAG 式程序)缺少中间标签与梯度的现实约束下,作者提出"提示优化 → 自举微调 → 再提示优化"的交替框架,让同一个 LM 用自举(program traces)生成的数据教自己。在 HotPotQA(多跳问答)、GSM8K(数学)、Iris(特征分类)× mistral-7b / llama-2-7b / llama-3-8b 的 9 个组合中,7 个的最佳策略都是"提示+权重联合"——提示优化在所有任务上都不可省略,而联合优化比任何单一手段都强。这为"提示工程 vs 微调"之争给出了工程答案:**不是二选一,是流水线**。
+
+## 全文对照翻译
+
+> **译注**:以下覆盖论文正文全部内容(摘要、第 1–6 节,原文第 1–5 页)以及附录 A–D 的实质内容;致谢仅作简要译注,参考文献列表不收录。表 1(主结果,8 策略 × 9 列)与附录 D 的三张逐次运行结果表均转为 markdown 表并保留全部数据;算法 1/2 与附录 A 的三段 DSPy 程序以代码块保留并加中文注释;附录 A 各"vanilla 提示表"中嵌入的维基百科检索段落为琐碎内容,仅保留条目标题、正文从略(已标注)。术语首现处中英对照:模块化流水线 modular pipeline、提示模板 prompt template、自举 bootstrapping、程序轨迹 program trace、少样本 few-shot、随机搜索 random search、思维链 Chain-of-Thought (CoT)、精确匹配 exact match、留出测试集 held-out test set、低秩适应 LoRA 等;LM、RAG、DSPy、BFRS、BFT 等缩写保留英文。
+
+### 题目与作者
+
+::: en
+Fine-Tuning and Prompt Optimization: Two Great Steps that Work Better Together
+
+Dilara Soylu, Christopher Potts, Omar Khattab
+
+Stanford University
+
+{soylu,cgpotts,okhattab}@stanford.edu
+
+Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing, pages 10696–10710. November 12-16, 2024 ©2024 Association for Computational Linguistics.
+:::
+
+微调与提示优化:两个很棒的步骤,合在一起效果更好(BetterTogether)。作者:Dilara Soylu、Christopher Potts、Omar Khattab(斯坦福大学)。发表于 2024 年自然语言处理经验方法会议(EMNLP 2024),第 10696–10710 页。
+
+### 摘要(Abstract)
+
+::: en
+Natural Language Processing (NLP) systems are increasingly taking the form of sophisticated modular pipelines, e.g., Retrieval Augmented Generation (RAG), where each module may involve a distinct Language Model (LM) and an associated prompt template. These compound systems often lack intermediate labels or gradient flow to optimize each module, making their end-to-end optimization challenging. Here we seek strategies to optimize both the module-level LM weights and the associated prompt templates of such systems to maximize a downstream task metric. We propose for the first time combining the weight and prompt optimization strategies to optimize a modular LM pipeline by alternating between the two to get the same LM to teach itself. In experiments with multi-hop QA, mathematical reasoning, and feature-based classification using mistral-7b, llama-2-7b, and llama-3-8b, these BetterTogether strategies optimizing the weights and prompts of a pipeline together outperform directly optimizing weights alone and prompts alone by up to 60% and 6%, respectively, on average across LMs and tasks. Our BetterTogether optimizer is released in DSPy at http://dspy.ai.
+:::
+
+自然语言处理(NLP)系统正日益采取复杂模块化流水线(modular pipelines)的形式,例如检索增强生成(Retrieval Augmented Generation,RAG),其中每个模块都可能涉及一个不同的语言模型(Language Model,LM)及与之关联的提示模板(prompt template)。这类复合系统通常缺少可用于优化各模块的中间标签(intermediate labels)或梯度流(gradient flow),这使得它们的端到端优化颇具挑战。本文寻求优化此类系统的模块级 LM 权重与关联提示模板二者、以最大化某个下游任务指标的策略。我们首次提出把权重优化与提示优化两种策略组合起来,通过在两者之间交替,让同一个 LM"自己教自己"(teach itself),从而优化模块化 LM 流水线。在使用 mistral-7b、llama-2-7b 与 llama-3-8b 进行的多跳问答(multi-hop QA)、数学推理与基于特征的分类(feature-based classification)实验中,这些把流水线的权重与提示放在一起优化的 BetterTogether 策略,在跨 LM 与任务平均意义上,分别比仅直接优化权重、仅优化提示最多高出 60% 与 6%。我们的 BetterTogether 优化器已在 DSPy 中发布:http://dspy.ai。
+
+### 1 引言(Introduction)
+
+::: en
+While the capabilities of language models (LMs) continue to grow, recent work has shown the potential of building more powerful Natural Language Processing (NLP) systems by composing multiple skills of LMs into pipelines. Examples of this include systems for retrieval-augmented generation (Guu et al., 2020; Lewis et al., 2020; Ma et al., 2023; Jiang et al., 2023b), multi-hop reasoning (Qi et al., 2021; Khattab et al., 2021), information extraction (Pourreza and Rafiei, 2023; D'Oosterlinck et al., 2024), and other sophisticated pipelines (Zelikman et al., 2022; Dohan et al., 2022; Khattab et al., 2022; Beurer-Kellner et al., 2023; Schlag et al., 2023; Viswanathan et al., 2023).
+:::
+
+尽管语言模型(LM)的能力仍在持续增长,近期工作已经展示了通过把 LM 的多种技能组合成流水线来构建更强大自然语言处理(NLP)系统的潜力。这类例子包括:检索增强生成系统(Guu et al., 2020; Lewis et al., 2020; Ma et al., 2023; Jiang et al., 2023b)、多跳推理(multi-hop reasoning)系统(Qi et al., 2021; Khattab et al., 2021)、信息抽取系统(Pourreza and Rafiei, 2023; D'Oosterlinck et al., 2024),以及其他复杂流水线(Zelikman et al., 2022; Dohan et al., 2022; Khattab et al., 2022; Beurer-Kellner et al., 2023; Schlag et al., 2023; Viswanathan et al., 2023)。
+
+::: en
+Such LM Programs offer much more control for designing NLP systems, as they break down problems into modular, more manageable sub-tasks that can be assigned to LMs. If we could teach these LMs to accurately conduct their easier sub-tasks and to communicate effectively within multi-stage pipelines, this could greatly expand the scope of reliable NLP systems we can build.
+:::
+
+这类 LM 程序(LM Programs)为设计 NLP 系统提供了更多的控制力,因为它们把问题拆解为模块化、更易处理的子任务,并可以把这些子任务分派给各个 LM。如果我们能教会这些 LM 准确地完成各自较容易的子任务、并在多阶段流水线内部进行有效沟通,那么我们可以构建的可靠 NLP 系统的范围将大大扩展。
+
+::: en
+To this end, Khattab et al. (2024) introduced the DSPy framework for defining and optimizing LM Programs. In it, a program is defined as a function Φ that composes a set of stages, which we will refer to as language modules M = ⟨M1,…,M|M|⟩, into a pipeline. Each language module Mi specifies a fuzzy natural-language transformation (e.g., generating a summary of a supplied document) that needs to be learned. To do so, each module learns a particular prompt (template) π to make a call to a particular LM with weights θ. The optimization problem is then defined as maximizing the expected performance (per a downstream metric µ) of the program Φ over a set of inputs by updating each module's π and θ.
+:::
+
+为此,Khattab et al. (2024) 提出了用于定义与优化 LM 程序的 DSPy 框架(DSPy framework)。在其中,程序被定义为一个函数 $\Phi$,它把一组阶段组合成一条流水线;我们把这些阶段称为语言模块(language modules)$M = \langle M_1, \dots, M_{|M|} \rangle$。每个语言模块 $M_i$ 规定了一个需要学习、以模糊自然语言表达的变换(例如:为给定文档生成摘要)。为实现这一点,每个模块学习一个特定的提示(模板)$\pi$,用它去调用一个权重为 $\theta$ 的特定 LM。于是,优化问题定义为:通过更新每个模块的 $\pi$ 与 $\theta$,最大化程序 $\Phi$ 在一组输入上的期望表现(依某个下游指标 $\mu$ 衡量)。
+
+::: en
+Existing work (Khattab et al., 2024; Opsahl-Ong et al., 2024) has studied optimizing the discrete string prompt of each module and has considered simple approaches for fine-tuning each module's LM weights. In this empirical study, we investigate updating each module's LM weights and prompt template together to maximize a downstream metric on the final output of the program. Doing this is challenging as Φ is not generally differentiable and its modules Mi generally lack labeled outputs, while exhibiting sophisticated dependencies. Moreover, in realistic settings, the training set is usually very small and only a small number of LM calls are possible for training and inference.
+:::
+
+既有工作(Khattab et al., 2024; Opsahl-Ong et al., 2024)研究了优化每个模块的离散字符串提示,也考虑过微调(fine-tuning)各模块 LM 权重的简单方法。在这项实证研究(empirical study)中,我们研究**同时**更新每个模块的 LM 权重与提示模板,以最大化程序最终输出上的某个下游指标。这样做很有挑战:$\Phi$ 通常不可微(differentiable),其各模块 $M_i$ 通常缺少带标签的输出,且模块之间呈现复杂的依赖关系。此外,在现实场景中,训练集通常很小,而且无论训练还是推理,可行的 LM 调用次数都很少。
+
+::: en
+To address this challenge, we propose to alternate between fine-tuning LM weights and optimizing prompt templates and evaluate approximate optimization strategies in which we bootstrap training labels for all pipeline modules. In experiments with multi-hop QA (HotPotQA), mathematical reasoning (GSM8K), and feature-based classification (Iris), we show that these tandem strategies are highly effective across three different LMs, leading to 5–78% gains for HotPotQA, 2.5–10% gains for GSM8K, and 3.5–88% gains for Iris against prompts only and weights only strategies, averaged across mistral-7b-instruct-v0.2, llama-2-7b-chat, and llama-3-8b-instruct.
+:::
+
+为应对这一挑战,我们提出在"微调 LM 权重"与"优化提示模板"之间交替进行,并评估一类近似优化策略:为流水线的所有模块自举(bootstrapping)出训练标签。在多跳问答(HotPotQA)、数学推理(GSM8K)与基于特征的分类(Iris)实验中,我们表明:这些协同(tandem)策略在三个不同 LM 上都非常有效——以 mistral-7b-instruct-v0.2、llama-2-7b-chat 与 llama-3-8b-instruct 上的平均计,相对于"仅提示"与"仅权重"策略,HotPotQA 提升 5–78%,GSM8K 提升 2.5–10%,Iris 提升 3.5–88%。
+
+### 2 问题陈述(Problem Statement)
+
+::: en
+We are given an LM program Φ, which operates like a blackbox function Φ : X → Y, in which X and Y are typically in natural language (e.g., questions and their program-generated answers, respectively). For example, we may have a program Φ for answering complex questions with short factoid answers. In the course of its execution, Φ makes one or more calls to each of its |M| ≥ 1 language modules, M = ⟨M1,…,M|M|⟩.
+:::
+
+给定一个 LM 程序 $\Phi$,它像一个黑盒函数(blackbox function)$\Phi: \mathcal{X} \to \mathcal{Y}$ 一样运行,其中 $\mathcal{X}$ 与 $\mathcal{Y}$ 通常都是自然语言(例如分别是问题与程序生成的答案)。举例来说,我们可能有一个用简短事实型答案(factoid answers)回答复杂问题的程序 $\Phi$。在执行过程中,$\Phi$ 会对它的 $|M| \ge 1$ 个语言模块 $M = \langle M_1, \dots, M_{|M|} \rangle$ 中的每一个进行一次或多次调用。
+
+::: en
+For example, the program may implement a multi-hop, retrieval-augmented pipeline for question answering. This common pipeline (Qi et al., 2021; Khattab et al., 2021; Press et al., 2023; Khattab et al., 2022) breaks down the input into sub-questions that are used to iteratively find relevant passages (e.g., from a corpus like Wikipedia) until the question can be faithfully answered. In general terms, each module Mi : Xi→Yi is a declarative LM invocation that defines, in inherently fuzzy natural-language terms, an input Xi domain (like a user-supplied question and a set of retrieved passages) and an output Yi co-domain (like a search query to find additional relevant passages).
+:::
+
+例如,该程序可以实现一条多跳、检索增强的问答流水线。这类常见流水线(Qi et al., 2021; Khattab et al., 2021; Press et al., 2023; Khattab et al., 2022)把输入拆解为若干子问题,用它们迭代地寻找相关段落(例如从维基百科这样的语料库中),直到问题能够被如实地回答。一般而言,每个模块 $M_i: \mathcal{X}_i \to \mathcal{Y}_i$ 是一次声明式的 LM 调用(declarative LM invocation),它以本质上模糊的自然语言定义一个输入 $\mathcal{X}_i$ 定义域(比如用户给出的问题与一组检索到的段落),以及一个输出 $\mathcal{Y}_i$ 陪域(co-domain,比如用于查找更多相关段落的搜索查询)。
+
+::: en
+We seek to implement each language module as some specific, well-tuned strategy for invoking an underlying language model LM. Concretely, we assume that a module Mi will be fully implemented by specifying (1) the string prompt πi in which the module inputs Xi are plugged in to decode the module outputs Yi and (2) the floating-point weights θi assigned to the parameters of LM in the course of this module. We refer to the version of Φ in which the prompts and LM weights are assigned explicitly to Π and Θ, respectively, as Φ⟨Θ,Π⟩.
+:::
+
+我们寻求把每个语言模块实现为某种具体的、调校良好的调用底层语言模型 LM 的策略。具体地,我们假设模块 $M_i$ 的完整实现由以下两者共同指定:(1) 字符串提示 $\pi_i$——模块输入 $\mathcal{X}_i$ 被填入其中,用于解码出模块输出 $\mathcal{Y}_i$;(2) 浮点数权重 $\theta_i$——在该模块执行过程中赋给 LM 参数的权重。我们把提示与 LM 权重分别被显式赋值为 $\Pi$ 与 $\Theta$ 的那个 $\Phi$ 版本记作 $\Phi_{\langle \Theta, \Pi \rangle}$。
+
+::: en
+Given nothing but a small training set X = {(x1, m1),…,(x|X|, m|X|)} of inputs xi ∈ X and optional metadata like output labels or other hints mi ∈ M that can be used for determining the correctness of a given program run, and a metric µ : Y × M → R, our goal is to optimize Φ, that is, configure its modules' prompts and LM weights to maximize the following objective.
+:::
+
+给定的东西只有:一个小训练集 $X = \{(x_1, m_1), \dots, (x_{|X|}, m_{|X|})\}$,其中输入 $x_i \in \mathcal{X}$,以及可选的元数据(如输出标签或其他提示)$m_i \in \mathcal{M}$,后者可用于判断程序某次运行是否正确;还有一个指标 $\mu: \mathcal{Y} \times \mathcal{M} \to \mathbb{R}$。我们的目标是优化 $\Phi$,即配置其各模块的提示与 LM 权重,以最大化如下目标:
+
+$$\arg\max_{\Theta,\Pi} \; \frac{1}{|X|} \sum_{(x,m)\in X} \mu\left(\Phi_{\langle \Theta,\Pi\rangle}(x),\, m\right)$$
+
+::: en
+Researchers tuning LM pipelines are in effect seeking to achieve this objective. It is also a very large subspace of the optimization problem in the DSPy framework for LM programs. Unfortunately, this problem is intractable: the search space is large and we don't have gradients or intermediate output labels to optimize each module, so we seek approximate strategies for such optimization.
+:::
+
+调试 LM 流水线的研究者们实际上就是在追求这个目标。它也是 DSPy 框架(面向 LM 程序)的优化问题中一个非常大的子空间。遗憾的是,这个问题本身不可行(intractable):搜索空间巨大,而我们既没有梯度、也没有中间输出标签来优化每个模块,因此我们寻求完成这种优化的近似策略。(脚注 1:http://dspy.ai)
+
+### 3 BetterTogether:对 LM 程序交替进行权重与提示优化(BetterTogether: Alternating Weight and Prompt Optimization Steps for LM Programs)
+
+::: en
+We now introduce the BetterTogether algorithm, which alternates the weight and prompt optimization steps for LM programs. We hypothesize that, when a large LM is used to teach itself how to tackle the task defined by an LM program, fine-tuning LM weights and prompts are both essential to achieve the highest quality. In particular, we expect that (1) prompt optimization before fine-tuning can lead to more successful datapoints for fine-tuning, and, (2) prompt optimization after fine-tuning can make adjustments to the behavior of the LM program, leading to higher quality outputs. Considering that fine-tuning is often perceived as a more powerful tool, this can be surprising, especially when both approaches are ultimately applied over the same set of training inputs X.
+:::
+
+我们现在介绍 BetterTogether 算法,它为 LM 程序交替执行权重优化与提示优化两个步骤。我们假设:当让一个大 LM 教自己去完成某个 LM 程序所定义的任务时,微调 LM 权重与优化提示**二者缺一不可**,才能达到最高质量。具体而言,我们预期:(1)**微调之前**先做提示优化,能为微调带来更成功的训练数据点;(2)**微调之后**再做提示优化,能对 LM 程序的行为做出调整,带来更高质量的输出。考虑到微调常被视为更强大的工具,这个结论可能令人意外——尤其当两种方法最终都是在同一批训练输入 $X$ 上施展时。
+
+```
+Algorithm 1  BetterTogether: Optimizing LM programs by alternating prompt and
+weight optimization steps, instantiated in Algorithm 2
+(算法 1 BetterTogether:通过交替提示与权重优化步骤来优化 LM 程序,在算法 2 中实例化)
+
+Input: Program Φ⟨Θ,Π⟩ = ΦΘ ⊙ ΦΠ,                      # 输入:程序 Φ⟨Θ,Π⟩
+       with module weights Θ = [θ1,…,θ|Φ|]              # 各模块权重 Θ
+       and module prompts Π = [π1,…,π|Φ|]               # 各模块提示 Π
+       Training Set X and Metric µ                       # 训练集 X 与指标 µ
+
+1: function BETTERTOGETHER(Φ⟨Θ,Π⟩, X, µ)
+2:   Π′ ← OPTIMIZE_PROMPTS(Φ⟨Θ,Π⟩, X, µ)        ▷ 第一步:先优化提示
+3:   Θ′ ← FINETUNE_WEIGHTS(Φ⟨Θ,Π′⟩, X, µ)       ▷ 第二步:用优化后提示自举出的数据微调权重
+4:   Π′′ ← OPTIMIZE_PROMPTS(Φ⟨Θ′,Π⟩, X, µ)      ▷ 第三步:用微调后的权重再优化提示
+5:   return Φ⟨Θ′,Π′′⟩                            ▷ 返回权重、提示都已更新的程序
+6: end function
+```
+
+::: en
+Accordingly, the general optimization framework for our algorithm is defined in Algorithm 1.
+:::
+
+因此,我们算法的总体优化框架由算法 1 定义。
+
+::: en
+Given a program Φ, the algorithm begins by optimizing Φ's prompts, then fine-tuning its set of LM weights with the data bootstrapped using the optimized prompts, and finally optimizing its prompts again using the fine-tuned weights. In principle, each of these steps could be treated as optional. This will define the different possible combinations of BetterTogether that we will seek to evaluate in Section 4. Specifically, we are interested in the quality of (1) the vanilla program Φ with simple user-supplied instructions as the prompts and no fine-tuning of LM, (2) optimizing the prompts only, (3) optimizing the weights only, (4) optimizing the prompts twice, i.e., using the prompt-optimized Φ as a starting point for a second round of prompt optimization, (5) optimizing the weights twice, (6) optimizing the prompts then the weights, (7) vice versa, and (8) optimizing the prompts, weights, then prompts. Overall, we expect the final three to consistently outperform the first five.
+:::
+
+给定程序 $\Phi$,该算法先优化 $\Phi$ 的提示,然后用经优化提示自举(bootstrapped)出来的数据微调其 LM 权重集合,最后再基于微调后的权重把提示重新优化一遍。原则上,这几步中的每一步都可以视为可选。这将定义出 BetterTogether 的各种可能组合,我们将在第 4 节逐一评估。具体地,我们关心以下策略的质量:(1) 原始(vanilla)程序 $\Phi$——以用户提供的简单指令作为提示、且不对 LM 做微调;(2) 仅优化提示;(3) 仅优化权重;(4) 提示优化两轮,即以提示优化后的 $\Phi$ 为起点再做一轮提示优化;(5) 权重优化两轮;(6) 先优化提示再优化权重;(7) 反之(先权重后提示);以及 (8) 提示 → 权重 → 提示。总体上,我们预期最后三种策略会稳定地优于前五种。
+
+::: en
+For Algorithm 1 to be complete, we need to instantiate Lines 1–3 with specific approaches for prompt optimization and LM fine-tuning. For this, we choose the Bootstrap-∗ family of algorithms from Khattab et al. (2024), which work by executing an initial version of the program on input examples (xi, mi) ∈ X and recording the inputs/outputs observed at each module when the final output is "correct", i.e., µ(Φ(xi), mi) ≥ λ for some threshold λ (e.g., 1.0 for binary accuracy). This is important to note: in line with our problem formulation, our prompt and weight optimization regimes are not simply training on hand-labeled data but on self-generated program traces.
+:::
+
+要让算法 1 完整,我们需要用具体的提示优化与 LM 微调方法来实例化其中的第 1–3 行。为此,我们选用 Khattab et al. (2024) 的 Bootstrap-$*$ 算法家族,它们的工作方式是:在输入样例 $(x_i, m_i) \in X$ 上执行程序的初始版本,并在最终输出"正确"——即对某个阈值 $\lambda$(如二值准确率取 1.0)有 $\mu(\Phi(x_i), m_i) \ge \lambda$——时,记录在每个模块上观察到的输入/输出。这一点值得强调:与我们的问题形式化一致,我们的提示与权重优化机制**并非简单地训练于人工标注数据,而是训练于自生成的程序轨迹(program traces)**。
+
+::: en
+Instantiations for Lines 1–3 of Algorithm 1 are shown in Algorithm 2. For prompt optimization, we use BootstrapFewshotRS (BFRS) of DSPy, which self-generates potential few-shot examples of every module and applies a form of random search (RS) to select the specific generated few-shot examples that are used for prompting. Overall, BFRS first divides X into a training split T and a validation split V (Line 2). It then executes the provided Φ⟨Θ,Π⟩ on the training inputs, collecting input–output pairs for every module in Φ for each xi ∈ T. This is called a trace τ, and we keep only the traces assigned high scores by µ (Line 4). Given all of these traces, BFRS samples multiple different subsets of a few traces τ′ (Line 6), each of them containing a potential few-shot example for each module in Φ, and ultimately selects the subset that, when used to construct few-shot prompts (Line 7), achieves the highest score (Line 8). This simple search strategy is known to consistently lead to large quality improvements in prompting LM programs (Khattab et al., 2024; Opsahl-Ong et al., 2024), often outperforming manually or automatically optimizing prompt instructions or writing examples by hand.
+:::
+
+算法 1 第 1–3 行的实例化见算法 2。提示优化方面,我们使用 DSPy 的 BootstrapFewshotRS(BFRS):它自生成每个模块的候选少样本示例(few-shot examples),并施加一种随机搜索(random search,RS)来选出最终用于提示的那些生成示例。整体上,BFRS 先把 $X$ 划分为训练 split $T$ 与验证 split $V$(第 2 行);然后在训练输入上执行给定的 $\Phi_{\langle\Theta,\Pi\rangle}$,为每个 $x_i \in T$ 收集 $\Phi$ 中每个模块的输入–输出对——这称为一条轨迹(trace)$\tau$——并且只保留被 $\mu$ 打了高分的轨迹(第 4 行)。基于所有这些轨迹,BFRS 采样多个不同的少轨迹子集 $\tau'$(第 6 行),每个子集都包含 $\Phi$ 中每个模块的一个候选少样本示例,最终选出那个当用于构造少样本提示(第 7 行)时得分最高(第 8 行)的子集。这一简单搜索策略已被证明能在 LM 程序提示上持续带来大幅质量提升(Khattab et al., 2024; Opsahl-Ong et al., 2024),常常胜过人工或自动地优化提示指令、或手工撰写示例。
+
+```
+Algorithm 2  Instantiating Algorithm 1's prompt & weight optimizers with
+bootstrapping algorithms
+(算法 2 用自举类算法实例化算法 1 的提示与权重优化器)
+
+Input: Training Set X and Metric µ                       # 输入:训练集 X 与指标 µ
+1: function BOOTSTRAPFEWSHOTRS(Φ⟨Θ,Π⟩, X, µ)             # BFRS:提示优化器
+2:   T, V ← SPLITINTOTRAINANDVALIDATION(X)        ▷ 把 X 分成训练集 T 与验证集 V
+3:   τ ← BOOTSTRAPTRACES(Φ⟨Θ,Π⟩, T)              ▷ 在 T 上运行程序,收集各模块输入-输出轨迹
+4:   τ ← FILTERTRACES(τ, µ)                       ▷ 只保留最终输出正确(µ 分高)的轨迹
+5:   Initialize attempts list A ← {}               ▷ 初始化候选(尝试)列表
+6:   for τ′ ∈ SAMPLEFEWSHOTSUBSETS(τ) do          ▷ 随机采样若干少样本轨迹子集
+7:     Π′ ← CONSTRUCTFEWSHOTPROMPTS(τ′)           ▷ 用该子集构造各模块的少样本提示
+8:     σ ← (1/|V|) Σ_{⟨xi,mi⟩∈V} µ(Φ⟨Θ,Π′⟩(xi), mi)   ▷ 在验证集 V 上评估这组提示的得分
+9:     Extend A with (σ, Π′)                       ▷ 记录(得分, 提示组)
+10:  end for
+11:  return Πmax, A's highest-scoring prompts sequence   ▷ 返回 A 中得分最高的提示序列
+12: end function
+13:
+14: function BOOTSTRAPFINETUNE(Φ⟨Θ,Π⟩, X, µ)             # BFT:权重微调器
+15:  τ ← BOOTSTRAPTRACES(Φ⟨Θ,Π⟩, X)               ▷ 在全部训练集 X 上自举轨迹
+16:  τ ← FILTERTRACES(τ, µ)                        ▷ 过滤,只留正确轨迹
+17:  Θ′ ← TRAINLM(τ)                               ▷ 用自举出的轨迹微调(训练)LM 权重
+18:  return Θ′
+19: end function
+20:
+21: Set OPTIMIZE_PROMPTS as BOOTSTRAPFEWSHOTRS            # 把"优化提示"实例化为 BFRS
+22: Set FINETUNE_WEIGHTS as BOOTSTRAPFINETUNE             # 把"微调权重"实例化为 BFT
+```
+
+::: en
+For fine-tuning, we extend BootstrapFinetune (BFT) of DSPy, which, given a program Φ, self-generates a large number examples for every module and combines them into one dataset to fine-tune the LM weights with an implicit multi-task objective, where the sub-tasks are the modules' roles. Existing work has only considered BFT in a very narrow setting for LM programs: on HotPotQA, Khattab et al. (2024) train a T5-Large model using traces from a few-shot Llama2-13b program, without considering getting an LM to teach itself via BFT nor considering a role for BFRS in the fine-tuned program. In this work, we focus on allowing models to teach themselves and self-improve. We propose for the first time combining the strategies of BFRS and BFT via alternation to get the same LM to teach itself better than either prompt or weight optimization in isolation. One could test similar ideas in scenarios where a larger model does the bootstrapping for a smaller LM. This may lead to even better results but is outside our scope.
+:::
+
+微调方面,我们扩展了 DSPy 的 BootstrapFinetune(BFT):给定程序 $\Phi$,它自生成每个模块的大量示例,并把它们合并成一个数据集,以隐式的多任务目标(multi-task objective,各子任务即各模块的角色)来微调 LM 权重。既有工作只在一种非常窄的场景下考虑过 BFT 用于 LM 程序:在 HotPotQA 上,Khattab et al. (2024) 用一个少样本 Llama2-13b 程序产生的轨迹去训练 T5-Large 模型——既没有考虑让 LM 通过 BFT **自己教自己**,也没有考虑让 BFRS 在微调后的程序中扮演角色。本工作聚焦于让模型自己教自己、自我改进。我们首次提出通过交替(alternation)把 BFRS 与 BFT 两种策略组合起来,让同一个 LM 教自己教得比单独使用提示优化或权重优化都更好。也可以在"大模型为小 LM 做自举"的场景中检验类似想法,那可能带来更好的结果,但超出了本文范围。
+
+## 要点速览
+- BetterTogether = **提示优化 → 自举微调 → 再提示优化** 的交替框架,数据全部来自自举 program traces,同一模型自我教学。
+- 9 个设定中 7 个:联合 > 单一手段;**提示优化是处处不可省略的基线**。
+- 仅微调的两大坑:常不敌提示优化;vanilla 冷启动失败时连微调数据都自举不出来(llama-2 GSM8K/Iris 直接 "–")。
+- 机制互补:好提示 → 更好的微调数据;好权重 → 提示优化的更高起点。
+- 与课程关联:与 MIPRO(提示侧)、GEPA(反思侧)、Snell 测试时计算(推理侧)同讲对照——优化可以发生在**提示、权重、推理时**三个层面,且可组合。
+- 工程启示:别问"微调还是提示工程",先做提示优化建立强基线,再自举微调,最后回到提示;全程用 DSPy 抽象管理。

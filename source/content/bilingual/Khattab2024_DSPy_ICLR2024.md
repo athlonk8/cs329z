@@ -1,0 +1,931 @@
+---
+title: "DSPy: Compiling Declarative Language Model Calls into Self-Improving Pipelines"
+title_zh: DSPy：将声明式语言模型调用编译为自我改进的流水线
+authors: Omar Khattab et al.
+venue: "ICLR 2024 · Stanford / UC Berkeley / CMU 等"
+kind: paper
+importance: must
+tags: DSPy, 提示优化, LM 流水线, 声明式编程, 自举, 框架与编排
+summary: DSPy 把 LM 流水线抽象为文本变换图，用"签名 + 模块 + 优化器"替代手写提示模板，自动编译出超越人工提示工程的系统。
+---
+
+## 导读
+
+本文是第 3 周"框架与编排"专题的核心论文。当时 LM 流水线（LangChain、LlamaIndex 等）普遍依赖手写的"提示模板"——一大段试错凑出的长字符串。论文视之为"手工调权重"式的脆弱做法：换个模型或领域就可能失效。DSPy 把这些技术"编程化"：像 PyTorch 之于神经网络，为 LM 流水线提供可组合的抽象与自动优化器。
+
+DSPy 的三大抽象是：**签名（signatures）**——用自然语言类型化的声明描述一次文本变换的输入输出；**模块（modules）**——把 Chain of Thought、ReAct 等提示技术改造成可配签名的参数化组件；**提示优化器（teleprompters）**——把"提示"当作优化问题，通过自举（bootstrapping）示教例证自动编译整个流水线。两个案例研究（GSM8K 数学题、HotPotQA 多跳问答）显示：几行 DSPy 代码在数分钟编译后，GPT-3.5 与 llama2-13b-chat 上的流水线普遍比标准少样本提示高出 25% 与 65% 以上，甚至能让 770M 参数的 T5-Large 与依赖专家提示链的 GPT-3.5 方案掰手腕。理解它就抓住了 Agent 工程从手工提示走向系统化优化的转向。
+
+## 全文对照翻译
+
+> **译注**：以下覆盖论文正文全部内容（摘要、第 1–8 节，原文第 1–11 页），以及附录 A、B、D、E、F 的实质内容；附录 C 的大型提示示例译出说明文字与统计表，8 份完整英文提示原文（合计约 2 万字符、系逐字抄录自其他论文与代码库）仅译图题并概述。结论之后的致谢（Acknowledgments）与参考文献列表不收录。术语首现处中英对照：签名 Signature、模块 Module、teleprompter/提示优化器、编译 compile、示教例证 demonstration、自举 bootstrapping 等；LLM、LM、Agent、RAG 等通用缩写保留英文。
+
+### 摘要（Abstract）
+
+::: en
+The ML community is rapidly exploring techniques for prompting language models (LMs) and for stacking them into pipelines that solve complex tasks. Unfortunately, existing LM pipelines are typically implemented using hard-coded "prompt templates", i.e. lengthy strings discovered via trial and error. Toward a more systematic approach for developing and optimizing LM pipelines, we introduce DSPy, a programming model that abstracts LM pipelines as text transformation graphs, i.e. imperative computation graphs where LMs are invoked through declarative modules. DSPy modules are parameterized, meaning they can learn (by creating and collecting demonstrations) how to apply compositions of prompting, finetuning, augmentation, and reasoning techniques. We design a compiler that will optimize any DSPy pipeline to maximize a given metric. We conduct two case studies, showing that succinct DSPy programs can express and optimize sophisticated LM pipelines that reason about math word problems, tackle multi-hop retrieval, answer complex questions, and control agent loops. Within minutes of compiling, a few lines of DSPy allow GPT-3.5 and llama2-13b-chat to self-bootstrap pipelines that outperform standard few-shot prompting (generally by over 25% and 65%, respectively) and pipelines with expert-created demonstrations (by up to 5–46% and 16–40%, respectively). On top of that, DSPy programs compiled to open and relatively small LMs like 770M-parameter T5 and llama2-13b-chat are competitive with approaches that rely on expert-written prompt chains for proprietary GPT-3.5. DSPy is available at https://github.com/stanfordnlp/dspy.
+:::
+
+机器学习社区正在快速探索为语言模型（LM）编写提示的技术，以及把它们堆叠成解决复杂任务的流水线。遗憾的是，现有的 LM 流水线通常用硬编码的"提示模板"实现，即通过反复试错发现的长字符串。为了给开发和优化 LM 流水线提供更系统化的路径，我们提出 DSPy——一个把 LM 流水线抽象为**文本变换图（text transformation graphs）**的编程模型（programming model），即通过声明式模块调用 LM 的命令式计算图。DSPy 模块是参数化的，意味着它们可以（通过创建和收集示教例证 demonstrations 来）学习如何组合运用提示、微调、增强与推理技术。我们设计了一个编译器（compiler）来优化任意 DSPy 流水线以最大化给定指标。我们进行了两个案例研究，表明简洁的 DSPy 程序即可表达并优化复杂的 LM 流水线：推理数学应用题、完成多跳检索、回答复杂问题、控制智能体循环。在几分钟的编译之内，几行 DSPy 代码即可让 GPT-3.5 与 llama2-13b-chat 自举出超越标准少样本提示（分别普遍高出 25% 与 65% 以上）以及专家编写示教例证的流水线（分别高出至多 5–46% 与 16–40%）的系统。此外，编译到开放且相对较小的 LM（如 770M 参数的 T5 与 llama2-13b-chat）上的 DSPy 程序，可与依赖专家编写提示链、调用专有 GPT-3.5 的方案相竞争。DSPy 已开源于 https://github.com/stanfordnlp/dspy。
+
+### 1 引言（Introduction）
+
+::: en
+Language models (LMs) are enabling researchers to build NLP systems at higher levels of abstraction and with lower data requirements than ever before (Bommasani et al., 2021). This is fueling an exploding space of "prompting" techniques—and lightweight finetuning techniques—for adapting LMs to new tasks (Kojima et al., 2022), eliciting systematic reasoning from them (Wei et al., 2022; Wang et al., 2022b), and augmenting them with retrieved sources (Guu et al., 2020; Lazaridou et al., 2022; Khattab et al., 2022) or with tools (Yao et al., 2022; Schick et al., 2023). Most of these techniques are explored in isolation, but interest has been growing in building multi-stage pipelines and agents that decompose complex tasks into more manageable calls to LMs in an effort to improve performance (Qi et al., 2019; Khattab et al., 2021a; Karpas et al., 2022; Dohan et al., 2022; Khot et al., 2022; Khattab et al., 2022; Chen et al., 2022; Pourreza & Rafiei, 2023; Shinn et al., 2023). Unfortunately, LMs are known to be sensitive to how they are prompted for each task, and this is exacerbated in pipelines where multiple LM calls have to interact effectively. As a result, the LM calls in existing LM pipelines and in popular developer frameworks are generally implemented using hard-coded 'prompt templates', that is, long strings of instructions and demonstrations that are hand crafted through manual trial and error. We argue that this approach, while pervasive, can be brittle and unscalable—conceptually akin to hand-tuning the weights for a classifier. A given string prompt might not generalize to different pipelines or across different LMs, data domains, or even inputs. Toward a more systematic approach to designing AI pipelines, we introduce the DSPy programming model.¹ DSPy pushes building new LM pipelines away from manipulating free-form strings and closer to programming (composing modular operators to build text transformation graphs) where a compiler automatically generates optimized LM invocation strategies and prompts from a program. We draw inspiration from the consensus that emerged around neural network abstractions (Bergstra et al., 2013), where (1) many general-purpose layers can be modularly composed in any complex architecture and (2) the model weights can be trained using optimizers instead of being hand-tuned.
+:::
+
+语言模型（LM）正让研究者能够以前所未有的更高抽象层级、更低数据要求构建 NLP 系统（Bommasani et al., 2021）。这催生了爆炸式增长的"提示（prompting）"技术与轻量微调技术：让 LM 适配新任务（Kojima et al., 2022）、激发其系统化推理（Wei et al., 2022; Wang et al., 2022b）、用检索到的来源（Guu et al., 2020; Lazaridou et al., 2022; Khattab et al., 2022）或工具（Yao et al., 2022; Schick et al., 2023）增强模型。这些技术大多被孤立地研究，但社区的兴趣日益转向构建多阶段流水线与智能体（agent），把复杂任务分解为更可控的多次 LM 调用以提升性能（Qi et al., 2019; Khattab et al., 2021a; Karpas et al., 2022; Dohan et al., 2022; Khot et al., 2022; Khattab et al., 2022; Chen et al., 2022; Pourreza & Rafiei, 2023; Shinn et al., 2023）。遗憾的是，LM 对每个任务被怎样提示高度敏感，而在多次 LM 调用必须有效协作的流水线中，这一问题被急剧放大。其结果是，现有 LM 流水线与流行开发框架中的 LM 调用普遍通过硬编码的"提示模板"实现——即经人工反复试错凑出的、由指令与示教例证组成的长字符串。我们认为这一做法虽普遍存在，却脆弱且不可扩展——概念上类似于手工调分类器的权重。一段字符串提示可能无法泛化到不同流水线，或跨不同的 LM、数据领域甚至输入。为给 AI 流水线设计一条更系统化的路径，我们提出 DSPy 编程模型。¹ DSPy 把构建新 LM 流水线的工作从操纵自由格式的字符串推向更接近编程——组合模块化算子构建文本变换图，由编译器从程序自动生成优化过的 LM 调用策略与提示。我们从围绕神经网络抽象达成的共识（Bergstra et al., 2013）中汲取灵感：(1) 大量通用层可以模块化地组合成任意复杂架构；(2) 模型权重可以用优化器训练，而非手工调整。
+
+> 脚注 1：DSPy 读作 dee-ess-pie。它是我们早期 Demonstrate–Search–Predict 框架（DSP；Khattab et al. 2022）的第二轮迭代。本文介绍 DSPy 的关键概念；关于该框架更详尽、最新的文档，请见 https://github.com/stanfordnlp/dspy。
+
+::: en
+To this end, we propose the DSPy programming model (Sec 3). We first translate string-based prompting techniques, including complex and task-dependent ones like Chain of Thought (Wei et al., 2022) and ReAct (Yao et al., 2022), into declarative modules that carry natural-language typed signatures. DSPy modules are task-adaptive components—akin to neural network layers—that abstract any particular text transformation, like answering a question or summarizing a paper. We then parameterize each module so that it can learn its desired behavior by iteratively bootstrapping useful demonstrations within the pipeline. Inspired directly by PyTorch abstractions (Paszke et al., 2019), DSPy modules are used via expressive define-by-run computational graphs. Pipelines are expressed by (1) declaring the modules needed and (2) using these modules in any logical control flow (e.g., if statements, for loops, exceptions, etc.) to logically connect the modules.
+:::
+
+为此，我们提出 DSPy 编程模型（第 3 节）。我们首先把基于字符串的提示技术——包括思维链（Chain of Thought；Wei et al., 2022）与 ReAct（Yao et al., 2022）这类复杂且依赖任务的技术——翻译为携带自然语言类型化**签名（signatures）**的声明式模块（modules）。DSPy 模块是任务自适应组件——如同神经网络的层——抽象任意具体的文本变换，比如回答一个问题或总结一篇论文。接着我们对每个模块做参数化（parameterize），使其能够通过在流水线内迭代自举（bootstrapping）有用的示教例证来习得期望行为。直接受 PyTorch 抽象（Paszke et al., 2019）启发，DSPy 模块经由富有表达力的 define-by-run（边定义边运行）计算图使用：流水线的表达方式是 (1) 声明所需的模块，(2) 在任意逻辑控制流（如 if 语句、for 循环、异常处理等）中使用这些模块，把它们逻辑地连接起来。
+
+::: en
+We then develop the DSPy compiler (Sec 4), which optimizes any DSPy program to improve quality or cost. The compiler inputs are the program, a few training inputs with optional labels, and a validation metric. The compiler simulates versions of the program on the inputs and bootstraps example traces of each module for self-improvement, using them to construct effective few-shot prompts or finetuning small LMs for steps of the pipeline. Optimization in DSPy is highly modular: it is conducted by teleprompters,² which are general-purpose optimization strategies that determine how the modules should learn from data. In this way, the compiler automatically maps the declarative modules to high-quality compositions of prompting, finetuning, reasoning, and augmentation.
+:::
+
+随后我们开发 DSPy 编译器（compile；第 4 节），它优化任意 DSPy 程序以提升质量或降低成本。编译器的输入是程序、少量带可选标签的训练输入、以及一个验证指标。编译器在这些输入上模拟程序的不同版本，并为每个模块自举示例轨迹（traces）用于自我改进，再用它们构造高效的少样本提示，或为流水线中的各步骤微调小型 LM。DSPy 的优化高度模块化：由 teleprompter（提示优化器）²执行——它们是决定各模块应如何从数据中学习的通用优化策略。这样，编译器自动把声明式模块映射为提示、微调、推理与增强的高质量组合。
+
+> 脚注 2：tele-prompter 之名源自"把提示任务抽象化、自动化，尤其使之在远处（at a distance）发生、无需人工干预"的观念。
+
+::: en
+Programming models like DSPy could be assessed along many dimensions, but we focus on the role of expert-crafted prompts in shaping system performance. We are seeking to reduce or even remove their role through DSPy modules (e.g., versions of popular techniques like Chain of Thought) and teleprompters. We report on two expansive case studies: math word problems (GMS8K; Cobbe et al. 2021) and multi-hop question answering (HotPotQA; Yang et al. 2018) with explorations of chain of thought, multi-chain reflection, multi-hop retrieval, retrieval-augmented question answering, and agent loops. Our evaluations use a number of different compiling strategies effectively and show that straightforward DSPy programs outperform systems using hand-crafted prompts, while also allowing our programs to use much smaller and hence more efficient LMs effectively.
+:::
+
+像 DSPy 这样的编程模型可以沿许多维度评估，但我们聚焦于专家手写提示在塑造系统性能中的角色。我们试图通过 DSPy 模块（如 Chain of Thought 这类流行技术的版本）与提示优化器来削减乃至消除这一角色。我们报告两个大规模案例研究：数学应用题（GMS8K，原文如此，即 GSM8K；Cobbe et al. 2021）与多跳问答（HotPotQA；Yang et al. 2018），并探索思维链、多链反思、多跳检索、检索增强问答与智能体循环。我们的评估有效地使用了多种编译策略，表明简洁的 DSPy 程序优于使用手写提示的系统，同时也能让程序有效使用小得多、因而更高效的 LM。
+
+::: en
+Overall, this work proposes the first programming model that translates prompting techniques into parameterized declarative modules and introduces an effective compiler with general optimization strategies (teleprompters) to optimize arbitrary pipelines of these modules. Our main contributions are empirical and algorithmic: with DSPy, we have found that we can implement very short programs that can bootstrap self-improving multi-stage NLP systems using LMs as small as llama2-13b-chat and T5-Large (770M parameters). Without hand-crafted prompts and within minutes to tens of minutes of compiling, compositions of DSPy modules can raise the quality of simple programs from 33% to 82% (Sec 6) and from 32% to 46% (Sec 7) for GPT-3.5 and, similarly, from 9% to 47% (Sec 6) and from 22% to 41% (Sec 7) for llama2-13b-chat.
+:::
+
+总体而言，本文提出了第一个把提示技术翻译为参数化声明式模块的编程模型，并引入配备通用优化策略（teleprompters）的高效编译器来优化这些模块构成的任意流水线。我们的主要贡献是实证与算法层面的：借助 DSPy，我们发现可以用极短的程序自举出自我改进的多阶段 NLP 系统，所用的 LM 可以小到 llama2-13b-chat 与 T5-Large（770M 参数）。无需手写提示，且在数分钟到数十分钟的编译之内，DSPy 模块的组合可以把简单程序的质量在 GPT-3.5 上从 33% 提升到 82%（第 6 节）、从 32% 提升到 46%（第 7 节），在 llama2-13b-chat 上同样地从 9% 到 47%（第 6 节）、从 22% 到 41%（第 7 节）。
+
+### 2 相关工作（Related Work）
+
+::: en
+This work is inspired by the role that Torch (Collobert et al., 2002), Theano (Bergstra et al., 2010; 2011; Al-Rfou et al., 2016), Chainer (Tokui et al., 2015), and others played in the development in deep learning by providing powerful abstractions. A similar transformation is emerging with higher-level pipelines of LMs, and we are seeking to offer a solid conceptual framework and programming abstractions for what we call foundation model programming. We draw on differentiable programming (Wang et al., 2018) but applied to LM calls rather than neural networks, and borrow syntactic elements from PyTorch (Paszke et al., 2019).
+:::
+
+本工作的灵感来自 Torch（Collobert et al., 2002）、Theano（Bergstra et al., 2010; 2011; Al-Rfou et al., 2016）、Chainer（Tokui et al., 2015）等框架通过提供强大抽象在深度学习发展中扮演的角色。一场类似的变革正在更高层的 LM 流水线领域出现，我们希望为我们所称的**基础模型编程（foundation model programming）**提供坚实的概念框架与编程抽象。我们借鉴可微编程（differentiable programming；Wang et al., 2018）的思想，但应用于 LM 调用而非神经网络，并从 PyTorch（Paszke et al., 2019）借用语法元素。
+
+::: en
+In-context learning (McCann et al. 2018; Radford et al. 2018; Brown et al. 2020) is a key mechanism for foundation model programming. A growing body of work has revealed that, especially with instruction tuning (Ouyang et al., 2022), we can elicit sophisticated behavior via prompting (Wei et al., 2022; Wang et al., 2022b; Press et al., 2022; Yao et al., 2022; Khot et al., 2022; Madaan et al., 2023). Similarly, forms of weak supervision that would normally require task-specific (Khattab et al., 2021a;b) or hand-built (Ratner et al., 2016; Hancock et al., 2018) heuristics are now done by LMs (Wang et al., 2022b; Zelikman et al., 2022; Zhang et al., 2022; Shao et al., 2023).
+:::
+
+上下文学习（in-context learning；McCann et al. 2018; Radford et al. 2018; Brown et al. 2020）是基础模型编程的关键机制。越来越多的工作揭示：尤其在指令微调（instruction tuning；Ouyang et al., 2022）加持下，我们可以经提示激发出复杂行为（Wei et al., 2022; Wang et al., 2022b; Press et al., 2022; Yao et al., 2022; Khot et al., 2022; Madaan et al., 2023）。类似地，以往需要任务专用（Khattab et al., 2021a;b）或人工搭建（Ratner et al., 2016; Hancock et al., 2018）启发式的弱监督形式，如今可以由 LM 完成（Wang et al., 2022b; Zelikman et al., 2022; Zhang et al., 2022; Shao et al., 2023）。
+
+::: en
+In-context learning methods now routinely invoke tools, leading to LM pipelines that use retrieval models (Chen et al., 2017; Lewis et al., 2020; Guu et al., 2020; Lazaridou et al., 2022; Izacard et al., 2022), multimodal foundation models, and more traditional tools like APIs (Nakano et al., 2021) and calculators. A number of toolkits have been developed to facilitate this, including LangChain (Chase, 2022), Semantic Kernel (Microsoft, 2023), LlamaIndex (Liu, 2022), and many other retrieval and agent libraries. These toolkits provide pre-packaged chains and agents that connect LMs with numerous accessible tools. However, they suffer from the pervasive prompt engineering challenges we address in DSPy: they express task-specific behavior through hand-written prompt templates (for detailed discussion, see Appendix B).
+:::
+
+如今上下文学习方法已常规地调用工具，催生了使用检索模型（Chen et al., 2017; Lewis et al., 2020; Guu et al., 2020; Lazaridou et al., 2022; Izacard et al., 2022）、多模态基础模型以及 API（Nakano et al., 2021）与计算器等传统工具的 LM 流水线。为此已涌现出一批工具包，包括 LangChain（Chase, 2022）、Semantic Kernel（Microsoft, 2023）、LlamaIndex（Liu, 2022）以及许多其他检索与智能体库。这些工具包提供预打包的链（chains）与智能体，把 LM 与众多可用工具相连。但它们深受我们在 DSPy 中着力解决的普遍性提示工程之苦：它们通过手写的提示模板表达任务专属行为（详细讨论见附录 B）。
+
+::: en
+Researchers are starting to apply discrete optimization and RL to find effective prompts, generally for a single logical LM call (Guo et al., 2023; Pryzant et al., 2023; Huang et al., 2022; Yang et al., 2023). DSPy seeks to generalize this space: it offers a rich framework for optimizing arbitrary pipelines from high-level declarative signatures, by bootstrapping high-quality multi-stage demonstrations with constraints. In this framework, DSPy teleprompters may apply optimization using model selection techniques like cross-validation or, in principle, with sophisticated techniques involving RL and LM feedback (Hu et al., 2023; Zhao et al., 2023a; Shinn et al., 2023) or learned or Bayesian hyperparameter optimization methods (Bergstra et al., 2013; Akiba et al., 2019).
+:::
+
+研究者开始把离散优化与强化学习（RL）用于寻找有效提示，通常针对单次逻辑 LM 调用（Guo et al., 2023; Pryzant et al., 2023; Huang et al., 2022; Yang et al., 2023）。DSPy 试图推广这一方向：它提供了一个丰富的框架，通过在约束下自举高质量的多阶段示教例证，从高级声明式签名出发优化任意流水线。在此框架中，DSPy 的提示优化器可以采用交叉验证这类模型选择技术做优化，原则上也可以结合涉及 RL 与 LM 反馈的复杂技术（Hu et al., 2023; Zhao et al., 2023a; Shinn et al., 2023），或学习式/贝叶斯超参数优化方法（Bergstra et al., 2013; Akiba et al., 2019）。
+
+::: en
+The present paper seeks to motivate DSPy as a programming model and to report new empirical findings from applying the DSPy compiler. This is inspired by formative work by Bergstra et al. (2010; 2013), Paszke et al. (2019), and Wolf et al. (2020), who support their respective programming models with a mix of benchmark numbers and some qualitative measures. For the current paper, we focus on showing that DSPy and its compiler allow us to build outstanding LM systems without hand-crafted prompt strings, but instead from truly modular units, and that this opens up doors for systematically exploring a rich design space at a very high programmatic level of abstraction.
+:::
+
+本文旨在论证 DSPy 作为一个编程模型的价值，并报告应用 DSPy 编译器的新实证发现。这受到 Bergstra et al.（2010; 2013）、Paszke et al.（2019）与 Wolf et al.（2020）奠基性工作的启发——他们以基准数字与若干定性度量相结合的方式来支撑各自的编程模型。就本文而言，我们聚焦于证明：DSPy 及其编译器让我们无需手写提示字符串、而是从真正模块化的单元出发构建卓越的 LM 系统；并且这为在极高的编程抽象层级上系统化探索丰富的设计空间打开了大门。
+
+### 3 DSPy 编程模型（The DSPy Programming Model）
+
+::: en
+We present DSPy, which treats LMs as abstract devices for text generation,³ and optimizes their usage in arbitrary computational graphs. DSPy programs are expressed in Python: each program takes the task input (e.g., a question to answer or a paper to summarize) and returns the output (e.g., an answer or a summary) after a series of steps. DSPy contributes three abstractions toward automatic optimization: signatures, modules, and teleprompters. Signatures abstract the input/output behavior of a module; modules replace existing hand-prompting techniques and can be composed in arbitrary pipelines; and teleprompters optimize all modules in the pipeline to maximize a metric.
+:::
+
+我们提出 DSPy：它把 LM 视为文本生成的抽象设备³，并在任意计算图中优化对它们的使用。DSPy 程序用 Python 表达：每个程序接收任务输入（如一个待回答的问题或一篇待摘要的论文），经一系列步骤后返回输出（如答案或摘要）。DSPy 为自动优化贡献三大抽象：签名（signatures）、模块（modules）与提示优化器（teleprompters）。签名抽象一个模块的输入/输出行为；模块取代现有的手工提示技术、可组合成任意流水线；提示优化器优化流水线中全部模块以最大化某指标。
+
+> 脚注 3：我们假设可以使用一个或多个 LM：它们接收提示字符串并返回文本补全。这可以是具备上下文学习能力的可提示 LM（如 GPT-3.5 或 Llama2-7b），也可以是较小的可微调 LM（如 T5-base）。可以指定一个默认 LM；除非另行配置，所有操作都会使用它。
+
+#### 3.1 自然语言签名可以抽象提示与微调（Natural Language Signatures Can Abstract Prompting & Finetuning）
+
+::: en
+Instead of free-form string prompts, DSPy programs use natural language signatures to assign work to the LM. A DSPy signature is natural-language typed declaration of a function: a short declarative spec that tells DSPy what a text transformation needs to do (e.g., "consume questions and return answers"), rather than how a specific LM should be prompted to implement that behavior. More formally, a DSPy signature is a tuple of input fields and output fields (and an optional instruction). A field consists of field name and optional metadata.⁴ In typical usage, the roles of fields are inferred by DSPy as a function of field names. For instance, the DSPy compiler will use in-context learning to interpret question differently from answer and will iteratively refine its usage of these fields. Signatures offer two benefits over prompts: they can be compiled into self-improving and pipeline-adaptive prompts or finetunes. This is primarily done by bootstrapping (Sec 4) useful demonstrating examples for each signature. Additionally, they handle structured formatting and parsing logic to reduce (or, ideally, avoid) brittle string manipulation in user programs.
+:::
+
+DSPy 程序不用自由格式的字符串提示，而用自然语言**签名（signature）**向 LM 分派工作。DSPy 签名是对函数的自然语言类型化声明：一段简短的声明式规格，告诉 DSPy 某个文本变换需要做什么（如"接收问题并返回答案"），而非某个具体 LM 应被怎样提示来实现该行为。更形式化地说，DSPy 签名是输入字段与输出字段（外加可选指令）组成的元组。字段由字段名与可选元数据构成。⁴在典型用法中，字段的角色由 DSPy 依据字段名推断。例如，DSPy 编译器会用上下文学习把 question 与 answer 区别对待，并迭代细化对这些字段的用法。签名相对提示有两大好处：其一，签名可被编译为自我改进、随流水线自适应的提示或微调——这主要通过（第 4 节的）自举为每个签名生成有用的示教例证来完成；其二，签名接管结构化格式化与解析逻辑，减少（理想情况下避免）用户程序中脆弱的字符串操作。
+
+> 脚注 4：对任务与字段的字符串描述同样是可选的、通常省略。字段可携带可选的字段前缀与描述。默认情况下字段被假定存放自由格式字符串；我们正在积极探索可选数据类型，以此表达对合法取值的约束（如 bool 或 int）并更优雅地处理格式化与解析逻辑，不过在本文撰写之时该特性尚非 DSPy 核心。
+
+::: en
+In practice, DSPy signatures can be expressed with a shorthand notation like question -> answer, so that line 1 in the following is a complete DSPy program for a basic question-answering system (with line 2 illustrating usage and line 3 the response when GPT-3.5 is the LM):
+:::
+
+实践中，DSPy 签名可以用形如 question -> answer 的简写记法表达，于是下面第 1 行就是一个基础问答系统的完整 DSPy 程序（第 2 行展示用法，第 3 行是 GPT-3.5 作为 LM 时的响应）：
+
+```python
+qa = dspy.Predict("question -> answer")   # 第 1 行:一行即完整的问答程序
+qa(question="Where is Guaraní spoken?")    # 第 2 行:用法
+# Out: Prediction(answer='Guaraní is spoken mainly in South America.')
+```
+
+::: en
+In the shorthand notation, each field's name indicates the semantic role that the input (or output) field plays in the transformation. DSPy will parse this notation and expand the field names into meaningful instructions for the LM, so that english document -> french translation would prompt for English to French translation. When needed, DSPy offers more advanced programming interfaces for expressing more explicit constraints on signatures (Appendix A).
+:::
+
+在简写记法中，每个字段名标示该输入（或输出）字段在变换中扮演的语义角色。DSPy 会解析这一记法，把字段名展开为对 LM 有意义的指令——例如 english document -> french translation 会生成英译法的提示。需要时，DSPy 还提供更高级的编程接口，以便对签名施加更显式的约束（附录 A）。
+
+#### 3.2 参数化与模板化的模块可以抽象提示技术（Parameterized & Templated Modules Can Abstract Prompting Techniques）
+
+::: en
+Akin to type signatures in programming languages, DSPy signatures simply define an interface and provide type-like hints on the expected behavior. To use a signature, we must declare a module with that signature, like we instantiated a Predict module above. A module declaration like this returns a function having that signature.
+:::
+
+与编程语言中的类型签名类似，DSPy 签名只定义接口，并对期望行为提供类型式的提示。要使用签名，必须声明一个持有该签名的**模块（module）**——就像我们在上面实例化的 Predict 模块。这样的模块声明会返回一个具备该签名的函数。
+
+::: en
+The Predict Module The core module for working with signatures in DSPy is Predict (simplified pseudocode in Appendix D.1). Internally, Predict stores the supplied signature, an optional LM to use (initially None, but otherwise overrides the default LM for this module), and a list of demonstrations for prompting (initially empty). Like layers in PyTorch, the instantiated module behaves as a callable function: it takes in keyword arguments corresponding to the signature input fields (e.g., question), formats a prompt to implement the signature and includes the appropriate demonstrations, calls the LM, and parses the output fields. When Predict detects it's being used in compile mode, it will also internally track input/output traces to assist the teleprompter at bootstrapping the demonstrations.
+:::
+
+**Predict 模块** DSPy 中处理签名的核心模块是 Predict（简化伪码见附录 D.1）。在内部，Predict 保存所给的签名、一个可选的模块级 LM（初始为 None；一旦设置便覆盖该模块的默认 LM）、以及一个用于提示的示教例证列表（初始为空）。与 PyTorch 中的层一样，实例化后的模块表现为可调用函数：接收与签名输入字段对应的关键字参数（如 question），格式化一个实现该签名的提示并纳入恰当的示教例证，调用 LM，再解析输出字段。当 Predict 检测到自己正以编译模式（compile mode）被使用时，还会在内部跟踪输入/输出轨迹，以协助提示优化器自举示教例证。
+
+::: en
+Other Built-in Modules DSPy modules translate prompting techniques into modular functions that support any signature, contrasting with the standard approach of prompting LMs with task-specific details (e.g., hand-written few-shot examples). To this end, DSPy includes a number of more sophisticated modules like ChainOfThought, ProgramOfThought, MultiChainComparison, and ReAct.⁵ These can all be used interchangeably to implement a DSPy signature. For instance, simply changing Predict to ChainOfThought in the above program leads to a system that thinks step by step before committing to its output field.
+:::
+
+**其他内置模块** DSPy 模块把提示技术翻译为支持任意签名的模块化函数，与"用任务专属细节（如手写少样本例子）提示 LM"的标准做法形成对照。为此，DSPy 内置了一批更复杂的模块：ChainOfThought、ProgramOfThought、MultiChainComparison 与 ReAct。⁵它们都可以互换地用来实现同一 DSPy 签名。例如，把上面程序中的 Predict 换成 ChainOfThought，就得到一个在落笔输出字段之前先逐步思考的系统。
+
+> 脚注 5：这些模块分别泛化自 Wei et al. (2022)、Chen et al. (2022)、Yoran et al. (2023) 与 Yao et al. (2022) 的提示技术；在此过程中，它们也把 Kojima et al. (2022)、Zelikman et al. (2022)、Zhang et al. (2022) 与 Huang et al. (2022) 关于零样本提示与理由自生成（rationale self-generation）的思想，推广为能自举任意多阶段流水线的参数化模块。
+
+::: en
+Importantly, all of these modules are implemented in a few lines of code by expanding the user-defined signature and calling Predict one or more times on new signatures as appropriate. For instance, we show a simplified implementation of the built-in ChainOfThought below.
+:::
+
+重要的是，所有这些模块都只用几行代码实现：扩展用户定义的签名，并视情况在一个或多个新签名上调用 Predict。下面我们给出内置 ChainOfThought 的简化实现。
+
+```python
+class ChainOfThought(dspy.Module):
+    def __init__(self, signature):
+        # 把签名从 '*inputs -> *outputs' 改为 '*inputs -> rationale, *outputs'
+        rationale_field = dspy.OutputField(prefix="Reasoning: Let's think step by step.")
+        signature = dspy.Signature(signature).prepend_output_field(rationale_field)
+
+        # 用修改后的签名声明一个子模块
+        self.predict = dspy.Predict(signature)
+
+    def forward(self, **kwargs):
+        # 只需把输入转发给子模块
+        return self.predict(**kwargs)
+```
+
+::: en
+This is a fully-fledged module capable of learning effective few-shot prompting for any LM or task. We contrast that with Appendix C, which copies long reasoning prompts hand-written by sources ranging from recent research to popular prompting libraries.
+:::
+
+这已是一个完备的模块，能为任意 LM 或任务学习高效的少样本提示。与之对照，附录 C 抄录了从近期论文到流行提示库等来源手写的长篇推理提示。
+
+::: en
+Parameterization Uniquely, DSPy parameterizes these prompting techniques. To understand this parameterization, observe that any LM call seeking to implement a particular signature needs to specify parameters that include: (1) the specific LM to call (Chen et al., 2023), (2) the prompt instructions (Yang et al., 2023) and the string prefix of each signature field and, most importantly, (3) the demonstrations used as few-shot prompts (for frozen LMs) or as training data (for finetuning). We focus primarily on automatically generating and selecting useful demonstrations. In our case studies, we find that bootstrapping good demonstrations gives us a powerful way to teach sophisticated pipelines of LMs new behaviors systematically.
+:::
+
+**参数化（Parameterization）** DSPy 的独特之处在于对这些提示技术做了参数化。要理解这种参数化，请注意：任何想要实现某个签名的 LM 调用都需要指定这些参数：(1) 调用哪个具体 LM（Chen et al., 2023）；(2) 提示指令（Yang et al., 2023）与各签名字段的字符串前缀；以及最关键的 (3) 用作少样本提示（对冻结的 LM）或训练数据（对微调）的**示教例证**。我们主要聚焦于自动生成并选择有用的示教例证。在案例研究中我们发现，自举好的示教例证为系统化地教会复杂 LM 流水线新行为提供了一条强大路径。
+
+::: en
+Tools DSPy programs may use tools, which are modules that execute computation. We support retrieval models through a dspy.Retrieve module. At the time of writing, DSPy has built-in support for ColBERTv2, Pyserini, and Pinecone retrievers, and we have explored experimental dspy.SQL for executing SQL queries and dspy.PythonInterpreter for executing Python code in a sandbox.
+:::
+
+**工具（Tools）** DSPy 程序可以使用工具——即执行计算的模块。检索模型通过 dspy.Retrieve 模块获得支持。截至撰写之时，DSPy 内置支持 ColBERTv2、Pyserini 与 Pinecone 检索器；我们还探索了实验性的 dspy.SQL（执行 SQL 查询）与 dspy.PythonInterpreter（在沙箱中执行 Python 代码）。
+
+::: en
+Programs DSPy modules can be composed in arbitrary pipelines in a define-by-run interface. Inspired directly by PyTorch and Chainer, one first declares the modules needed at initialization, allowing DSPy to keep track of them for optimization, and then one expresses the pipeline with arbitrary code that calls the modules in a forward method. As a simple illustration, we offer the following simple but complete retrieval-augmented generation (RAG) system.
+:::
+
+**程序（Programs）** DSPy 模块可以在 define-by-run 接口中组成任意流水线。直接受 PyTorch 与 Chainer 启发：先在初始化时声明所需模块（让 DSPy 跟踪它们以便优化），然后在 forward 方法中用任意代码调用这些模块来表达流水线。作为简单示例，我们给出下面这个简单但完整的检索增强生成（RAG）系统。
+
+```python
+class RAG(dspy.Module):
+    def __init__(self, num_passages=3):
+        # 除非另行覆盖，‘Retrieve‘ 将使用用户的默认检索设置
+        self.retrieve = dspy.Retrieve(k=num_passages)
+        # ‘ChainOfThought‘：给定检索结果与问题生成答案的签名
+        self.generate_answer = dspy.ChainOfThought("context, question -> answer")
+
+    def forward(self, question):
+        context = self.retrieve(question).passages
+        return self.generate_answer(context=context, question=question)
+```
+
+::: en
+To highlight modularity, we use ChainOfThought as a drop-in replacement of the basic Predict. One can now simply write RAG()("Where is Guaraní spoken?") to use it. Notice that, if we use a signature "context, question -> search query", we get a system that generates search queries rather than answers.
+:::
+
+为凸显模块化，这里用 ChainOfThought 直接替换基础的 Predict（即插即用）。现在只需写 RAG()("Where is Guaraní spoken?") 即可使用它。注意，若改用签名 "context, question -> search query"，得到的就是一个生成搜索查询而非答案的系统。
+
+#### 3.3 提示优化器可以为任意流水线自动化提示（Teleprompters Can Automate Prompting for Arbitrary Pipelines）
+
+::: en
+When compiling a DSPy program, we generally invoke a teleprompter, which is an optimizer that takes the program, a training set, and a metric—and returns a new optimized program. Different teleprompters (Sec 4) apply different strategies for optimization.
+:::
+
+编译（compiling）DSPy 程序时，我们通常调用一个 **teleprompter（提示优化器）**：它是一个优化器，接收程序、训练集与指标，返回优化后的新程序。不同提示优化器（第 4 节）采用不同的优化策略。
+
+::: en
+In DSPy, training sets may be small, potentially a handful of examples, though larger data enables more powerful optimization. Training examples may be incomplete, i.e., only input values are necessary. Labels for the pipeline steps are not required, unless they need to be used in the metric. In practice, we typically assume labels only for (at most) the program's final output, not the intermediate steps. This label-efficiency is critical for modularity: building a new pipeline in DSPy requires simply recompiling the new pipeline's code, not annotating data specific to the new pipeline.
+:::
+
+在 DSPy 中，训练集可以很小——少量几个例子即可，不过更大的数据量能支撑更强的优化。训练例子可以是不完整的，即只需输入值。流水线各步骤的标签并非必需，除非指标需要用到。实践中我们通常假设（至多）只有程序最终输出带标签，中间步骤则无。这种标签效率（label-efficiency）对模块化至关重要：在 DSPy 里搭建一条新流水线，只需重新编译新流水线的代码，而无需为其标注专属数据。
+
+::: en
+Metrics can be simple notions like exact match (EM) or F1, but they can be entire DSPy programs that balance multiple concerns. For example, we may compile the RAG module above against a dataset of question–answer pairs qa trainset and the metric EM. The goal of optimization here is to effectively bootstrap few-shot demonstrations. The following code achieves this:
+:::
+
+指标可以很简单，如精确匹配（exact match, EM）或 F1，也可以是平衡多重考量的完整 DSPy 程序。例如，我们可以把上面的 RAG 模块对着一个问答对数据集 qa_trainset 与指标 EM 进行编译。此处优化的目标是高效地自举少样本示教例证。以下代码即可完成：
+
+```python
+# 只有问题与最终答案的小训练集
+qa_trainset = [dspy.Example(question="What is the capital of France?", answer="Paris")]
+
+# 提示优化器将自举缺失的标签：推理链与检索上下文
+teleprompter = dspy.BootstrapFewShot(metric=dspy.evaluate.answer_exact_match)
+compiled_rag = teleprompter.compile(RAG(), trainset=qa_trainset)
+```
+
+::: en
+In this example, the BootstrapFewShot teleprompter (Sec 4, Appendix E.1) simulates RAG on the training example(s). It will collect demonstrations of each module (i.e., examples of its input–output behavior) that collectively lead to valid output (i.e., respecting the signatures and the metric).
+:::
+
+在这个例子中，BootstrapFewShot 提示优化器（第 4 节、附录 E.1）会在训练例上模拟 RAG。它将收集各模块的示教例证（即其输入—输出行为的样例），这些例证合起来能产生通过有效性检验的输出（即同时满足签名与指标约束）。
+
+::: en
+If one wanted to push the compiled program to be extractive given its retrieved contexts, one could define a custom metric to use in place of dspy.evaluate.answer exact match:
+:::
+
+如果想让编译后的程序在给定检索上下文时输出更"抽取式"（extractive），可以定义一个自定义指标来替代 dspy.evaluate.answer_exact_match：
+
+```python
+def answer_and_context_match(example, pred, trace=None):
+    answer_match = dspy.evaluate.answer_exact_match(example, pred)
+
+    # 预测是否是某段段落的子串？
+    context_match = any((pred.answer.lower() in c) for c in pred.context)
+
+    return answer_match and context_match
+```
+
+::: en
+Notice that behavior like this might be more accurately checked by another DSPy program that checks for faithful grounding of answers. Such metrics are fully supported and encouraged in DSPy.
+:::
+
+注意，这类行为其实可以用另一个 DSPy 程序更精确地检验——比如检查答案是否忠实有据（faithful grounding）。DSPy 完全支持并鼓励这样的指标。
+
+::: en
+Teleprompters can be composed by specifying a teacher program. DSPy will sample demonstrations from this program for prompt optimization. This composition can enable very rich pipelines, where expensive programs (e.g., complex expensive ensembles using large LMs) supervise cheap programs (e.g., simple pipelines using smaller LMs). One may start with compiled rag from above (say, compiled to use a large Llama2-13b-chat LM) but now fine-tune Flan-T5-large to create an efficient program:
+:::
+
+提示优化器可以通过指定 **teacher（教师）程序**来组合。DSPy 会从该程序采样示教例证用于提示优化。这种组合能搭建非常丰富的流水线：昂贵程序（如使用大 LM 的复杂昂贵集成）监督廉价程序（如使用较小 LM 的简单流水线）。例如可以从上面的 compiled_rag 出发（设其编译为使用大号 Llama2-13b-chat LM），而现在去微调 Flan-T5-large 以得到一个高效程序：
+
+```python
+# 更大的问题集，*无标签*。所有步骤的标签都将被自举。
+unlabeled_questions = [dspy.Example(question="What is the capital of Germany?"), ...]
+
+# 由于假设没有答案，用 ‘answer_passage_match‘ 过滤无依据的答案
+finetuning_teleprompter = BootstrapFinetune(metric=dspy.evaluate.answer_passage_match)
+
+# 设 ‘teacher=compiled_rag‘ 进行组合，自举过程将使用 ‘compiled_rag‘
+compiled_rag_via_finetune = finetuning_teleprompter.compile(RAG(), teacher=compiled_rag,
+                                                            trainset=unlabeled_questions, target='google/flan-t5-large')
+```
+
+### 4 DSPy 编译器（The DSPy Compiler）
+
+::: en
+A key source of DSPy's expressive power is its ability to compile—or automatically optimize—any program in this programming model. Compiling relies on a teleprompter, which is an optimizer for DSPy programs that improves the quality (or cost) of modules via prompting or finetuning, which are unified in DSPy. While DSPy does not enforce this when creating new teleprompters, typical teleprompters go through three stages.
+:::
+
+DSPy 表达能力的一个关键来源，是它能编译——即自动优化——该编程模型下的任意程序。编译依赖提示优化器：一个针对 DSPy 程序的优化器，通过提示或微调（二者在 DSPy 中被统一对待）来改进模块的质量（或成本）。虽然 DSPy 并不强制新提示优化器遵循此结构，但典型的提示优化器会经历三个阶段。
+
+::: en
+Stage 1: Candidate Generation The compiler first (recursively) finds all unique Predict modules (predictors) in a program, including those nested under other modules. For each unique predictor p, the teleprompter may generate candidate values for the parameters of p: the instructions, field descriptions, or—most importantly—demonstrations (i.e., example input–output pairs). In this iteration of DSPy, we focus on demonstrations and find that simple rejection-sampling-like approaches can help bootstrap highly effective multi-stage systems.
+:::
+
+**阶段 1：候选生成（Candidate Generation）。** 编译器首先（递归地）找出程序中所有唯一的 Predict 模块（称 predictor），包括嵌套在其他模块之下的。对每个唯一的 predictor p，提示优化器可以为其参数生成候选值：指令、字段描述，或最重要的——示教例证（即输入—输出样例对）。在本版（iteration）DSPy 中我们聚焦示教例证，并发现类似拒绝采样（rejection sampling）的简单做法即可帮助自举出高效的多阶段系统。
+
+::: en
+Consider the simplest non-trivial teleprompter in DSPy, BootstrapFewShot (simplified pseudocode in Appendix E.1). This teleprompter will simulate a teacher program (or, if unset, the zero-shot version of the program being compiled) on some training inputs, possibly one or more times with a high temperature. When running in compile mode, multi-stage traces are tracked transparently and in a thread-safe fashion throughout execution. The program's metric is used to filter for multi-stage traces that together help the pipeline pass the metric. We thus obtain potential labels for all signatures in the program by throwing away the bad examples and using the good examples as potential demonstrations, though these design decisions are under user control.
+:::
+
+以 DSPy 中最简单的非平凡提示优化器 BootstrapFewShot 为例（简化伪码见附录 E.1）。它会在一些训练输入上模拟 teacher 程序（若未设置，则用被编译程序的零样本版本），可能以高温（high temperature）运行一次或多次。在编译模式下运行时，多阶段轨迹会在整个执行过程中以透明且线程安全的方式被跟踪。程序指标被用来筛选整体上能让流水线通过指标的多阶段轨迹。这样，丢弃坏例子、把好例子留作潜在示教例证，我们就为程序中所有签名获得了候选标签——当然，这些设计决策均在用户掌控之下。
+
+::: en
+While LMs can be highly unreliable, we find they can be rather efficient at searching the space of solutions for multi-stage designs. A well-decomposed program can typically find at least a few training examples where the LM can pass the constraints enforced by the signatures and metrics, allowing us to bootstrap iteratively if needed.
+:::
+
+尽管 LM 可能高度不可靠，我们发现它们搜索多阶段设计的解空间时相当高效。一个分解良好的程序通常能找到至少几个训练例，使 LM 通过签名与指标施加的约束，从而允许我们在需要时迭代自举。
+
+::: en
+Stage 2: Parameter Optimization Now each parameter has a discrete set of candidates: demonstrations, instructions, etc. Many hyperparameter tuning algorithms (e.g., random search or Tree-structured Parzen Estimators as in HyperOpt (Bergstra et al., 2013) and Optuna (Akiba et al., 2019)) can be applied for selection among candidates. We report simplified implementations of DSPy's BootstrapFewShotWithRandomSearch and BootstrapFewShotWithOptuna in Appendix E.2 and Appendix E.3.
+:::
+
+**阶段 2：参数优化（Parameter Optimization）。** 此时每个参数都有了离散候选集：示教例证、指令等。许多超参数调优算法（如随机搜索，或 HyperOpt（Bergstra et al., 2013）与 Optuna（Akiba et al., 2019）中的树结构 Parzen 估计器 TPE）都可用来在候选间做选择。我们在附录 E.2 与附录 E.3 中给出 DSPy 的 BootstrapFewShotWithRandomSearch 与 BootstrapFewShotWithOptuna 的简化实现。
+
+::: en
+Another type of optimization is finetuning with BootstrapFinetune, where the demonstrations are used to update the LM's weights for each predictor. When this is applied, the LM parameter of each module is updated to the new LM weights. Typically, we are optimizing average quality using the metric with cross-validation over the training set or a validation set. This is applicable even with no labels for any stages, depending on the nature of metric.
+:::
+
+另一类优化是用 BootstrapFinetune 做微调：用示教例证更新各 predictor 所用 LM 的权重。应用之后，每个模块的 LM 参数会更新为新的 LM 权重。通常，我们基于指标在训练集上做交叉验证、或在验证集上优化平均质量。依据指标的性质，即使任何阶段都没有标签，这一做法也适用。
+
+::: en
+Stage 3: Higher-Order Program Optimization A different type of optimization that the DSPy compiler supports is modifying the control flow of the program. One of the simplest forms of these is ensembles, which we use in the case studies in this work. An ensemble will bootstrap multiple copies of the same program, and then replace the program with a new one that runs them all in parallel and reduces their predictions into one with a custom function (e.g., majority voting). In future work, this stage can easily accommodate techniques for more dynamic (i.e., test-time) bootstrapping as well as automatic backtracking-like logic.
+:::
+
+**阶段 3：高阶程序优化（Higher-Order Program Optimization）。** DSPy 编译器支持的另一类优化是修改程序的控制流。其中最简单的形式之一是集成（ensembles），我们在本文案例研究中就有使用。集成会自举同一程序的多份副本，然后把原程序替换为一个新程序：并行运行全部副本，并用自定义函数（如多数投票）把它们的预测归约为一个。在未来工作中，这一阶段还可以轻松容纳更动态（即测试时）的自举技术以及自动回溯（backtracking）式逻辑。
+
+### 5 评估目标（Goals of Evaluation）
+
+::: en
+Programming frameworks can be evaluated along many dimensions: computational efficiency, developer efficiency, intuitiveness of the code and concepts, and so forth. In this paper, we focus on perhaps the most pressing issue for current LM pipelines: the role of hand-written, task-specific prompts in achieving performant systems. Our evaluations seek to test the following hypotheses:
+:::
+
+编程框架可以沿许多维度评估：计算效率、开发效率、代码与概念的直观性等等。本文聚焦于当下 LM 流水线或许最紧迫的问题：**手写的、任务专属的提示在打造高性能系统中所扮演的角色**。我们的评估旨在检验以下假设：
+
+::: en
+H1 With DSPy, we can replace hand-crafted prompt strings with concise and well-defined modules, without reducing quality or expressive power.
+:::
+
+**H1** 借助 DSPy，我们可以用简洁且良定义的模块替代手写的提示字符串，而不损失质量与表达力。
+
+::: en
+H2 Parameterizing the modules and treating prompting as an optimization problem makes DSPy better at adapting to different LMs, and it may outperform expert-written prompts.
+:::
+
+**H2** 把模块参数化、把提示当作优化问题，使 DSPy 更善于适配不同的 LM，且有可能超过专家手写的提示。
+
+::: en
+H3 The resulting modularity makes it possible to more thoroughly explore complex pipelines that have useful performance characteristics or that fit nuanced metrics.
+:::
+
+**H3** 由此获得的模块化，使更充分地探索具备有用性能特征、或契合细致指标的复杂流水线成为可能。
+
+::: en
+Our evaluation will explore these hypotheses using diverse task–program pairs. We hope this begins a shift from underspecified questions like "how do different LMs compare on GSM8K" toward "how they compare on GSM8K with program P when compiled with strategy S", which is a well-defined and reproducible run. Ultimately, our goal is to reduce the role of artful prompt construction in modern AI in favor of the development of new modular, composable programs and optimizers.
+:::
+
+我们的评估将用多样的"任务—程序"组合来检验这些假设。我们希望以此开启一种转变：从"不同 LM 在 GSM8K 上谁更强"这类欠规定的问法，转向"在 GSM8K 上使用程序 P、以策略 S 编译后表现如何"——后者是定义良好且可复现的实验。归根结底，我们的目标是削弱精雕细琢的提示构造在现代 AI 中的角色，转而推动新的模块化、可组合程序与优化器的开发。
+
+### 6 案例研究：数学应用题（Case Study: Math Word Problems）
+
+::: en
+We evaluate on the popular GSM8K dataset with grade school math questions (Cobbe et al., 2021). We sample 200 and 300 question–answer pairs from the official training set for training and development, respectively. Our final evaluations use the 1.3k official test set examples. We report extensive comparisons on the development set to avoid overfitting on test. Following prior work on GSM8K, we evaluate the accuracy of the final numerical value that appears in the LM output.
+:::
+
+我们在流行的 GSM8K 数据集（小学数学题；Cobbe et al., 2021）上评估。我们从官方训练集分别抽取 200 与 300 个问答对用于训练与开发。最终评估使用 1.3k 官方测试集样例。为避免在测试集上过拟合，我们在开发集上报告大量对比。沿用 GSM8K 上的先前工作，我们评估 LM 输出中最后出现的数值是否正确。
+
+[表 1: Results with in-context learning on GSM8K math word problems. Each row represents a separate pipeline: the module in the Program column is compiled against the examples in the Training set. The programs, compilers, and (small) training sets are defined in Section 6. Rows with ensemble build on the immediately preceding row. Notably, all programs in this table are expressed by composing two to four DSPy modules and teleprompters. Compiling the correct modules, instead of string prompts, improves different LMs from 4–20% accuracy to 49–88% accuracy.]
+
+表 1：GSM8K 数学应用题上的上下文学习结果。每行代表一条独立流水线：程序列中的模块针对训练集中的例子编译。程序、编译器与（小型）训练集在第 6 节定义。带 ensemble 的行构建于紧邻的上一行之上。值得注意的是，表中所有程序都由 2–4 个 DSPy 模块与提示优化器组合而成；编译正确的**模块**（而非字符串提示）把不同 LM 从 4–20% 的准确率提升到 49–88%。（原文中本表浮动于第 8 页顶部。）
+
+| 程序 | 编译 | 训练集 | GPT-3.5 Dev | GPT-3.5 Test | Llama2-13b-chat Dev | Llama2-13b-chat Test |
+|---|---|---|---|---|---|---|
+| vanilla | none | n/a | 24.0 | 25.2 | 7.0 | 9.4 |
+| | fewshot | trainset | 33.1 | – | 4.3 | – |
+| | bootstrap | trainset | 44.0 | – | 28.0 | – |
+| | bootstrap×2 | trainset | 64.7 | 61.7 | 37.3 | 36.5 |
+| | +ensemble | trainset | 62.7 | 61.9 | 39.0 | 34.6 |
+| CoT | none | n/a | 50.0 | – | 26.7 | – |
+| | fewshot | trainset | 63.0 | – | 27.3 | – |
+| | fewshot +human CoT | trainset +human CoT | 78.6 | 72.4 | 34.3 | 33.7 |
+| | bootstrap | trainset | 80.3 | 72.9 | 43.3 | – |
+| | +ensemble | trainset | 88.3 | 81.6 | 43.7 | – |
+| reflection | none | n/a | 65.0 | – | 36.7 | – |
+| | fewshot | trainset | 71.7 | – | 36.3 | – |
+| | bootstrap | trainset | 83.0 | 76.0 | 44.3 | 40.2 |
+| | +ensemble | trainset | 86.7 | – | 49.0 | 46.9 |
+
+::: en
+Programs Considered For this task, we consider three simple DSPy programs: a one-step Predict module (vanilla), a two-step ChainOfThought module (CoT), and finally a multi-stage ComparerOfThoughts module (ThoughtReflection). These are fully defined by the following code:
+:::
+
+**考虑的程序（Programs Considered）** 对本任务，我们考察三个简单的 DSPy 程序：一步式的 Predict 模块（vanilla）、两步式的 ChainOfThought 模块（CoT），以及最后的多阶段比较模块（ComparerOfThoughts，即 ThoughtReflection）。它们全部由以下代码完整定义：
+
+```python
+vanilla = dspy.Predict("question -> answer")        # GSM8K 程序 ‘vanilla‘
+
+CoT = dspy.ChainOfThought("question -> answer")     # GSM8K 程序 ‘CoT‘
+```
+
+```python
+class ThoughtReflection(dspy.Module):
+    def __init__(self, num_attempts):
+        self.predict = dspy.ChainOfThought("question -> answer", n=num_attempts)
+        self.compare = dspy.MultiChainComparison('question -> answer', M=num_attempts)
+
+    def forward(self, question):
+        completions = self.predict(question=question).completions
+        return self.compare(question=question, completions=completions)
+
+reflection = ThoughtReflection(num_attempts=5)      # GSM8K 程序 ‘reflection‘
+```
+
+::: en
+In reflection, five reasoning chains are sampled from the LM (alongside their answers) and they are compared in parallel by a built-in MultiChainComparison module, which generalizes Yoran et al. (2023). This generates a new answer taking into account the patterns from the five attempts. Critically, the modules used are all generic, none is specific math problems or particular LM.
+:::
+
+在 reflection 中，从 LM 采样五条推理链（连同其答案），再由内置的 MultiChainComparison 模块并行比较——该模块泛化自 Yoran et al. (2023)。综合五次尝试中的模式后生成一个新答案。关键在于，所用模块全是通用的，没有哪个是为数学题或特定 LM 定制的。
+
+::: en
+Compiling As we discussed in Section 4, DSPy programs can be compiled into new, optimized programs. In our experiments, we evaluate the programs zero-shot (no compiling) as well as a number of strategies for compiling. Our simplest compiler is LabeledFewShot:
+:::
+
+**编译（Compiling）** 如第 4 节所述，DSPy 程序可被编译为优化后的新程序。实验中，我们既评估零样本（不编译）的程序，也评估多种编译策略。最简单的编译器是 LabeledFewShot：
+
+```python
+fewshot = dspy.LabeledFewShot(k=8).compile(program, trainset=trainset)
+```
+
+::: en
+Here, program can be any DSPy module. This simply samples k=8 random demonstrations from the trainset for the fields common to the training examples and the signature(s), in this case, question and answer, but not the reasoning for instance. We report the average of 3–5 runs (depending on the setting) when applying such random sampling.
+:::
+
+这里 program 可以是任意 DSPy 模块。它只是从 trainset 中为训练例与签名共有的字段（本例中是 question 与 answer，但不包括推理）随机采样 k=8 个示教例证。应用这种随机采样时，我们报告 3–5 次运行（视设置而定）的平均值。
+
+::: en
+Next, we also consider bootstrapping few-shot examples with random search:
+:::
+
+其次，我们还考虑用随机搜索自举少样本例子：
+
+```python
+tp = BootstrapFewShotWithRandomSearch(metric=gsm8k_accuracy)
+bootstrap = tp.compile(program, trainset=trainset, valset=devset)
+```
+
+::: en
+This will generate demonstration chains for examples in the training set and optimize the selection of demonstrations (from this set) to self-improve the program's modules. As the name indicates, this is done with random search, treating the selection of demonstrations as a parameter to optimize.
+:::
+
+它会为训练集中的例子生成示教链，并（从该集合中）优化示教例证的选择，以自我改进程序的各模块。顾名思义，这通过随机搜索完成——把示教例证的选择当作一个待优化参数。
+
+::: en
+Next, if desired, this bootstrapping process can be nested in DSPy. In particular, we can use the optimized bootstrap program itself to further bootstrap another program. This is relevant, for example, whenever the original zero-shot program performs relatively poorly.
+:::
+
+再者，如有需要，这一自举过程可在 DSPy 中嵌套。特别地，我们可以用优化后的 bootstrap 程序本身去进一步自举另一个程序。这在例如原始零样本程序表现较差时尤为有用。
+
+```python
+bootstrap2 = tp.compile(program, teacher=bootstrap, trainset=trainset, valset=devset)
+```
+
+::: en
+And lastly, we consider ensembling these bootstraps:
+:::
+
+最后，我们考虑对这些自举结果做集成（ensembling）：
+
+```python
+# 对一次自举编译运行（具体是 ‘bootstrap‘，或适用时的 ‘bootstrap2‘）产出的
+# top-7 候选程序做集成、以多数投票归约的程序
+ensemble = Ensemble(reduce_fn=dspy.majority).compile(bootstrap.programs[:7])
+```
+
+::: en
+GSM8K includes human reasoning chains. Above, trainset does not include these reasoning chains. We also evaluate with trainset human CoT, which extends the examples in trainset with the human reasoning string. These two datasets can be used interchangeably as the value for the trainset parameter above. We note here that compiling generally runs on the order of minutes (or tens of minutes) as even the more expensive settings only require running the program a few thousand times (e.g., 10–20 trials over 150–300 validation examples) and they can occur in parallel.
+:::
+
+GSM8K 自带人工推理链。上面的 trainset 不含这些推理链。我们还评估 **trainset +human CoT**——它把 trainset 中的例子扩展上人工推理字符串。这两个数据集可互换地用作上面 trainset 参数的取值。这里要说明：编译一般只需分钟（或数十分钟）量级——即便较贵的设置也只需把程序跑几千次（如 10–20 轮 × 150–300 个验证例），且可以并行执行。
+
+::: en
+Results Our results are summarized in Table 1, which includes dev results as well as our evaluation of promising representatives of each approach on the test set. First, the vanilla program results show that GPT-3.5 and llama2-13b-chat struggle with math word problems when they have to predict the answers directly, that is, without using a reasoning chain first. This is most pronounced in the absence of good demonstrations, which can be seen in the none compilation setting (i.e., zero-shot instruction) and the fewshot setting (i.e., sampling random question–answer pairs). Interestingly, however, vanilla is helped substantially by compiling with bootstrap and by iterating this process into bootstrap×2. On inspecting the prompts bootstrapped (Appendix F), we see that the prompt allows the LM to leverage the answer field for reasoning first, which is permitted as the metric extracts the final numerical value for evaluation.
+:::
+
+**结果（Results）** 结果汇总于表 1，其中包含开发集结果以及每种方法中有代表性的优选者在测试集上的评估。首先，vanilla 程序的结果表明：当 GPT-3.5 与 llama2-13b-chat 必须直接预测答案（即不先用推理链）时，它们在数学应用题上都很挣扎。在缺少好示教例证时最为明显——none 编译设置（即零样本指令）与 fewshot 设置（即随机抽样的问答对）中都可见这一点。但有趣的是，vanilla 在用 bootstrap 编译、并把这一过程迭代为 bootstrap×2 后获得了大幅提升。检视自举出的提示（附录 F）可见：该提示允许 LM 先利用 answer 字段做推理——由于指标只提取最终数值来评估，这是被允许的。
+
+::: en
+Next, we consider the CoT program. While the expert human reasoning chains (+human CoT) provide a large boost when available, we can match or surpass this using bootstrap, substantiating our hypothesis that DSPy can cut the need for hand-crafted prompts. Beyond this, we see that the reflection program, while only a few lines longer than the others, is a clear winner, though CoT is quite effective with ensemble. Overall, the bootstrap compilation procedure leads to large gains for every program, across both LMs. Indeed, all programs in this table are expressed by composing two to four DSPy modules and teleprompters, and they reveal overall that—in the new paradigm prescribed by DSPy—it's composing the right generic modules, rather than manipulating string prompts, that improves different LMs from 4–20% accuracy to 49–88% accuracy.
+:::
+
+其次看 CoT 程序。专家人工推理链（+human CoT）在可用时确有大幅提升，但 bootstrap 可以匹配甚至超过它，印证了我们"DSPy 能削减手写提示需求"的假设。除此之外可以看到，reflection 程序只比其他程序多几行，却是明确的赢家（不过 CoT 配合 ensemble 也相当有效）。总体上，bootstrap 编译流程给每个程序、两款 LM 都带来巨大收益。事实上，表中所有程序都由 2–4 个 DSPy 模块与提示优化器组合而成；它们共同揭示：在 DSPy 所开创新范式下，是**把正确的通用模块组合起来、而非操纵字符串提示**，把不同 LM 从 4–20% 的准确率提升到了 49–88%。
+
+::: en
+We can informally compare with the following. Zhang et al. (2022) reports 48% for text-davinci-002, which aligns closely with our llama2-13b-chat results, and reports 59.4% with codex when employing a manual CoT approach and 62.8% with an automatic CoT method. Wang et al. (2022b) report 57% for CoT prompting with PaLM 540-B, which becomes 74% upon adding self-consistency. The Llama2 authors (Touvron et al., 2023) presents 28.7% for llama2-13b, 42.2% for llama2-34b, and 56.8% for llama2-70b. Intriguingly, our program with the 13b variant of the model is competitive with their 34b-based results even though we don't use human reasoning chains in our program. Zhao et al. (2023b) reports 80.8% for CoT with gpt-3.5-turbo from April 2023. The GPT-4 authors (OpenAI, 2023) reports that GPT-3.5 scores 57.1% and GPT-4 elevates this to 92% but they note that GPT-4 was in fact pre-trained on a subset of GSM8K's training set.
+:::
+
+我们可以与以下文献做非正式对比。Zhang et al. (2022) 报告 text-davinci-002 为 48%（与我们的 llama2-13b-chat 结果相当接近），并报告 codex 配人工 CoT 为 59.4%、自动 CoT 方法为 62.8%。Wang et al. (2022b) 报告 PaLM 540-B 的 CoT 提示为 57%，加自一致性后达 74%。Llama2 作者（Touvron et al., 2023）给出 llama2-13b 为 28.7%、llama2-34b 为 42.2%、llama2-70b 为 56.8%。耐人寻味的是，我们用 13b 版模型的程序即可与其 34b 结果竞争——即使我们的程序并不使用人工推理链。Zhao et al. (2023b) 报告 2023 年 4 月的 gpt-3.5-turbo 配 CoT 为 80.8%。GPT-4 作者（OpenAI, 2023）报告 GPT-3.5 得分 57.1%、GPT-4 提升至 92%，但他们注明 GPT-4 实际上在预训练中见过 GSM8K 训练集的一个子集。
+
+### 7 案例研究：复杂问答（Case Study: Complex Question Answering）
+
+::: en
+In this case study, we explore the multi-hop question answering task with the HotPotQA (Yang et al., 2018) dataset in the open-domain "fullwiki" setting. For retrieval, we use a search index of the official Wikipedia 2017 "abstracts" dump of HotPotQA. Search is conducted by a ColBERTv2 (Santhanam et al., 2021) retriever. The HotPotQA test set is hidden, so we reserve the official validation set for our testing, and sample 1000 examples for that. We sub-divide the training set into 70%/30% train/validation splits. In the training (and thus validation) split, we keep only examples marked as "hard" in the original dataset, which matches the designation of the official validation and test sets. For training and for reporting development results, we sample 200 and 300 examples respectively.
+:::
+
+在本案例研究中，我们用 HotPotQA（Yang et al., 2018）数据集在开放域"fullwiki"设定下探索多跳问答任务。检索方面，我们使用 HotPotQA 官方维基百科 2017"abstracts"转储的搜索索引；搜索由 ColBERTv2（Santhanam et al., 2021）检索器执行。HotPotQA 测试集是保密的，因此我们把官方验证集留作测试，从中抽 1000 例。我们把训练集按 70%/30% 划分为训练/验证。在训练（从而验证）划分中，只保留原数据集中标注为"hard"的例子，这与官方验证/测试集的标注一致。用于训练与报告开发结果，分别抽取 200 与 300 例。
+
+::: en
+Programs Considered Our simplest baseline is the vanilla program used in the previous case study on GSM8K (Sec 6); the "question -> answer" signature is universal enough that it will work for this task (and many others) when compiled appropriately.
+:::
+
+**考虑的程序（Programs Considered）** 我们最简单的基线是上一案例研究（第 6 节）在 GSM8K 上用过的 vanilla 程序；"question -> answer" 签名足够通用，经恰当编译即可用于本任务（以及许多其他任务）。
+
+::: en
+Our baseline RAG program is the one given in Section 3.2 as a simple example of RAG with a dspy.ChainOfThought layer. We will see that this program does not excel at HotPotQA, and this motivates us to evaluate two multi-hop programs.
+:::
+
+基线 RAG 程序即第 3.2 节给出的那个带 dspy.ChainOfThought 层的简单 RAG 示例。我们将看到该程序在 HotPotQA 上并不出色，这促使我们评估两个多跳程序。
+
+::: en
+To that end, we first test ReAct (Yao et al., 2022), a multi-step agent for tool use, which is implemented as a built-in module in DSPy. In the simplest case, a ReAct module for a particular signature can be declared as follows in DSPy:
+:::
+
+为此，我们首先测试 ReAct（Yao et al., 2022）——一个多步工具使用智能体，在 DSPy 中实现为内置模块。最简单情形下，针对某签名的 ReAct 模块可以这样声明：
+
+```python
+react = dspy.ReAct("question -> answer", tools=[dspy.Retrieve(k=1)], max_iters=5)
+```
+
+::: en
+We also test the following custom program, which simulates the information flow in Baleen (Khattab et al., 2021a) and IRRR (Qi et al., 2020) and has similarities to IRCoT (Trivedi et al., 2022).
+:::
+
+我们还测试以下自定义程序，它模拟 Baleen（Khattab et al., 2021a）与 IRRR（Qi et al., 2020）中的信息流，并与 IRCoT（Trivedi et al., 2022）相似：
+
+```python
+class BasicMultiHop(dspy.Module):
+    def __init__(self, passages_per_hop):
+        self.retrieve = dspy.Retrieve(k=passages_per_hop)
+        self.generate_query = dspy.ChainOfThought("context, question -> search_query")
+        self.generate_answer = dspy.ChainOfThought("context, question -> answer")
+
+    def forward(self, question):
+        context = []
+
+        for hop in range(2):  # 两跳循环
+            query = self.generate_query(context=context, question=question).search_query
+            context += self.retrieve(query).passages
+
+        return self.generate_answer(context=context, question=question)
+
+multihop = BasicMultiHop(passages_per_hop=3)
+```
+
+::: en
+Compiling For compilers, we continue to use the ones that we used for GSM8K (see Sec 6). We also consider two compositions of our teleprompters. For ReAct, we consider bootstrapping with BootstrapFewShotWithRandomSearch starting from an earlier bootstrap of the ReAct program. For the simple multihop program, we also consider fine-tuning with T5-Large starting from the earlier bootstrap of that program.
+:::
+
+**编译（Compiling）** 编译器方面，我们沿用 GSM8K 所用的那些（见第 6 节），另考虑两种提示优化器的组合。对 ReAct，我们考虑从该程序早先的 bootstrap 出发、再用 BootstrapFewShotWithRandomSearch 继续自举。对简单的 multihop 程序，我们还考虑从其早先的 bootstrap 出发、用 T5-Large 做微调：
+
+```python
+multihop_t5 = dspy.BootstrapFinetune(metric=answer_exact_match).compile(program,
+                        teacher=bootstrap, trainset=trainset, target='t5-large')
+```
+
+::: en
+Results Table 2 summarizes our results. Compared with the vanilla few-shot prompting, a chain-of-thought and retrieval-augmented generation (CoT RAG) program can self-bootstrap in DSPy to increase answer EM substantially. However, this relies entirely on the ColBERTv2 retriever to find relevant passages directly from the original questions, limiting its passage recall. This is tackled in the react and multihop programs, which will generate queries for the retriever in multiple iterative "hops". Indeed, overall, a simple multihop program performs the best, and in general bootstrap again proves to be very effective at raising its quality relative to its fewshot variant for both LMs.
+:::
+
+**结果（Results）** 表 2 汇总了我们的结果。与 vanilla 少样本提示相比，思维链检索增强生成（CoT RAG）程序能在 DSPy 中自举，大幅提升答案 EM。但它完全依赖 ColBERTv2 检索器直接从原始问题找出相关段落，段落召回受限。react 与 multihop 程序解决了这一问题：它们以多次迭代"跳"（hops）的方式为检索器生成查询。总体上，简单的 multihop 程序表现最佳，且对两款 LM，bootstrap 相对 fewshot 变体再次被证明能非常有效地提升质量。
+
+[表 2: Results with in-context learning on HotPotQA multi-hop retrieval question answering. We report answer exact match (Ans) and pair-retrieval accuracy (Psg). Each row represents a separate pipeline: the module in the Program column is compiled against the examples in the Training set. The programs, compilers, and (small) training sets are defined in the main text. For HotPotQA, we use the training set (and not dev) directly for cross-validation. ∗The marked result is evaluated on 50% of our test set due to cost.]
+
+表 2：HotPotQA 多跳检索问答上的上下文学习结果。我们报告答案精确匹配（Ans）与段落对检索准确率（Psg）。每行代表一条独立流水线：程序列中的模块针对训练集中的例子编译。程序、编译器与（小型）训练集在正文中定义。对 HotPotQA，我们直接用训练集（而非开发集）做交叉验证。带 ∗ 的结果因成本原因只在测试集的 50% 上评估。（原文中本表浮动于第 11 页顶部；下表中每格为 Ans / Psg，"–"表示未评。）
+
+| 程序 | 编译器 | GPT-3.5 Dev | GPT-3.5 Test | Llama2-13b-chat Dev | Llama2-13b-chat Test |
+|---|---|---|---|---|---|
+| vanilla | fewshot | 34.3 / n/a | 31.5 / n/a | 27.5 / n/a | 21.8 / n/a |
+| CoT RAG | fewshot | 36.4 / 36.0 | 29.8 / 34.4 | 34.5 / 36.0 | 28.0 / 34.4 |
+| | bootstrap | 42.3 / 36.0 | – / – | 38.3 / 36.0 | 32.9 / 34.4 |
+| react | none | 20.3 / – | – / – | 20.0 / – | – / – |
+| | +human r | 33.0 / – | – / – | 28.3 / – | – / – |
+| | bootstrap | 31.0 / – | – / – | 24.7 / – | – / – |
+| | bootstrap×2 | 39.0 / – | – / – | 40.0 / – | – / – |
+| multihop | fewshot | 36.9 / 38.3 | 31.2 / 40.8 | 34.7 / 32.0 | 31.3 / 30.8 |
+| | bootstrap | 48.7 / 47.0 | 39.6 / 43.8 | 42.0 / 48.3 | 36.4 / 43.5 |
+| | ensemble | 54.7 / – | 45.6* / – | 50.0 / – | 41.0 / – |
+
+::: en
+In particular, we can see that bootstrap (and/or bootstrap×2) can outperform both fewshot prompting (for multihop) and expert human reasoning (for react; adapted slightly from Yao et al. (2022) to our retrieval setting). Perhaps most importantly, we can make llama2-13b-chat competitive with GPT-3.5 by simply compiling our programs.
+:::
+
+特别地，可以看到 bootstrap（及/或 bootstrap×2）既能超过 fewshot 提示（multihop 情形），也能超过专家人工推理（react 情形；专家提示稍作改编自 Yao et al. (2022) 以适配我们的检索设置）。或许最重要的是：只需简单地编译我们的程序，就能让 llama2-13b-chat 与 GPT-3.5 同台竞技。
+
+::: en
+To assess the finetuning capacity of DSPy, we also evaluated the compiler multihop t5 defined above which produces a T5-Large (770M parameter) model. This program scores 39.3% answer EM and 46.0% passage accuracy on the dev set, using only 200 labeled inputs and 800 unlabeled questions. For compiling, we use a teacher program consisting of an ensemble (union) of two multihop with llama2-13b-chat. Considering its extremely small size and local availability, this compiled program with T5-Large would impose orders of magnitude lower costs for inference than a proprietary LM like GPT-3.5.
+:::
+
+为检验 DSPy 的微调能力，我们还评估了上面定义的编译器 multihop_t5，它产出一个 T5-Large（770M 参数）模型。该程序在开发集上取得 39.3% 答案 EM 与 46.0% 段落准确率，而只用了 200 个带标签输入与 800 个无标签问题。编译时，我们使用的 teacher 程序由两个 llama2-13b-chat multihop 的（并集）集成构成。考虑到其体积极小且可本地部署，这个编译到 T5-Large 的程序的推理成本，会比 GPT-3.5 这类专有 LM 低若干数量级。
+
+::: en
+Our results may be pegged against the evaluation on HotPotQA in a number of recent papers, though there is significant variation in evaluation methodology and test set samples across studies in this space. Using CoT prompting, Si et al. (2022) achieve 25.2% EM. With a "recite-and-answer" technique that uses PaLM-62B (Chowdhery et al., 2022) to recite evidence passages, Sun et al. (2022) achieve 26.5% EM. Wang et al. (2022a) achieve 33.8% EM and 44.6% F1 when applying self-consistency for PaLM-540B. Yao et al. (2022) achieve 27.4% EM using ReAct with PaLM-540B and 30.8 with text-davinci-002, with a tool giving it the ability for search using a Wikipedia API. They push their PaLM results to 35.1% EM by applying an additional CoT step with self-consistency, which may resemble our ensemble approach in the sense of aggregating multiple answers. Trivedi et al. (2022) reports 49% using a pipeline with code-davinci-002 LM on a sample of 500 HotPotQA questions.
+:::
+
+我们的结果可与近年若干论文在 HotPotQA 上的评估对照，不过该领域各研究在评估方法学与测试集样本上差异显著。用 CoT 提示，Si et al. (2022) 达到 25.2% EM。用让 PaLM-62B（Chowdhery et al., 2022）背诵证据段落的"recite-and-answer"技术，Sun et al. (2022) 达到 26.5% EM。Wang et al. (2022a) 对 PaLM-540B 应用自一致性，达到 33.8% EM 与 44.6% F1。Yao et al. (2022) 在 PaLM-540B 上用 ReAct 达到 27.4% EM，在 text-davinci-002 上达 30.8，其工具赋予它经 Wikipedia API 搜索的能力。他们再施加一个带自一致性的额外 CoT 步骤，把 PaLM 结果推至 35.1% EM——在聚合多个答案的意义上，这与我们的 ensemble 思路或有相似。Trivedi et al. (2022) 用 code-davinci-002 LM 的流水线在 500 个 HotPotQA 问题样本上报 49%。
+
+### 8 结论（Conclusion）
+
+::: en
+This paper introduced DSPy, a new programming model for designing AI systems using pipelines of pretrained LMs and other tools. We presented three new concepts introduced in this abstraction (DSPy signatures, modules, and teleprompters), and showed in two very different case studies that it supports rapid development of highly effective systems that use relatively small LMs. We have maintained open-source versions of this framework for close to a year. In this period, we have seen and created a large number of programs that were compiled to high-quality systems by DSPy, spanning tasks from information extraction to low-resource synthetic data generation. In the interest of space and to maintain reasonable scope in this paper, we leave reporting on such tasks under controlled experimental conditions to future work. While in-context learning has proved transformative over the past 2–3 years of LM research, we argue that the true expressive power in this emerging paradigm is in building sophisticated text transformation graphs in which composable modules and optimizers (teleprompters) come together to leverage LMs in more systematic and reliable ways.
+:::
+
+本文提出了 DSPy——一个用预训练 LM 与其他工具的流水线设计 AI 系统的新编程模型。我们呈现了这一抽象引入的三个新概念（DSPy 签名、模块与提示优化器），并在两个迥异的案例研究中表明：它支持快速开发出高效、且使用相对较小 LM 的系统。我们维护该框架的开源版本已近一年。期间，我们看到并创建了大量被 DSPy 编译为高质量系统的程序，任务横跨从信息抽取到低资源合成数据生成。出于篇幅与控制本文范围的考虑，我们把此类任务在受控实验条件下的报告留待未来工作。尽管上下文学习在过去 2–3 年的 LM 研究中已被证明具有变革性，我们主张：这一新兴范式的真正表达力，在于构建精巧的**文本变换图**——让可组合的模块与优化器（teleprompters）协同，以更系统、更可靠的方式驾驭 LM。
+
+> **译注**：结论之后为致谢（Acknowledgments，感谢合作者、资助机构等）与参考文献列表，按本站惯例不收录；提取文本中另有一段 PDF 转换产生的 LaTeX 残片（`\usepackage[pdftex]{graphicx}` 等），系排版噪音，亦略过。
+
+### 附录 A 高级签名（Advanced Signatures）
+
+::: en
+When more control is desired, one can express signatures as Python classes to provide explicit instructions of the transformation and describe the format or role of each field more directly. For instance, the following signature generates search queries using context and an optional question:
+:::
+
+当需要更多控制时，可以把签名表达为 Python 类，为变换提供显式指令，并更直接地描述每个字段的格式或角色。例如，下面的签名利用上下文与可选的问题生成搜索查询：
+
+```python
+class GenerateSearchQuery(dspy.Signature):
+    """Write a simple search query that will help answer a complex question."""
+    # 译注:docstring 意为"写一条有助于回答复杂问题的简单搜索查询"
+
+    context = dspy.InputField(desc="may contain relevant facts")  # 可能包含相关事实
+    question = dspy.InputField()
+    query = dspy.OutputField(dtype=dspy.SearchQuery)
+```
+
+::: en
+Using the above, we can specify a complete system for the generation of a synthetic IR dataset where the queries are mediated by a question generated by the LM:
+:::
+
+利用上面的签名，我们可以搭出一个生成合成 IR（信息检索）数据集的完整系统，其中查询由 LM 生成的问题居间引导：
+
+```python
+query_gen = dspy.Predict(GenerateSearchQuery)
+query_gen(context="Language typology")
+# Out: Prediction(question='What are the main types of language classification?',
+#                 query='"language classification" OR "language typology" -wikipedia')
+```
+
+::: en
+If questions are available, they can be supplied as shown: query gen(context="Language typology", question="What are the primary language families of South America?"). As a work in progress feature, users can optionally specify the type of output fields as bool, int, float, list, or dict instead of the default free-form string type, as in contexts, question -> answer found: bool.
+:::
+
+若问题可得，可如下传入：query_gen(context="Language typology", question="What are the primary language families of South America?")。作为一项进行中的特性，用户可以选择把输出字段的类型指定为 bool、int、float、list 或 dict，而非默认的自由格式字符串，如 contexts, question -> answer found: bool。
+
+### 附录 B 与 LangChain、LlamaIndex 等现有库的对比（Comparison with Existing Libraries Like LangChain and LlamaIndex）
+
+::: en
+LangChain and LlamaIndex are perhaps the most popular library in the general space of prompting LMs. These libraries have a different focus compared to DSPy and they suffer internally from the prompt engineering challenges that DSPy aims to resolve. In particular, whereas the goal of DSPy is to tackle the fundamental challenges of prompt engineering for building new LM computational graphs, LangChain and LlamaIndex generally help application developers who need pre-packaged components and chains, e.g., implementations of popular and reusable pipelines (e.g., particular agents and specific retrieval pipelines) and tools (e.g., connections to various databases and implementations of long- and short-term memory for agents).
+:::
+
+在通用 LM 提示领域，LangChain 与 LlamaIndex 或许是最流行的库。这些库与 DSPy 的侧重点不同，且内部正深受 DSPy 想要解决的提示工程之苦。具体而言，DSPy 的目标是攻克"为构建新 LM 计算图而做提示工程"这一根本难题；LangChain 与 LlamaIndex 则主要服务需要预打包组件与链的应用开发者，例如流行可复用流水线（特定智能体、特定检索流水线）与工具（各类数据库连接、智能体长短期记忆实现）。
+
+::: en
+These off-the-shelf higher-level abstractions contrast with DSPy's focus on introducing core composable operators. In particular, DSPy introduces signatures (to abstract prompts), modules (to abstract prompting techniques), and teleprompters to act as optimizers for arbitrary imperative code (DSPy programs) that chain modules together. Its goal is to help researchers and practitioners build new LM pipelines quickly and achieve very high quality through automatic compilation (self-improvement) instead of manual prompt engineering.
+:::
+
+这些现成的更高层抽象，与 DSPy 专注于引入核心可组合算子形成对照。具体来说，DSPy 引入签名（抽象提示）、模块（抽象提示技术）与提示优化器——后者充当把模块串成任意命令式代码（即 DSPy 程序）的优化器。其目标是帮助研究者与从业者快速构建新 LM 流水线，并通过自动编译（自我改进）而非人工提示工程达到极高质量。
+
+::: en
+In contrast, typical existing research implementations and existing libraries like LangChain and LlamaIndex are implemented using manual prompt engineering, which is the key problem that DSPy tackles. We conducted an informal study to highlight this. In late September 2023, we found that the LangChain codebase contains 50 strings exceeding 1000 characters, which are generally prompts, compared to none at all in DSPy. Indeed, a substantial number of LangChain's Python files are singularly dedicated to task-related templating and prompt engineering with 12 prompts.py files and and 42 prompt.py files. DSPy, on the other hand, provides a structured framework that automatically bootstraps prompts. The library itself does not contain a single hand-written prompt demonstration for any tasks at the time of writing, despite the very high quality with various LMs.
+:::
+
+相比之下，典型的现有研究实现与 LangChain、LlamaIndex 等现有库都用人工提示工程实现——这正是 DSPy 要解决的关键问题。我们做了一项非正式研究来凸显这一点：2023 年 9 月末，我们发现 LangChain 代码库中有 50 条超过 1000 字符的字符串（通常就是提示），而 DSPy 中一条都没有。事实上，LangChain 相当多的 Python 文件专门用于任务相关的模板化与提示工程——有 12 个 prompts.py 文件和 42 个 prompt.py 文件（原文如此，重复了 and）。而 DSPy 提供了一个自动自举提示的结构化框架：截至撰写之时，库本身不含任何一条为任务手写的示教提示，却在各种 LM 上达到极高质量。
+
+::: en
+To review the typical forms of prompt engineering in existing libraries, we consider the following in LangChain. The LangChain Program-Aided Language Model Gao et al. (2023a) chain program uses few-shot learning, leveraging a template that is 3982 characters long with 8 math word problems (Prompt 2) and corresponding outputted programs as learning examples for the language model. LangChain also contains a prompt for SQL query tasks for each of the databases like Oracle, GoogleSQL, DuckDB, Crate, and MySQL, with the average length of these prompts at 1058 characters. Other task areas such as QA with sources (Prompt B) and Graph QA also have significantly lengthy prompt templates, with averages of 1337 and 722 characters, respectively. While expert-written prompts can be useful, we believe that LM- and task-adaptive prompts bootstrapped automatically can offer far more power (and are far more modular) than hard-coding a prompt per database provider inside the code base. The next appendix section contains a number of prompts copied from related research papers and existing libraries.
+:::
+
+为检视现有库中提示工程的典型形态，我们看 LangChain 中的几个例子。LangChain 的程序辅助语言模型（Program-Aided Language Model；Gao et al., 2023a）链程序使用少样本学习，其模板长达 3982 字符，内含 8 道数学应用题（Prompt 2）及相应输出程序作为 LM 的学习样例。LangChain 还为 Oracle、GoogleSQL、DuckDB、Crate、MySQL 等每种数据库各准备了一份 SQL 查询任务提示，平均长度 1058 字符。其他任务领域如带来源问答（QA with sources，Prompt B）与 Graph QA 的提示模板也相当长，平均分别为 1337 与 722 字符。虽然专家手写的提示有其用处，我们相信自动自举、随 LM 与任务自适应的提示，能提供远强于"在代码库里为每家数据库厂商硬编码一份提示"的能力（且模块化程度高得多）。下一附录节收录了若干抄自相关论文与现有库的提示。
+
+### 附录 C 大型提示示例（Sample Large Prompts）
+
+::: en
+This section highlights a few popular existing frameworks that structure prompts with extensive prompt engineering templates. The primary objective is to capture how many words and characters are used for such large multi-line prompts defined for tasks or tools and present these example prompts retrieved from open-sourced papers and repositories. The formatting of these example prompts is adapted from Gao et al. (2023a).
+:::
+
+本节聚焦几个用繁重提示工程模板来组织提示的流行现有框架。首要目标是统计这些为任务或工具定义的大型多行提示用了多少词与字符，并展示这些取自开源论文与代码库的示例提示。示例提示的排版改编自 Gao et al. (2023a)。
+
+[表：各示例提示的词数与字符数统计（原表列头：Task/Tool、Prompt Source、Words、Characters）]
+
+| 提示 | 任务/工具 | 来源 | 词数 | 字符数 |
+|---|---|---|---|---|
+| Prompt 1 | 文本证据核查（Text-evidence checker） | Gao et al. (2023a) | 818 | 4964 |
+| Prompt 2 | 数学应用题（PAL） | LangChain & Gao et al. (2023b) | 566 | 3957 |
+| Prompt 3 | ReAct | Yao et al. (2022) | 593 | 3889 |
+| Prompt 4 | 零样本 ReAct（Zero-shot ReAct） | LangChain | 101 | 600 |
+| Prompt 5 | 带来源问答（QA with sources） | LangChain | 992 | 6197 |
+| Prompt 6 | MyScale SQL 查询 | LangChain | 343 | 2239 |
+| Prompt 7 | 相关文档检索 | LlamaIndex | 129 | 719 |
+| Prompt 8 | IRS 聊天机器人 | LlamaIndex | 389 | 2258 |
+
+> **译注**：原文第 19–26 页以图 1–8 逐字抄录了上述 8 份完整英文提示（合计约 2 万字符），系其他论文与库的原文复制，本页不重复收录全文，仅译图题并概述内容。
+
+[图 1: Example few-shot prompt using a reasoning chain for agreement model that identifies inconsistencies between text and evidence (Gao et al., 2023a).]
+中文说明：用于"一致性（agreement）模型"的带推理链少样本提示——检验文本断言与检索证据是否一致。提示含 9 个"你说……/我核查……/我找到这篇文章……/这同意（不同意）你所说"格式的示教例证（涉及鼻周期、Little House 丛书出版商、斯坦福监狱实验、Havel-Hakimi 算法等），每例先给断言、再给核查问题与证据、末行判定一致与否，最后以 {text}/{query}/{evidence} 三个模板槽位收尾。
+
+[图 2: PAL example few-shot prompt for solving math questions by generating code.]
+中文说明：PAL（程序辅助语言模型）解数学题的少样本提示：8 道 GSM8K 风格应用题（Olivia 买贝果、Michael 丢高尔夫球、机房装机、Shawn 的玩具、Jason 的棒棒糖、Leah 的巧克力、停车场汽车、树林种树），每题在 "# solution in Python:" 后给出写满变量赋值与运算的 `def solution():` 函数示教，末尾以 "Q: {question} / # solution in Python:" 模板结束，教 LM 用生成代码的方式解题。
+
+[图 3: ReAct example prompt for interleaving Thought, Action, Observation steps.]
+中文说明：论文原版 ReAct 提示：开头说明任务需交错 Thought/Action/Observation，动作有三类——Search[entity]（维基百科检索实体）、Lookup[keyword]（当前段落中找关键词）、Finish[answer]（给出答案结束）；随后是 6 个 HotPotQA 式示教（科罗拉多造山带海拔、Milhouse 名字来历、芬兰摇滚纪录片、导演共同职业、杂志创刊先后、数学家同类工作），完整展示多跳"搜索—查找—结束"轨迹。
+
+[图 4: Langchain ReAct example prompt for interleaving Thought, Action, Observation steps.]
+中文说明：LangChain 版零样本 ReAct 提示（无示教例证）：声明可用工具 Search 与 Question/Thought/Action/Action Input/Observation 的输出格式（可重复 N 次），以 "Begin! / Question: {question} / Thought:" 模板收尾。
+
+[图 5: Langchain example prompt for QA with sources.]
+中文说明：LangChain 带来源问答提示：要求模型基于长文档抽取片段作答、必须附 "SOURCES" 引用，不知道就直说、不要编造；给出两段完整示教（合同受哪国法律管辖→引用 28-pl；总统演讲中未提及 Michael Jackson→SOURCES 为空），中途夹带两篇长文档（用户协议条款、国情咨文演讲），末尾以 {question}/{summaries} 模板结束。
+
+[图 6: Langchain example prompt for SQL querying using MyScale.]
+中文说明：LangChain 的 MyScale SQL 查询提示：设定"你是 MyScale 专家"，解释向量距离函数 DISTANCE(column, array) 与 NeuralArray(entity) 的用法、LIMIT/{top_k} 约定、"只查需要的列"等规则，给出 ChatPaper 表结构与一条 SQLQuery 示教——"为每家数据库厂商在代码库里硬编码一份提示"的典型样本。
+
+[图 7: LlamaIndex example prompt for returning relevant documents and corresponding summaries.]
+中文说明：LlamaIndex 的相关文档检索提示：给出带编号与摘要的文档列表及问题，要求按相关度顺序返回应查阅的文档编号并给 1–10 的相关性评分，不含无关文档；附一个 "Doc: 9, Relevance: 7" 式的格式示教，以 {context_str}/{query_str} 模板收尾。
+
+[图 8: LlamaIndex example prompt for IRS chatbot guidelines.]
+中文说明：LlamaIndex 的美国国税局（IRS）聊天机器人提示：规定助手只答美国报税相关且基于官方信息、回复礼貌简洁、遇到无关问题或未知答案时给出固定话术（引导至 www.irs.gov/faqs）；随后附 2022 年影响退税的变化清单（无新增纾困金、子女税收抵免回到 2019 水平、EITC 上限、清洁车辆抵免新规等）作为上下文。
+
+### 附录 D 模块（Modules）
+
+#### D.1 Predict
+
+> 原文本节无散文，仅含以下 Predict 的简化伪码（中文注释为译者所加）。
+
+```python
+class Predict(dspy.Module):
+    def __init__(self, signature, **config):
+        self.signature = dspy.Signature(signature)
+        self.config = config
+
+        # 模块参数
+        self.lm = dspy.ParameterLM(None)                    # 使用默认 LM
+        self.demonstrations = dspy.ParameterDemonstrations([])
+
+    def forward(self, **kwargs):
+        lm = get_the_right_lm(self.lm, kwargs)
+        signature = get_the_right_signature(self.signature, kwargs)
+        demonstrations = get_the_right_demonstrations(self.demonstrations, kwargs)
+
+        prompt = signature(demos=self.demos, **kwargs)
+        completions = lm.generate(prompt, **self.config)
+        prediction = Prediction.from_completions(completions, signature=signature)
+
+        if dsp.settings.compiling is not None:
+            # 编译模式下透明记录轨迹,供提示优化器自举示教例证
+            trace = dict(predictor=self, inputs=kwargs, outputs=prediction)
+            dspy.settings.traces.append(trace)
+
+        return prediction
+```
+
+#### D.2 ChainOfThought
+
+> 原文本节无散文，其简化伪码与第 3.2 节所给实现相同：在签名输出字段前加一个前缀为 "Reasoning: Let's think step by step." 的 rationale 字段，再交给 Predict 子模块执行。
+
+### 附录 E 提示优化器（Teleprompters）
+
+#### E.1 BootstrapFewShot
+
+> 原文本节无散文，仅含以下简化伪码（中文注释为译者所加）。
+
+```python
+class SimplifiedBootstrapFewShot(Teleprompter):
+    def __init__(self, metric=None):
+        self.metric = metric
+
+    def compile(self, student, trainset, teacher=None):
+        teacher = teacher if teacher is not None else student
+        compiled_program = student.deepcopy()
+
+        # 第 1 步:建立学生与教师程序 Predict 模块之间的映射。
+        # 注意:其他模块内部都依赖 Predict。
+        assert student_and_teacher_have_compatible_predict_modules(student, teacher)
+        name2predictor, predictor2name = map_predictors_recursively(student, teacher)
+
+        # 第 2 步:为每个 Predict 模块自举轨迹。
+        # 我们将遍历训练集;为简单起见每个例子只尝试一次。
+        for example in trainset:
+            if we_found_enough_bootstrapped_demos(): break
+
+            # 打开编译模式,以便跟踪轨迹
+            with dspy.setting.context(compiling=True):
+                # 在该例上运行教师程序并取其最终预测
+                # 注意 compiling=True 可能影响此处的内部行为
+                prediction = teacher(**example.inputs())
+
+                # 取教师程序所有内部 Predict 调用的轨迹
+                predicted_traces = dspy.settings.trace
+
+                # 若预测有效,则把该例加入轨迹
+                if self.metric(example, prediction, predicted_traces):
+                    for predictor, inputs, outputs in predicted_traces:
+                        d = dspy.Example(automated=True, **inputs, **outputs)
+                        predictor_name = self.predictor2name[id(predictor)]
+                        compiled_program[predictor_name].demonstrations.append(d)
+
+        return compiled_program
+```
+
+#### E.2 BootstrapFewShotWithRandomSearch
+
+> 原文本节无散文，仅含以下简化伪码（中文注释为译者所加）。以 16 个随机种子分别打乱训练集、各自跑一遍 BootstrapFewShot 得到候选程序，再在验证集上评分，返回得分最高的候选。
+
+```python
+class SimplifiedBootstrapFewShotWithRandomSearch(Teleprompter):
+    def __init__(self, metric=None, trials=16):
+        self.metric = metric
+        self.trials = trials
+
+    def compile(self, student, *, teacher=None, trainset, valset=None):
+        # 若未设 valset,可以做各种形式的交叉验证
+        valset = trainset if valset is None else valset
+
+        candidates = []
+        for seed in range(self.trials):
+            # 新建一个基本的 bootstrap few-shot 程序
+            shuffled_trainset = shuffle(trainset, seed=seed)
+            tp = BootstrapFewShot(metric=metric, max_bootstrap_demos=random_size())
+            candidate_program = tp.compile(student, shuffled_trainset, teacher)
+
+            # 第 2 步:评估生成的候选程序
+            score = evaluate_program(candidate_program, self.metric, valset)
+            candidates.append((score, candidate_program))
+
+        # 返回最优候选程序
+        return max(candidates, key=lambda x: x[0])[1]
+```
+
+#### E.3 BootstrapFewShotWithOptuna
+
+> 原文本节无散文，仅含以下简化伪码（中文注释为译者所加）。先用 BootstrapFewShot 造出示教例证池，再用 Optuna 把"每个 predictor 选哪条示教例证"当作超参数搜索。
+
+```python
+class SimplifiedBootstrapFewShotWithOptuna(Teleprompter):
+    def __init__(self, metric, trials=16):
+        self.metric = metric
+        self.trials = trials
+
+    def objective(self, trial):
+        pool = self.pool
+
+        # 第 1 步:创建学生程序副本
+        candidate_program = self.student.reset_copy()
+
+        # 第 2 步:依据 trial 为程序中每个 predictor 选择示教例证
+        # 注:为简单起见每个 predictor 只选一条示教;
+        # 但可以很容易地在此调节示教数量。
+        for (name, predictor1), (_, predictor2) in \
+                zip(pool.named_predictors(), candidate_program.named_predictors()):
+            all_demos = predictor1.demos
+            demo_index = trial.suggest_int(f"demo_index_for_{name}", 0, len(all_demos) - 1)
+            predictor2.demos = [all_demos[demo_index]]
+
+        # 第 3 步:评估修改后的候选程序
+        score = evaluate_program(candidate_program, self.metric, self.valset)
+
+        # 第 4 步:保存候选,供 Optuna 挑选得分最高的程序
+        trial.set_user_attr("program", candidate_program)
+        return score
+
+    def compile(self, student, trainset, teacher=None, valset=None):
+        self.trainset = trainset
+        self.valset = trainset if valset is None else valset
+
+        self.student = student.deepcopy()
+        self.teacher = teacher.deepcopy() if teacher else student.deepcopy()
+
+        # 借助 BootstrapFewShot 生成大量潜在示教例证
+        tp = BootstrapFewShot()
+        self.pool = tp.compile(self.student, self.teacher, self.trainset, self.metric)
+
+        # 用 Optuna 优化目标函数,找出最优程序
+        best_program = optimize_with_optuna(self.objective)
+
+        print('Best score:', best_program.score)
+        print('Best program:', best_program)
+        return best_program
+```
+
+### 附录 F DSPy 自动生成的提示示例（Examples of the Prompts Automatically Generated by DSPy）
+
+::: en
+For GSM8K, we include the prompt bootstrapped by DSPy for GSM8K llama2-13b-chat for the vanilla program compiled with bootstrap×2 in Figure 9. We also include a CoT prompt for GSM8K and a generate query prompt from the multihop program for HotPotQA. All of these, particularly their demonstrations' labels and their selection, are generated by DSPy automatically using llama2-13b-chat.
+:::
+
+对于 GSM8K，我们在图 9 中收录 DSPy 为 GSM8K llama2-13b-chat 的 vanilla 程序以 bootstrap×2 编译后自举出的提示。我们还收录了一条 GSM8K 的 CoT 提示，以及一条来自 HotPotQA multihop 程序的查询生成提示。所有这些——尤其其中示教例证的标签与选择——都由 DSPy 使用 llama2-13b-chat 自动生成。
+
+> **译注**：图 9–11 为 llama2-13b-chat 自举产物的逐字复制（原文第 31–32 页），此处译出指令与格式部分并概述示教内容。
+
+[图 9: Copy of the prompt automatically generated by DSPy for GSM8K Llama2-13b-chat vanilla program compiled with bootstrap×2.]
+中文说明：提示开头是自动生成的指令 "Given the fields 'question', produce the fields 'answer'."（给定字段 question，产出字段 answer），随后是 "Follow the following format."（按以下格式作答）与 Question/Answer 两个槽位；示教例证里模型把逐步计算直接写进 answer 字段（如 Jimmy 与 Irene 购物打折题的 $45 + $85 = $130、$130 − $13 = $117），最后才落到数值——正呼应正文所述"提示允许 LM 先利用 answer 字段推理"。
+
+[图 10: Shortened copy of the prompt automatically generated by DSPy for GSM8K Llama2-13b-chat CoT program compiled with bootstrap.]
+中文说明：缩略版 CoT 提示：格式部分多出 "Reasoning: Let's think step by step in order to ${produce the answer}. We ..." 一行；两条示教（Mark 烤面包共需 280 分钟、Ben 的生意结余 $1000）都先写出完整推理链再给 Answer，中间以 "... several other demonstrations here ..."（此处省略若干其他示教）标示删节。
+
+[图 11: Shortened copy of the prompt automatically generated by DSPy for HotPotQA Llama2-13b-chat multi-hop program (generating second hop query) compiled with bootstrap.]
+中文说明：缩略版的 HotPotQA multihop 程序"生成第二跳查询"提示：指令为 "Given the fields 'context', 'question', produce the fields 'search query'."，格式含 Context/Question/Reasoning/Search Query 四个槽位；示教例证展示模型先读 [1][2][3] 编号的段落（暮光之城系列、Harper Connelly 悬疑系列、维多利亚时代纪录片），再逐步推理出下一跳检索词（如 "When was the first of the vampire-themed fantasy romance novels published?"、"Jeremy Paxman birth year"）。
+
+## 要点速览
+
+- 问题定位：主流 LM 流水线与框架依赖手工试错的长提示模板，脆弱且不可迁移——论文将其类比为"手调分类器权重"。
+- 三大抽象：签名（自然语言类型化的输入/输出声明，如 `question -> answer`）抽象提示；模块（Predict、ChainOfThought、ReAct、MultiChainComparison、Retrieve 等可互换组件）抽象提示技术；teleprompter（提示优化器）把提示当作可优化参数。
+- 模块参数包括：用哪个 LM、指令与字段前缀、以及最关键的示教例证（few-shot 演示或微调数据）；DSPy 聚焦自动生成与选择示教例证。
+- 编译器三阶段：候选生成（模拟程序、按指标过滤出通过的多阶段轨迹作示教例证）→ 参数优化（随机搜索/Optuna 选示教例证，或 BootstrapFinetune 微调小 LM）→ 高阶优化（集成、多数投票；未来可扩展测试时自举与回溯）。
+- 标签效率：通常只需最终输出的少量标签（GSM8K 用 200 例、HotPotQA 用 200 例），中间步骤标签全部自举；teacher 程序可监督无标签学生程序完成微调。
+- GSM8K：编译正确的通用模块（而非提示字符串）把各 LM 从 4–20% 提升到 49–88%；GPT-3.5 的 CoT+集成达 88.3%（Dev）/81.6%（Test），llama2-13b-chat 的 reflection+集成达 49.0%/46.9%；自举示教例证还能匹配甚至超过自带的人工推理链（bootstrap 80.3 vs fewshot+human CoT 78.6）。
+- HotPotQA：简单 multihop 程序（两跳查询生成 + 检索）最强，bootstrap 后 GPT-3.5 Dev 答案 EM 48.7、集成 54.7；llama2-13b-chat 集成达 Dev 50.0——编译让 13b 开源模型与 GPT-3.5 竞争。
+- 仅用 200 带标签示例 + 800 无标签示例即可把 multihop 微调进 T5-Large（770M），dev 答案 EM 39.3%、段落准确率 46.0%，推理成本比专有 LM 低若干数量级。
+- 与 LangChain/LlamaIndex 的分工：它们提供预打包链与工具连接（内部仍是手写提示）；DSPy 提供核心算子与自动优化——两者互补而非替代。
+- 编译成本可控：一般分钟到数十分钟（几千次程序执行、可并行），使"程序 + 编译策略"成为定义良好、可复现的评估单元。
+

@@ -1,0 +1,2127 @@
+---
+title: "Why Do Multi-Agent LLM Systems Fail?"
+title_zh: "为什么多智能体 LLM 系统会失败?"
+authors: "Mert Cemri et al."
+venue: "NeurIPS 2025 (Datasets & Benchmarks) · UC Berkeley / Intesa Sanpaolo"
+kind: paper
+importance: must
+tags: 多智能体系统, 失败模式分类法, MAST, LLM-as-a-Judge, 系统设计, 智能体协调
+summary: 首个多智能体失败分类法 MAST:14 种失败模式归入 3 大类,基于 1642 条标注轨迹,揭示 MAS 失败多源于系统设计而非模型本身。
+---
+
+## 导读
+
+本文是第 5 周「多智能体系统」的核心论文,回答一个此前几乎无人系统研究过的问题:多智能体 LLM 系统(Multi-Agent LLM Systems, MAS)到底为什么失败?课程前面几周讲的都是"怎么把单个 Agent 做强"(ReAct、SWE-agent、记忆系统等),而工业界和开源社区却在大量堆叠多智能体框架(ChatDev、MetaGPT、AutoGen 等)。本文作者实测 7 个主流开源 MAS,发现失败率高达 41%–86.7%,于是自下而上地构建了第一个实证驱动的失败分类法 MAST(Multi-Agent System Failure Taxonomy):14 种失败模式、3 大类别(系统设计问题、智能体间失调、任务验证),并用 1642 条标注轨迹的 MAST-Data 数据集量化了各模式的分布。
+
+对课程而言,本文的价值有三:其一,它给了我们一套诊断多智能体系统的"词汇表",后面读 AutoGen、DyLAN 时可以对照检视它们各自解决了哪类失败;其二,它示范了 LLM-as-a-Judge 在大规模标注中的校准方法(o1 标注器与人类一致率 κ=0.77);其三,它最重要的结论是反直觉的——多数失败源于系统设计而非底层模型能力,简单修提示词只能带来有限提升(最高 +15.6%),可靠 MAS 需要结构性重设计。
+
+## 全文对照翻译
+
+> 说明:英文原段置于 `::: en` 容器中,其后紧跟该段完整中文翻译;参考文献列表从略(正文引用编号保留);图以「[图 N: 英文图题] + 中文说明」呈现;表格已转为 Markdown 表并保留全部数据;代码与提示词示例原样保留。
+
+### 题目与作者
+
+::: en
+Why Do Multi-Agent LLM Systems Fail?
+
+Mert Cemri¹∗ Melissa Z. Pan¹∗ Shuyi Yang²∗ Lakshya A Agrawal¹ Bhavya Chopra¹ Rishabh Tiwari¹ Kurt Keutzer¹ Aditya Parameswaran¹ Dan Klein¹ Kannan Ramchandran¹ Matei Zaharia¹ Joseph E. Gonzalez¹ Ion Stoica¹
+
+¹UC Berkeley ²Intesa Sanpaolo ∗Equal Contribution
+
+39th Conference on Neural Information Processing Systems (NeurIPS 2025) Track on Datasets and Benchmarks. arXiv:2503.13657v3 [cs.AI] 26 Oct 2025
+:::
+
+《为什么多智能体 LLM 系统会失败?》
+
+作者:Mert Cemri¹∗、Melissa Z. Pan¹∗、Shuyi Yang²∗、Lakshya A Agrawal¹、Bhavya Chopra¹、Rishabh Tiwari¹、Kurt Keutzer¹、Aditya Parameswaran¹、Dan Klein¹、Kannan Ramchandran¹、Matei Zaharia¹、Joseph E. Gonzalez¹、Ion Stoica¹
+
+¹加州大学伯克利分校(UC Berkeley);²意大利圣保罗银行(Intesa Sanpaolo);∗共同贡献
+
+发表于 NeurIPS 2025 数据集与基准赛道(Datasets & Benchmarks);arXiv:2503.13657v3 [cs.AI],2025 年 10 月 26 日。
+
+### 摘要(Abstract)
+
+::: en
+Despite enthusiasm for Multi-Agent LLM Systems (MAS), their performance gains on popular benchmarks are often minimal. This gap highlights a critical need for a principled understanding of why MAS fail. Addressing this question requires systematic identification and analysis of failure patterns. We introduce MAST-Data, a comprehensive dataset of 1600+ annotated traces collected across 7 popular MAS frameworks. MAST-Data is the first multi-agent system dataset to outline the failure dynamics in MAS for guiding the development of better future systems. To enable systematic classification of failures for MAST-Data, we build the first Multi-Agent System Failure Taxonomy (MAST). We develop MAST through rigorous analysis of 150 traces, guided closely by expert human annotators and validated by high inter-annotator agreement (κ = 0.88). This process identifies 14 unique modes, clustered into 3 categories: (i) system design issues, (ii) inter-agent misalignment, and (iii) task verification. To enable scalable annotation, we develop an LLM-as-a-Judge pipeline with high agreement with human annotations. We leverage MAST and MAST-Data to analyze failure patterns across models (GPT4, Claude 3, Qwen2.5, CodeLlama) and tasks (coding, math, general agent), demonstrating opportunities for improvement through better MAS design. Our analysis provides insights revealing that identified failures require more sophisticated solutions, highlighting a clear roadmap for future research. We publicly release our comprehensive dataset (MAST-Data), the MAST, and our LLM annotator to facilitate widespread research and development in MAS.¹ ²
+:::
+
+尽管业界对多智能体 LLM 系统(Multi-Agent LLM Systems, MAS)热情高涨,它们在流行基准上的性能提升往往微乎其微。这一差距凸显了对"MAS 为什么失败"进行有原则理解的迫切需求。回答这个问题需要系统性地识别与分析失败模式。我们提出 MAST-Data:一个包含 1600 余条标注轨迹的综合数据集,采集自 7 个流行 MAS 框架。MAST-Data 是第一个勾勒 MAS 失败动态的多智能体系统数据集,可用于指导未来更好的系统开发。为了对 MAST-Data 中的失败进行系统化分类,我们构建了第一个多智能体系统失败分类法 MAST(Multi-Agent System Failure Taxonomy)。我们在 150 条轨迹的严格分析之上开发 MAST,全程由专家人工标注者指导,并通过高标注者间一致性(inter-annotator agreement,κ = 0.88)验证。这一过程识别出 14 种独特的失败模式,聚为 3 大类:(i) 系统设计问题;(ii) 智能体间失调(inter-agent misalignment);(iii) 任务验证。为实现可扩展标注,我们开发了一个与人类标注高度一致的 LLM-as-a-Judge 管线。我们借助 MAST 与 MAST-Data 分析了不同模型(GPT-4、Claude 3、Qwen2.5、CodeLlama)与任务(编码、数学、通用智能体)上的失败模式,展示了通过更好的 MAS 设计获得的改进空间。我们的分析揭示:已识别的失败需要更复杂的解决方案,为未来研究勾勒出清晰的路线图。我们公开发布综合数据集 MAST-Data、MAST 分类法与 LLM 标注器,以促进 MAS 领域广泛的研究与开发。¹ ²
+
+(注 1:代码仓库 https://github.com/multi-agent-systems-failure-taxonomy/MAST ;注 2:数据集 https://huggingface.co/datasets/mcemri/MAST-Data )
+
+::: en
+“Happy families are all alike; each unhappy family is unhappy in its own way.” (Tolstoy [1])
+
+“Successful systems all work alike; each failing system has its own problems.” (Berkeley’25)
+:::
+
+「幸福的家庭都是相似的;而不幸的家庭各有各的不幸。」(托尔斯泰 [1])
+
+「成功的系统都相似;而失败的系统各有各的问题。」(Berkeley'25)
+
+### 1 引言(Introduction)
+
+::: en
+Recently, Large Language Model (LLM) based agentic systems have gained significant attention in the AI community [2–4]. Building on this characteristic, multi-agent systems are increasingly explored in various domains, such as software engineering, drug discoveries, scientific simulations, and general-purpose agents [5–11]. In this study, we define an LLM-based agent as an artificial entity with prompt specifications (initial state), conversation trace (state), and ability to interact with the environments such as tool usage (action). A multi-agent system (MAS) is then defined as a collection of agents designed to interact through orchestration, enabling collective intelligence. MAS are structured to coordinate efforts, enabling task decomposition, performance parallelization, context isolation, specialized model ensembling, and diverse reasoning discussions [12–17].
+:::
+
+最近,基于大语言模型(Large Language Model, LLM)的智能体系统(agentic systems)在 AI 社区引起了极大关注 [2–4]。在此基础上,多智能体系统被越来越多地探索应用于各类领域,如软件工程、药物发现、科学仿真与通用智能体 [5–11]。在本研究中,我们将基于 LLM 的智能体(agent)定义为一种人工实体,它具备提示规范(初始状态)、对话轨迹(状态)以及与环境交互的能力(动作,如工具使用)。多智能体系统(Multi-Agent System, MAS)则被定义为一组通过编排(orchestration)进行交互、以实现集体智能的智能体集合。MAS 的结构旨在协调各方努力,从而支持任务分解、性能并行化、上下文隔离、专业化模型集成(specialized model ensembling)与多样化推理讨论 [12–17]。
+
+::: en
+Despite the increasing adoption of MAS, their performance gains often remain minimal compared to single-agent frameworks [18] or simple baselines like best-of-N sampling [19]. Our empirical analysis reveals 41% to 86.7% failure rate on 7 state-of-the-art (SOTA) open-source MAS detailed in Figure 5 (Appendix B). Furthermore, there is no clear consensus on how to build robust and reliable MAS. This motivates the fundamental question we address: Why do MAS fail?
+:::
+
+尽管 MAS 的采用日益增多,但与单智能体框架 [18] 或 best-of-N 采样这类简单基线 [19] 相比,其性能提升往往微乎其微。我们的实证分析(详见图 5,附录 B)显示:7 个最先进(state-of-the-art, SOTA)开源 MAS 的失败率在 41% 到 86.7% 之间。此外,对于"如何构建稳健且可靠的 MAS",社区并没有明确共识。这引出了我们所要回答的根本问题:为什么 MAS 会失败?
+
+[图 1: A Taxonomy of MAS Failure Modes. The inter-agent conversation stages indicate when a failure typically occurs within the end-to-end MAS execution pipeline. A failure mode spanning multiple stages signifies that the underlying issue can manifest or have implications across these different phases of operation. The percentages shown represent the prevalence of each failure mode and category as observed in our analysis of 1642 MAS execution traces. Detailed definitions for each failure mode and illustrative examples are available in Appendix A.]
+
+中文说明:图 1 给出 MAST 失败分类法总览:14 种失败模式按"智能体间对话阶段"(执行前 Pre-Execution、执行中 Execution、执行后 Post-Execution)排列,并归入 3 大失败类别;横跨多个阶段的模式意味着其根源问题可在不同运行阶段显现或产生影响。括号中的百分比为各模式/类别在我们对 1642 条 MAS 执行轨迹分析中的发生率:系统设计问题(System Design Issues)占 44.2%,含 1.1 不服从任务规范(11.8%)、1.2 不服从角色规范(1.50%)、1.3 步骤重复(15.7%)、1.4 丢失对话历史(2.80%)、1.5 不知终止条件(12.4%);智能体间失调(Inter-Agent Misalignment)占 32.3%,含 2.1 会话重置(2.20%)、2.2 未请求澄清(6.80%)、2.3 任务偏航(7.40%)、2.4 信息隐瞒(0.80%)、2.5 忽视其他智能体输入(1.90%)、2.6 推理-行动失配(13.2%);任务验证(Task Verification)占 23.5%,含 3.1 过早终止(6.20%)、3.2 无或不完整验证(8.20%)、3.3 错误验证(9.10%)。各失败模式的详细定义见附录 A,示例见附录 N。
+
+::: en
+To address this question and systematically understand MAS failures, we introduce MAST-Data, a comprehensive, high-quality collection of 1642 annotated execution traces. We define failures as instances where the MAS does not achieve its intended task objectives. As shown in Table 1, we collect traces from 7 popular MAS frameworks run with two main model families (GPT-4 series and Claude series), covering tasks such as coding, math problem-solving, and general agent functionalities. Alongside MAST-Data, we also release MAST-Data-human, a smaller dataset featuring 21 traces annotated by three human experts each during our inter-annotator agreement studies. We create MAST-Data to outline failure dynamics in MAS and to guide the development of better future systems.
+:::
+
+为回答这一问题并系统地理解 MAS 失败,我们提出 MAST-Data——一个由 1642 条标注执行轨迹组成的综合性高质量数据集。我们将失败定义为 MAS 未能达成其既定任务目标的情形。如表 1 所示,我们从 7 个流行 MAS 框架收集轨迹,分别使用两大模型家族(GPT-4 系列与 Claude 系列)运行,覆盖编码、数学问题求解与通用智能体功能等任务。除 MAST-Data 之外,我们还发布 MAST-Data-human——一个较小的数据集,包含 21 条轨迹,每条均由三位人类专家在我们的标注者间一致性研究中标注。我们创建 MAST-Data 的目的是勾勒 MAS 的失败动态,并指导未来更好系统的开发。
+
+::: en
+Systematically annotating failures in diverse MAS for a large-scale dataset like MAST-Data presents challenges unique to MAS: the difficulty in verifying ground truth for root cause detection and the absence of standardized failure definitions. To mitigate these challenges in creating MAST-Data, we first develop the Multi-Agent System Failure Taxonomy (MAST), illustrated in Figure 1. We build MAST using Grounded Theory [20] from a close analysis of over 150 MAS execution traces (each averaging over 15,000 lines of text). This analysis spans a subset of five open-source MAS frameworks and involves six expert human annotators. To ensure generalizable definitions in MAST for labeling MAST-Data, three annotators independently and iteratively labeled a total of 15 traces until achieving high inter-annotator agreement (κ = 0.88). This comprehensive analysis results in 14 distinct failure modes, clustered into 3 categories. While MAST serves as a foundational first step towards unifying the understanding of MAS failures, we do not claim it covers every potential failure pattern. To enable scalable annotation for the full MAST-Data, we then develop an LLM-as-a-judge pipeline (which we term the LLM annotator) [21] using OpenAI’s o1 model. We calibrate the LLM annotator to achieve high agreement with human expert annotations (κ = 0.77), and additionally validated applicability on two additional unseen MAS and benchmarks (κ = 0.79).
+:::
+
+为像 MAST-Data 这样的大规模数据集系统性地标注多样化 MAS 中的失败,会遇到 MAS 特有的挑战:失败根因检测的真值(ground truth)难以验证,以及缺乏标准化的失败定义。为缓解构建 MAST-Data 时的这些挑战,我们首先构建了多智能体系统失败分类法(Multi-Agent System Failure Taxonomy, MAST),见图 1。我们基于扎根理论(Grounded Theory)[20],对 150 余条 MAS 执行轨迹(平均每条超过 15,000 行文本)进行细致分析来构建 MAST。该分析覆盖五个开源 MAS 框架的子集,并涉及六位专家人工标注者。为确保 MAST 中的定义可用于 MAST-Data 标注且具备可泛化性,三位标注者独立地、迭代地共标注 15 条轨迹,直至达到较高的标注者间一致性(κ = 0.88)。这一全面分析得到 14 种独立失败模式,聚为 3 大类。虽然 MAST 是朝统一理解 MAS 失败迈出的奠基性第一步,但我们并不声称它覆盖了所有可能的失败模式。为了对完整 MAST-Data 实现可扩展标注,我们又基于 OpenAI 的 o1 模型开发了 LLM-as-a-Judge 管线(我们称之为 LLM 标注器)[21]。我们将 LLM 标注器校准到与人类专家标注高度一致(κ = 0.77),并在另外两个未见的 MAS 与基准上额外验证了适用性(κ = 0.79)。
+
+::: en
+To demonstrate MAST’s practical usage, our case studies (Appendix H) highlight its role in guiding MAS development, and in Section C we describe how to use the MAST easily as a python library using pip install agentdash. For example, the CPO agent in ChatDev can exhibit ‘Failure Mode 1.2 - Disobey Role Specification’ by terminating conversation without the CEO agent’s consensus. We demonstrate that a straightforward system workflow adjustment ensuring the CEO had the final say contributed to a +9.4% increase in overall task success rate. While such MAST-guided interventions demonstrate improvements, achieving robust MAS reliability often requires more than isolated fixes, pointing towards the need for more complex solutions and fundamental MAS redesigns.
+:::
+
+为展示 MAST 的实用价值,我们的案例研究(附录 H)突出了其在指导 MAS 开发中的作用;在附录 C 中,我们说明如何通过 `pip install agentdash` 将 MAST 作为 Python 库轻松使用。例如,ChatDev 中的 CPO 智能体可能在未经 CEO 智能体同意的情况下终止对话,从而表现出"失败模式 1.2——不服从角色规范"。我们证明,一个直接的系统工作流调整——确保 CEO 拥有最终决定权——带来了整体任务成功率 +9.4% 的提升。虽然这类由 MAST 引导的干预展示了改进,但要实现稳健的 MAS 可靠性,往往不能只靠孤立的修补,这指向了更复杂解决方案与根本性 MAS 重设计的需要。
+
+::: en
+Table 1: MAST-Data configuration details. HE: Human Evaluated (Task completions rates are checked by humans), HA: Human Annotated (Failure modes are annotated by humans), LA: LLM Annotated (Failure modes are annotated by LLM-as-a-Judge).
+:::
+
+表 1:MAST-Data 配置详情。HE:人类评测(任务完成率由人类检查);HA:人类标注(失败模式由人类标注);LA:LLM 标注(失败模式由 LLM-as-a-Judge 标注)。
+
+| MAS | 基准(Benchmark) | LLM | 标注方式 | 轨迹数 |
+|---|---|---|---|---|
+| ChatDev | ProgramDev | GPT-4o | HE, HA, LA | 30 |
+| MetaGPT | ProgramDev | GPT-4o | HE, HA, LA | 30 |
+| HyperAgent | SWE-Bench Lite | Claude-3.7-Sonnet | HE, HA, LA | 30 |
+| AppWorld | Test-C | GPT-4o | HE, HA, LA | 30 |
+| AG2 (MathChat) | GSM-Plus | GPT-4 | HE, HA, LA | 30 |
+| Magentic-One | GAIA | GPT-4o | HE, HA, LA | 30 |
+| OpenManus | ProgramDev | GPT-4o | HE, HA, LA | 30 |
+| ChatDev | ProgramDev-v2 | GPT-4o | LA | 100 |
+| MetaGPT | ProgramDev-v2 | GPT-4o | LA | 100 |
+| MetaGPT | ProgramDev-v2 | Claude-3.7-Sonnet | LA | 100 |
+| ChatDev | ProgramDev-v2 | Qwen2.5-Coder-32B-Instruct | LA | 100 |
+| MetaGPT | ProgramDev-v2 | Qwen2.5-Coder-32B-Instruct | LA | 100 |
+| ChatDev | ProgramDev-v2 | CodeLlama-7b-Instruct-hf | LA | 100 |
+| MetaGPT | ProgramDev-v2 | CodeLlama-7b-Instruct-hf | LA | 100 |
+| AG2 (MathChat) | OlympiadBench | GPT-4o | HE, LA | 206 |
+| AG2 (MathChat) | GSMPlus | Claude-3.7-Sonnet | HE, LA | 193 |
+| AG2 (MathChat) | MMLU | GPT-4o-mini | HE, LA | 168 |
+| Magentic-One | GAIA | GPT-4o | HE, LA | 165 |
+
+::: en
+These findings suggest MAST reflects fundamental design challenges inherent in current MAS, not just artifacts of specific MAS implementation. By systematically defining failures, MAST serves as a framework to guide failure diagnosis and opens concrete research problems for the community. We have released our traces and annotations and open-sourced the LLM annotator pipeline to foster research in the design of more robust and reliable MAS.
+:::
+
+这些发现表明,MAST 反映的是当前 MAS 固有的根本性设计挑战,而非特定 MAS 实现的伪影。通过系统化地定义失败,MAST 可作为指导失败诊断的框架,并为社区开辟具体的研究问题。我们已发布轨迹与标注,并开源了 LLM 标注器管线,以促进更稳健、更可靠 MAS 的设计研究。
+
+::: en
+The contributions of this paper are as follows:
+
+• We introduce and open-source MAST-Data, the first large-scale MAS failure dataset with consistent annotations from 7 MAS and four model families. And MAST-Data-human, a detailed inter-annotator study results with human labels. Together serve to facilitate research into MAS failures.
+
+• We introduce MAST, the first empirically grounded taxonomy of MAS failures, providing a structured framework for defining, understanding and annotating failures.
+
+• We develop a scalable LLM-as-a-judge annotation pipeline integrated with MAST for efficiently annotating MAST-Data and enabling analysis of MAS performance, diagnosis of failure modes, and understanding of failure breakdowns.
+
+• We demonstrate through case studies that failures identified by MAST often stem from system design issues, not just LLM limitations or simple prompt following, and require more than superficial fixes, thereby highlighting the need for structural MAS redesigns.
+:::
+
+本文的贡献如下:
+
+- 我们提出并开源了 MAST-Data——首个大规模 MAS 失败数据集,带有来自 7 个 MAS、四个模型家族的一致标注;同时发布 MAST-Data-human——包含详细标注者间一致性研究结果与人类标签的数据集。二者共同促进对 MAS 失败的研究。
+- 我们提出 MAST——首个实证落地的 MAS 失败分类法,为定义、理解与标注失败提供了结构化框架。
+- 我们开发了与 MAST 集成、可扩展的 LLM-as-a-Judge 标注管线,可高效标注 MAST-Data,并支持 MAS 性能分析、失败模式诊断与失败分解的理解。
+- 我们通过案例研究证明:MAST 识别出的失败往往源于系统设计问题,而不只是 LLM 限制或简单的提示词遵循问题,需要超越表层修补的解决方案,从而凸显了对结构性 MAS 重设计的需要。
+
+### 2 相关工作(Related Work)
+
+#### 2.1 智能体系统中的挑战(Challenges in Agentic Systems)
+
+::: en
+The promising capabilities of agentic systems have inspired research into solving specific challenges. For instance, Agent Workflow Memory [22] addresses long-horizon web navigation by introducing workflow memory. DSPy [23] tackles issues in programming agentic flows, while StateFlow [24] focuses on state control within agentic workflows to improve task-solving capabilities. Several surveys also highlight challenges and potential risks specifically within MAS [25, 26]. While these works meaningfully contribute towards understanding specific issues or providing high-level overviews, they do not offer a fine-grained, empirically grounded taxonomy of why MAS fail across diverse systems and tasks. Numerous benchmarks also exist to evaluate agentic systems [27–32]. These evaluations are crucial but primarily facilitate a top-down perspective, focusing on aggregate performance or high-level objectives like trustworthiness and security [33, 34]. Our work complements these efforts by providing a bottom-up analysis focused on identifying specific failure modes in MAS.
+:::
+
+智能体系统的光明前景启发了解决特定挑战的研究。例如,Agent Workflow Memory [22] 通过引入工作流记忆解决长程网页导航问题;DSPy [23] 处理智能体流程编程中的问题;StateFlow [24] 则聚焦智能体工作流中的状态控制以提升任务求解能力。也有多篇综述强调了 MAS 特有的挑战与潜在风险 [25, 26]。这些工作在理解特定问题或提供高层概览方面贡献显著,但均未给出跨多样系统与任务的、细粒度且实证落地的"MAS 为什么失败"分类法。此外还存在众多评估智能体系统的基准 [27–32]。这些评估至关重要,但主要提供自上而下的视角,聚焦聚合性能或可信度、安全性等高层目标 [33, 34]。我们的工作通过提供自下而上、聚焦识别 MAS 具体失败模式的分析,与这些努力形成互补。
+
+#### 2.2 智能体系统的设计原则(Design Principles for Agentic Systems)
+
+::: en
+Several works highlight challenges in building robust agentic systems and suggest design principles, often focused on single-agent settings. For instance, Anthropic’s blog post emphasizes modular components and avoiding overly complex frameworks [35]. Similarly, Kapoor et al. [19] demonstrates how complexity can hinder practical adoption. Our work extends these insights to the multi-agent context. By systematically collecting and analyzing a large corpus of MAS failure instances within MAST-Data, and by developing MAST, we provide not only a structured understanding of why MAS fail but also empirical data from MAST-Data to support the development and validation of more robust design principles for MAS. This aligns with the call for clearer specifications and design principles [36].
+:::
+
+多项工作强调了构建稳健智能体系统的挑战并提出设计原则,但多聚焦单智能体场景。例如,Anthropic 的博客文章强调模块化组件与避免过度复杂的框架 [35];类似地,Kapoor et al. [19] 证明了复杂性会如何阻碍实际采用。我们的工作将这些洞见扩展到多智能体场景:通过在 MAST-Data 中系统化地收集并分析大规模 MAS 失败语料,并构建 MAST,我们不仅提供了对"MAS 为什么失败"的结构化理解,还提供了来自 MAST-Data 的实证数据,以支持更稳健 MAS 设计原则的开发与验证。这与对更清晰规范和设计原则的呼吁 [36] 相一致。
+
+#### 2.3 相关数据集与分类法(Related Datasets and Taxonomy)
+
+::: en
+Despite the growing interest in LLM agents, dedicated research systematically characterizing their failure modes remains limited, particularly for MAS. While Bansal et al. [37] catalogs challenges in human-agent interaction, our contribution focuses specifically on failures within autonomous MAS execution. Other related work includes taxonomies for evaluating multi-turn LLM conversations [38] or specific capabilities like code generation [39]. These differ significantly from our goal of developing a generalizable failure taxonomy for multi-agent interactions and coordination.
+:::
+
+尽管对 LLM 智能体的兴趣与日俱增,系统刻画其失败模式的专门研究仍然有限,MAS 领域尤甚。Bansal et al. [37] 归纳了人机交互中的挑战,而我们的贡献聚焦于自主 MAS 执行中的失败。其他相关工作包括多轮 LLM 对话评估分类法 [38] 或代码生成等特定能力的(错误)分类法 [39],它们与我们的目标——为多智能体交互与协调构建可泛化的失败分类法——差异显著。
+
+::: en
+Further related efforts aim to improve MAS through different approaches. AgentEval [40] proposes a framework using LLM agents to define and quantify multi-dimensional evaluation criteria reflecting task utility for end-users. AGDebugger [41] introduces an interactive tool enabling developers to debug and steer agent teams by inspecting and editing message histories. And current work by Zhang et al. [42] present the Who&When dataset and MAS debugger, which focuses on summarizing failures for specific task items by attributing them to particular agents and error steps.
+:::
+
+进一步的相关工作试图从不同路径改进 MAS。AgentEval [40] 提出了一个使用 LLM 智能体来定义并量化多维评估标准的框架,这些标准反映最终用户的任务效用。AGDebugger [41] 引入交互式工具,让开发者通过检查和编辑消息历史来调试并引导智能体团队。Zhang et al. [42] 的并行工作提出了 Who&When 数据集与 MAS 调试器,聚焦于通过将失败归因到特定智能体与错误步骤来总结特定任务条目的失败。
+
+::: en
+Thus, MAST-Data and MAST represent, to our knowledge, the first empirically derived, comprehensive dataset and taxonomy focused specifically on MAS failures focus on failure patterns. Identifying these patterns highlights the need for continued research into robust evaluation metrics and mitigation strategies tailored for the unique challenges of MAS.
+:::
+
+因此,据我们所知,MAST-Data 与 MAST 代表了首个实证推导的、专门聚焦 MAS 失败(聚焦失败模式)的综合数据集与分类法。识别这些模式凸显了持续研究稳健评估指标与缓解策略的需要,以应对 MAS 独特的挑战。
+
+### 3 多智能体系统数据集(The Multi-Agent Systems Dataset)
+
+::: en
+To facilitate a principled understanding of why MAS fail and to guide the development of more reliable future systems, we introduce MAST-Data, the Multi-Agent System Failure Dataset. MAST-Data is a comprehensive, empirically grounded dataset comprising 1642 annotated execution traces collected from 7 popular MAS frameworks, covering domains of coding, math, and generic tasks.
+:::
+
+为了给"MAS 为什么失败"提供有原则的理解,并指导开发更可靠的未来系统,我们提出 MAST-Data——多智能体系统失败数据集。MAST-Data 是一个综合的、实证落地的数据集,包含从 7 个流行 MAS 框架收集的 1642 条标注执行轨迹,覆盖编码、数学与通用任务领域。
+
+::: en
+Constructing such a dataset, however, presents distinct challenges. First, unlike in traditional software where failures often have clearly identifiable root causes, failures in MAS are frequently complex. They involve convoluted agent interactions and the compounding effects of individual model behaviors and overall system design. Therefore, pinpointing the precise nature and origin of a failure in MAS requires more than simple error detection; it necessitates understanding the system’s dynamics. Second, the lack of a standardized failure framework with clear definitions makes identifying and classifying MAS failures across different systems inconsistent, which complicates annotation and cross-system analysis.
+:::
+
+然而,构建这样的数据集面临独特的挑战。首先,传统软件中的失败往往有清晰可辨的根因,而 MAS 中的失败常常很复杂:它们涉及盘根错节的智能体交互,以及个体模型行为与整体系统设计的复合效应。因此,要在 MAS 中精确定位失败的性质与起源,需要的不仅是简单的错误检测,还需要理解系统的动态。其次,缺乏带有清晰定义的标准化失败框架,使得跨不同系统识别和分类 MAS 失败的做法并不一致,这让标注与跨系统分析变得复杂。
+
+::: en
+To address these challenges, we develop a rigorous, principled methodology to construct MAST-Data. In this section, we detail our approach, which centers on building the first empirical MAS failure taxonomy, MAST, and a scalable annotation pipeline for systematic and comprehensive data collection. Figure 2 summarizes our methodological workflow.
+:::
+
+为应对这些挑战,我们开发了严谨、有原则的方法论来构建 MAST-Data。本节详述我们的方法,其核心是构建第一个实证的 MAS 失败分类法 MAST,以及一条用于系统化、全面数据收集的可扩展标注管线。图 2 概括了我们的方法学工作流。
+
+[图 2: Methodological workflow for constructing the MAST-Data dataset, involving the empirical identification of failure modes, the development of MAST, iterative refinement through inter-annotator agreement studies (κ = 0.88), and the creation of a scalable LLM annotation pipeline. This figure highlights our systematic approach to creating a comprehensive dataset for studying MAS failures.]
+
+中文说明:图 2 描述构建 MAST-Data 的方法学工作流:MAS 轨迹收集 → 以扎根理论分析实证识别失败模式 → 开发失败分类法 MAST(3 大类别:规范不良/系统设计 Poor Specification (System Design)、智能体间失调/智能体协调 Inter-Agent Misalignment (Agent Coordination)、任务验证/质量控制 Task Verification (Quality Control),共含 14 种细粒度模式,即图 1 所列)→ 通过标注者间一致性研究迭代精炼(κ = 0.88)→ 校准 LLM 标注器 → 大规模 MAST 失败标注,最终形成多智能体数据集。图中标注的类别占比(37.17% / 31.41% / 31.41%)与各模式发生率(如 1.1 不服从任务规范 11.5%、1.3 步骤重复 15.2%、1.5 不知终止条件 6.02% 等)为分类法开发阶段数据上的分布,与图 1 基于 1642 条全量轨迹的分布略有不同。
+
+#### 3.1 以扎根理论分析进行数据收集(Data Collection with Grounded Theory Analysis)
+
+::: en
+To uncover a comprehensive set of failure patterns that are both diverse and generalizable to standardize failure labels which we detail further in Section 3.2, we first collect 150 traces from five MAS frameworks, which are closely examined by six human experts. Our goal at this stage is to identify as many distinct failure modes as possible, ensuring these observed patterns are not merely artifacts of a single system but can likely apply more broadly. To achieve this without predefined hypotheses, we adopt the Grounded Theory (GT) approach [20]. This qualitative research method allows failure modes to emerge organically from empirical data.
+:::
+
+为了发现一套全面、多样且可泛化的失败模式集合,以标准化失败标签(详见 3.2 节),我们首先从 5 个 MAS 框架收集 150 条轨迹,由六位人类专家细致检视。我们这一阶段的目标是尽可能多地识别出不同的失败模式,并确保这些观察到的模式不只是单一系统的伪影,而是可能更广泛地适用。为了在没有预设立场的前提下做到这一点,我们采用扎根理论(Grounded Theory, GT)方法 [20]。这一质性研究方法让失败模式从实证数据中自然涌现。
+
+::: en
+For this initial data collection, we use theoretical sampling [43] to ensure robust coverage across different system objectives and interaction patterns. This method guides our selection of the five MAS frameworks (HyperAgent, AppWorld, AG2, ChatDev, and MetaGPT) and two task categories (programming and math problem-solving). We then iteratively analyze these traces using core GT techniques: open coding [44] to label trace data with observed failure behaviors; constant comparative analysis to refine our understanding of these failure behaviors and their recurrence across systems; memoing to document insights; and theorizing to structure these findings into an initial set of failure modes with their definitions. This iterative analysis continues until we reach theoretical saturation, where further data analysis does not yield new failure mode insights. This initial process requires significant human effort, over 20 hours of annotation per expert for these 150 traces.
+:::
+
+在这次初始数据收集中,我们使用理论抽样(theoretical sampling)[43] 以确保稳健地覆盖不同的系统目标与交互模式。这一方法指导我们选择了 5 个 MAS 框架(HyperAgent、AppWorld、AG2、ChatDev 与 MetaGPT)与两类任务(编程与数学问题求解)。随后,我们用 GT 核心技术迭代分析这些轨迹:开放编码(open coding)[44] 为轨迹数据标注观察到的失败行为;持续比较分析(constant comparative analysis)精炼我们对这些失败行为及其跨系统复发性的理解;备忘(memoing)记录洞见;理论化(theorizing)将这些发现结构化为带定义的初始失败模式集合。这一迭代分析持续到理论饱和(theoretical saturation)——进一步的数据分析不再产生新的失败模式洞见。这一初始过程需要大量人力:每位专家在这 150 条轨迹上投入超过 20 小时的标注。
+
+#### 3.2 通过标注者间一致性标准化失败标签(Standardizing Failure Labels via Inter-Annotator Agreement)
+
+::: en
+To make the failure observations from our GT analysis useful for creating consistent labels in MAST-Data, we recognize the critical need for standardized definitions that apply uniformly across different MAS. To address this, we develop the failure taxonomy - MAST. MAST serves as a foundational first step towards a common understanding of MAS failures by providing clear, empirically grounded failure observation labels. We provide a detailed description and analysis of MAST in Section 4.
+:::
+
+为让 GT 分析得到的失败观察对在 MAST-Data 中创建一致的标签真正有用,我们认识到,关键在于需要可跨不同 MAS 统一适用的标准化定义。为此,我们开发了失败分类法 MAST。MAST 通过提供清晰、实证落地的失败观察标签,朝向对 MAS 失败的共同理解迈出奠基性的第一步。我们在第 4 节给出 MAST 的详细描述与分析。
+
+::: en
+To develop a taxonomy that is unambiguous and consistently applicable by different annotators, we rigorously validate and refine MAST definitions through Inter-Annotator Agreement (IAA) studies. This iterative process begins with a preliminary version of MAST derived from our GT findings. In each round of IAA, three expert annotators independently label a subset of five randomly selected traces from our initial 150+ trace collection using MAST. We then facilitate discussions to collectively resolve any disagreements. Based on these discussions, we iteratively refine MAST by adjusting failure mode definitions, adding new modes, or removing and merging existing ones until we achieve high consensus. We conduct three such rounds of IAA, requiring about 10 hours in total solely for resolving disagreements, not including the annotation time itself. We measure agreement using Cohen’s Kappa score, achieving a strong average of κ = 0.88 in the final rounds. This high IAA score signifies that MAST provides a clear and shared understanding of failure modes, crucial for the consistent annotation of MAST-Data. Figure 3 illustrates an example of a trace snippet with a MAST label.
+:::
+
+为了开发一个无歧义、不同标注者都能一致适用的分类法,我们通过标注者间一致性(Inter-Annotator Agreement, IAA)研究严格验证并精炼 MAST 定义。这一迭代过程从 GT 发现导出的 MAST 初步版本开始。在每一轮 IAA 中,三位专家标注者使用 MAST 独立标注从初始 150+ 条轨迹集合中随机抽取的 5 条轨迹;随后我们组织讨论以集体消解分歧。基于这些讨论,我们迭代精炼 MAST:调整失败模式定义、增加新模式,或删除与合并既有模式,直至达成高度共识。我们共进行了三轮这样的 IAA,仅消解分歧一项就耗时约 10 小时(不含标注本身的时间)。我们用 Cohen's Kappa 分数度量一致性,最终轮次达到平均 κ = 0.88 的强一致性。这一高 IAA 分数表明,MAST 提供了对失败模式清晰且共享的理解,这对 MAST-Data 的一致标注至关重要。图 3 展示了一条带 MAST 标签的轨迹片段示例。
+
+[图 3: Visualization of a trace segment in MAST-Data. This illustrates an agent-to-agent conversation exhibiting Failure Mode 2.4: Information Withholding. The Phone Agent fails to communicate API requirements (username format) to the Supervisor Agent, who also fails to seek clarification, leading to repeated failed logins and task failure.]
+
+中文说明:图 3 可视化了 MAST-Data 中的一段轨迹:在 AppWorld 场景中,Supervisor Agent(监督智能体)要求用 a@mail.com 与密码 XvV@Hof 登录;Phone Agent(电话智能体)展示电话应用文档后直接调用 `apis.phone.login(username="a@mail.com", password="XvV@Hof")`,而 API 文档其实写明 username 应为账户手机号("name": "username", "description": "Your account phone_number"),结果返回 `{"message":"Invalid credentials"}`。Phone Agent 始终未把"用户名应为手机号"这一 API 要求告知 Supervisor,Supervisor 也未追问,只回复"所提供的登录凭据不正确,请提供正确的用户名和密码",导致反复登录失败、任务失败——这是 FM-2.4 信息隐瞒(缺失"用户名应为手机号"的反馈)的典型示例。
+
+#### 3.3 实现可扩展标注:LLM-as-a-Judge 管线(Enabling Scalable Annotation: The LLM-as-a-Judge Pipeline)
+
+::: en
+Manually annotating over 1600 MAS traces with fine-grained failure modes is time-consuming and costly. To enable scalable and automated failure annotation for MAST-Data, we develop an LLM-as-a-Judge pipeline (LLM annotator), building upon our validated MAST. This pipeline prompts an LLM (OpenAI’s o1 model) with an execution trace, the MAST definitions, and few-shot examples from our human-annotated data (details in Appendix N) to classify observed failure modes. We validate the LLM annotator’s reliability against expert human annotations on a held-out set from our IAA studies. The LLM annotator achieves high agreement with human experts (accuracy 94%, Cohen’s Kappa of 0.77; Table 2), confirming its suitability for scaling the annotation process while adhering to MAST definitions.
+:::
+
+人工为 1600 多条 MAS 轨迹标注细粒度失败模式既耗时又昂贵。为对 MAST-Data 实现可扩展的自动化失败标注,我们在已验证的 MAST 之上构建了 LLM-as-a-Judge 管线(LLM 标注器)。该管线向 LLM(OpenAI 的 o1 模型)输入执行轨迹、MAST 定义以及来自我们人类标注数据的少样本示例(细节见附录 N),令其对观察到的失败模式进行分类。我们在 IAA 研究的留出集上,对照专家人类标注验证 LLM 标注器的可靠性。LLM 标注器与人类专家达到高度一致(准确率 94%、Cohen's Kappa 0.77;见表 2),证实其适合在遵循 MAST 定义的同时扩展标注流程。
+
+::: en
+Table 2: Performance of LLM-as-a-judge pipeline
+
+Model Accuracy Recall Precision F1 Cohen’s κ
+o1 0.89 0.62 0.68 0.64 0.58
+o1 (few shot) 0.94 0.77 0.833 0.80 0.77
+:::
+
+表 2:LLM-as-a-Judge 管线的性能
+
+| 模型 | 准确率(Accuracy) | 召回率(Recall) | 精确率(Precision) | F1 | Cohen's κ |
+|---|---|---|---|---|---|
+| o1 | 0.89 | 0.62 | 0.68 | 0.64 | 0.58 |
+| o1(少样本 few-shot) | 0.94 | 0.77 | 0.833 | 0.80 | 0.77 |
+
+#### 3.4 构建多智能体数据集(Constructing the Multi-Agent Dataset)
+
+::: en
+Before large-scale data collection for MAST-Data, we confirm the generalizability of our finalized MAST and the LLM annotator. We evaluate their performance on two new MAS (OpenManus and Magentic-One) with two new benchmarks (MMLU and GAIA, the latter representing a new general-agent task domain for validation) not part of the initial MAST development. An additional human IAA round on these out-of-domain traces using the finalized MAST yields a strong Cohen’s Kappa score of 0.79. This demonstrates MAST’s effectiveness in capturing failures in diverse systems and tasks without further modification, supporting the robustness of our annotation approach for broader application. We further detail the uniqueness of MAST failure modes via a correlation study in Appendix E.
+:::
+
+在为 MAST-Data 开展大规模数据收集之前,我们确认了最终版 MAST 与 LLM 标注器的泛化性。我们在两个新 MAS(OpenManus 与 Magentic-One)与两个新基准(MMLU 与 GAIA,后者代表用于验证的全新通用智能体任务域)上评估它们的表现——这些都不属于最初的 MAST 开发。使用最终版 MAST 对这些域外(out-of-domain)轨迹做额外一轮人类 IAA,得到强 Cohen's Kappa 分数 0.79。这证明 MAST 无需进一步修改即可在多样系统与任务中捕捉失败,支持了我们标注方法在更广应用中的稳健性。我们还在附录 E 中通过相关性研究进一步说明 MAST 失败模式的独特性。
+
+::: en
+Leveraging our validated MAST and LLM annotator, we expand data collection to construct MAST-Data, comprising 1642 annotated traces from seven popular MAS frameworks (Table 1). These frameworks include the five from our initial studies, the two from the generalization validation, and Manus [45] as detailed in Appendix B. These traces cover diverse tasks like coding, math problem-solving, and general agent functionalities. For MAST-Data, our LLM annotator identifies MAST failure modes in each trace and provides a corresponding reason. We also release MAST-Data-human, consisting of all traces annotated by human experts during our IAA studies, where each annotation specifies MAST failure modes with textual justifications. We open-source MAST-Data and MAST-Data-human as resources to analyze MAS failure dynamics and guide robust system design.
+:::
+
+依托已验证的 MAST 与 LLM 标注器,我们扩展数据收集以构建 MAST-Data,包含来自 7 个流行 MAS 框架的 1642 条标注轨迹(表 1)。这些框架包括最初研究中的 5 个、泛化验证中的 2 个,以及 Manus [45](详见附录 B)。这些轨迹覆盖编码、数学问题求解与通用智能体功能等多样任务。对于 MAST-Data,我们的 LLM 标注器识别每条轨迹中的 MAST 失败模式并给出相应理由。我们还发布 MAST-Data-human,由 IAA 研究中人类专家标注的全部轨迹组成,每条标注都指明 MAST 失败模式并附带文字说明。我们将 MAST-Data 与 MAST-Data-human 开源,作为分析 MAS 失败动态、指导稳健系统设计的资源。
+
+### 4 多智能体系统失败分类法(The Multi-Agent System Failure Taxonomy)
+
+::: en
+This section details MAST, a key result of our study and a critical component that guides the creation and analysis of MAST-Data. MAST provides the first empirically grounded, structured framework for defining, understanding, and annotating common failures in MAS. Here, we present its structure, the failure categories it defines, and key insights derived from its development and application.
+:::
+
+本节详述 MAST——我们研究的一项关键成果,也是指导 MAST-Data 创建与分析的关键组件。MAST 提供了首个实证落地的结构化框架,用于定义、理解与标注 MAS 中的常见失败。这里我们呈现其结构、它所定义的失败类别,以及从其开发与应用中得出的关键洞见。
+
+::: en
+MAST, illustrated in Figure 1, identifies 14 fine-grained failure modes, which we map to MAS execution stages (Pre-Execution, Execution, and Post-Execution) where their root causes commonly emerge. These modes are organized into 3 overarching categories reflecting the fundamental nature of the observed failures. While we recognize that prior works have noted some individual failure types and we do not claim MAST is exhaustive, it offers precise definitions for a structured approach to understanding why MAS fail. Detailed definitions for each failure mode (FM) are available in Appendix A, with specific examples in Appendix N.
+:::
+
+MAST(见图 1)识别出 14 种细粒度失败模式,我们将它们映射到 MAS 执行阶段(执行前、执行中、执行后)——这些是其根因常见的涌现之处。这些模式被组织为 3 个总体类别,反映所观察到失败的根本性质。虽然我们认识到已有工作注意到了一些个别的失败类型,我们也并不声称 MAST 是穷尽的,但它为结构化地理解"MAS 为什么失败"提供了精确的定义。每个失败模式(Failure Mode, FM)的详细定义见附录 A,具体示例见附录 N。
+
+::: en
+We acknowledge that some MAS failures can stem from fundamental limitations of current LLMs, such as hallucination or instruction following. However, in developing MAST, we focus on identifying failure patterns where improvements in system design, agent coordination, and verification can offer room to improve the reliability of MAS, often independently of or complementary to advancements in the base models themselves. We now discuss each failure category (FC) in MAST and its implications.
+:::
+
+我们承认,某些 MAS 失败可能源于当前 LLM 的固有限制,例如幻觉或指令遵循。但在开发 MAST 时,我们聚焦于识别这样一类失败模式:对系统设计、智能体协调与验证的改进可以为 MAS 可靠性提供提升空间,且这种提升往往独立于或互补于基础模型自身的进步。下面我们讨论 MAST 中的每个失败类别(Failure Category, FC)及其含义。
+
+::: en
+FC1. System Design Issues. Failures originate from system design decisions, and poor or ambiguous prompt specifications.
+
+. Insight 1. MAS failure is not merely a function of challenges in the underlying model; a well-designed MAS can result in performance gain when using the same underlying model.
+:::
+
+FC1. 系统设计问题(System Design Issues)。失败源于系统设计决策,以及糟糕或含糊的提示规范。
+
+洞见 1:MAS 失败不仅仅是底层模型挑战的函数;使用同一底层模型时,设计良好的 MAS 也能带来性能增益。
+
+::: en
+Failures in FC1 occur during execution but often reflect flaws in pre-execution design choices regarding system architecture, prompt instructions, or state management. These include failing to follow task requirements (FM-1.1, 11.8%) or agent roles (FM-1.2, 1.5%), step repetitions (FM-1.3, 15.7%), context loss (FM-1.4, 2.80%), or not recognizing task completion (FM-1.5, 12.4%). While FM-1.1 and FM-1.2, disobey specifications, may seem like general instruction-following limitation, we identify deeper causes: (1) flaws in MAS design regarding agent roles and workflow, (2) poor user prompt specifications, or (3) limitations of the underlying LLM. We posit that a well-designed MAS should interpret high-level objectives with minimal but clear user input to mitigate the impact of points (2) and (3).
+:::
+
+FC1 的失败发生在执行期,但往往反映的是执行前在设计选择上的缺陷,涉及系统架构、提示指令或状态管理。这包括:未遵循任务要求(FM-1.1,11.8%)或智能体角色(FM-1.2,1.5%)、步骤重复(FM-1.3,15.7%)、上下文丢失(FM-1.4,2.80%)、或未识别任务已完成(FM-1.5,12.4%)。虽然 FM-1.1 与 FM-1.2 这类"不服从规范"的失败看似一般的指令遵循限制,我们识别出更深层的原因:(1) MAS 在智能体角色与工作流上的设计缺陷;(2) 用户提示规范糟糕;或 (3) 底层 LLM 的限制。我们认为,设计良好的 MAS 应能在用户输入最少但清晰的前提下解释高层目标,以缓解 (2)、(3) 两点的影响。
+
+::: en
+For instance, when ChatDev is tasked to create a Wordle game with the prompt a standard wordle game by providing a daily 5-letter... , the generated program uses a fixed word dictionary. Even with a more explicit prompt like ...without having a fixed word bank, and randomly select a new 5-letter word each day , ChatDev still produces code with a fixed list and new errors. This suggests failures stem from the MAS’s design for interpreting specifications. Our intervention studies (Appendix H) show that improving agent role specifications alone yields a +9.4% success rate increase for ChatDev with the same user prompt and LLM (GPT-4o).
+:::
+
+例如,当要求 ChatDev 用提示词 "a standard wordle game by providing a daily 5-letter..." 创建一个 Wordle 游戏时,生成的程序使用了固定的词库。即便换用更明确的提示词 "...without having a fixed word bank, and randomly select a new 5-letter word each day",ChatDev 仍产出带固定列表的代码并引入新错误。这表明失败源于 MAS 解析规范的设计。我们的干预研究(附录 H)表明:仅改进智能体角色规范,在相同用户提示与 LLM(GPT-4o)下即可为 ChatDev 带来 +9.4% 的成功率提升。
+
+::: en
+FC2. Inter-Agent Misalignment. Failures arise from a breakdown in critical information flow from inter-agent interaction and coordination during execution.
+
+. Insight 2. Solutions focused on context or communication protocols are often insufficient for FC2 failures, which demand deeper ‘social reasoning’ abilities from agents.
+:::
+
+FC2. 智能体间失调(Inter-Agent Misalignment)。失败源于执行期智能体交互与协调中关键信息流的断裂,即协调失败(coordination failure)。
+
+洞见 2:聚焦上下文或通信协议的方案对 FC2 失败往往不够,这类失败要求智能体具备更深层的"社会推理"(social reasoning)能力。
+
+::: en
+FC2 covers failures in agent coordination. These include unexpected conversation resets (FM-2.1, 2.20%), proceeding with wrong assumptions instead of seeking clarification (FM-2.2, 6.80%), task derailment (FM-2.3, 7.40%), withholding crucial information (FM-2.4, 0.85%), ignoring other agents’ input (FM-2.5, 1.90%), or mismatches between reasoning and action (FM-2.6, 13.2%). Figure 3 illustrates information withholding (FM-2.4). Diagnosing FC2 failures can be complex, as similar surface behaviors (e.g., missing information) can stem from different root causes like withholding (FM-2.4), ignoring input (FM-2.5), or context mismanagement (FM-1.4), underscoring the need for MAST’s fine-grained modes.
+:::
+
+FC2 覆盖智能体协调(coordination)中的失败,包括:意外的会话重置(FM-2.1,2.20%)、带着错误假设继续而不寻求澄清(FM-2.2,6.80%)、任务偏航(FM-2.3,7.40%)、隐瞒关键信息(FM-2.4,0.85%)、忽视其他智能体的输入(FM-2.5,1.90%)、或推理与行动之间的失配(FM-2.6,13.2%)。图 3 展示了信息隐瞒(FM-2.4)。诊断 FC2 失败可能很复杂,因为相似的表层行为(如信息缺失)可能源于不同根因,如隐瞒(FM-2.4)、忽视输入(FM-2.5)或上下文管理不当(FM-1.4),这凸显了 MAST 细粒度模式的必要性。
+
+::: en
+Recent system innovations, such as Model Context Protocol [46] and Agent to Agent [47], improve agent communication by standardizing message formats from different tool or agent providers. However, the errors we observe in FC2 occur even when agents within the same framework communicate using natural language. This signals a deeper agent interaction dynamic challenge: the collapse of ‘theory of mind’ [48], where agents fail to accurately model other agents’ informational needs. Addressing this likely requires structural improvements to the content of agent messages or enhancing models’ contextual reasoning and their capacity to infer other agents’ informational needs, such as through targeted training, as base LLMs are generally not pre-trained for such nuanced inter-agent dynamics. Thus, robust solutions will likely involve a combination of improved MAS architecture and model-level advancements in communicative intelligence.
+:::
+
+近期的系统创新,如模型上下文协议(Model Context Protocol)[46] 与 Agent-to-Agent(A2A)[47],通过标准化来自不同工具或智能体提供商的消息格式来改进智能体通信。然而,我们在 FC2 中观察到的错误,即便在同一框架内的智能体以自然语言通信时也会发生。这预示着一个更深层的智能体交互动态挑战:"心智理论"(theory of mind)[48] 的坍塌——智能体无法准确建模其他智能体的信息需求。解决这一问题可能需要对智能体消息内容做结构性改进,或增强模型的上下文推理及其推断其他智能体信息需求的能力(例如通过针对性训练),因为基础 LLM 的预训练通常并不针对这种细粒度的智能体间动态。因此,稳健的解决方案很可能需要改进的 MAS 架构与模型级"沟通智能"进展的结合。
+
+::: en
+FC3. Task Verification. Failures involve inadequate verification processes that fail to detect or correct errors, or premature termination of tasks.
+
+. Insight 3. Multi-Level Verification is Needed. Current verifier implementations are often insufficient; sole reliance on final-stage, low-level checks is inadequate.
+:::
+
+FC3. 任务验证(Task Verification)。失败涉及不足以检测或纠正错误的验证过程,或任务的过早终止。
+
+洞见 3:需要多级验证(Multi-Level Verification)。当前验证器的实现普遍不足;仅依赖最终阶段的低层检查是不够的。
+
+::: en
+FC3 failures are related to the quality control of the final output, including premature termination (FM-3.1, 6.20%), no or incomplete verification (FM-3.2, 8.20%), or incorrect verification (FM-3.3, 9.10%). These highlight challenges in ensuring output correctness and reliability. Systems with explicit verifiers like MetaGPT and ChatDev generally show fewer total failures (Figure 4), indicating explicit checks help. However, the presence of a verifier is not a silver bullet, as overall MAS success rates can still be low. For example (FM-3.2), a ChatDev-generated chess program passes superficial checks (e.g., code compilation) but contains runtime bugs because it fails to validate against actual game rules, rendering the output unusable despite review phases.
+:::
+
+FC3 失败与最终输出的质量控制相关,包括过早终止(FM-3.1,6.20%)、无或不完整验证(FM-3.2,8.20%)、或错误验证(FM-3.3,9.10%)。这些凸显了确保输出正确性与可靠性方面的挑战。配备显式验证器的系统,如 MetaGPT 与 ChatDev,总体失败确实较少(图 4),说明显式检查确有帮助。然而,验证器的存在并非银弹:整体 MAS 成功率仍然可能很低。例如(FM-3.2),一个 ChatDev 生成的国际象棋程序通过了表层检查(如代码可编译),却因未对照实际游戏规则验证而包含运行时缺陷,使得输出尽管经过评审阶段仍不可用。
+
+::: en
+During our GT analysis of MAS traces, we find that many existing verifiers perform only superficial checks, despite being prompted to perform thorough verification, such as checking if the code compiles or if there are leftover TODO comments. We posit that MAS development should take lessons from traditional software development where programmers test their code before committing. More rigorous verification is needed, such as using external knowledge, collecting testing output throughout generation, and multi-level checks for both low-level correctness and high-level objectives. We demonstrate this in an intervention study where adding a high-level task objective verification step to ChatDev yields a +15.6% improvement in task success on ProgramDev (details in Appendix H).
+:::
+
+在我们对 MAS 轨迹的 GT 分析中,我们发现许多现有验证器只执行表层检查——尽管它们被提示要做彻底验证,例如只检查代码能否编译、有无遗留的 TODO 注释。我们认为,MAS 开发应借鉴传统软件开发的经验:程序员在提交(commit)前先测试代码。需要更严格的验证,例如利用外部知识、在生成过程中持续收集测试输出、以及对低层正确性与高层目标做多级检查。我们在一项干预研究中证明了这一点:为 ChatDev 增加一个高层任务目标验证步骤,在 ProgramDev 上带来 +15.6% 的任务成功率提升(细节见附录 H)。
+
+### 5 迈向更好的多智能体 LLM 系统(Towards better Multi-Agent LLM Systems)
+
+[图 4: Distribution of failure in MAST-Data with MAST labels on total 210 traces. This plot visualizes the failure distributions of the first 30 traces for each system. As the specific tasks and benchmarks may differ across the MAS configurations shown, these results are intended to illustrate system-specific failure profiles rather than to serve as a performance comparison across MAS.]
+
+中文说明:图 4 展示 MAST-Data 中带 MAST 标签的失败分布(共 210 条轨迹,即 7 个系统各取前 30 条):横轴为 14 种失败模式(1.1–3.3),按三大类别分组着色——系统设计问题(System Design Issues)41.8%、智能体间失调(Inter-Agent Misalignment)36.9%、任务验证(Task Verification)21.3%;纵轴为失败次数,涵盖 AppWorld、HyperAgent、AG2、ChatDev、MetaGPT、Magentic-One、OpenManus 七个系统。由于图中各 MAS 配置的具体任务与基准可能不同,该结果旨在展示各系统特有的失败画像,而非作为跨 MAS 的性能比较。
+
+::: en
+We now discuss the broader implications and usage of MAST-Data and MAST. MAST-Data, with its annotations grounded in MAST, provides crucial empirical evidence, while MAST offers a foundational framework and practical tool for understanding, debugging, and ultimately improving MAS. By concretely defining failure modes and providing a large-scale dataset of their occurrences, our work outlines the challenges in building reliable MAS and opens targeted research problems for the community.
+:::
+
+我们现在讨论 MAST-Data 与 MAST 更广泛的含义与用法。MAST-Data 以 MAST 为根基的标注提供了关键实证证据,而 MAST 为理解、调试并最终改进 MAS 提供了基础框架与实用工具。通过具体地定义失败模式并提供其大规模出现的数据库,我们的工作勾勒了构建可靠 MAS 的挑战,并为社区开辟了有针对性的研究问题。
+
+#### 5.1 MAST-Data 中的失败分解(Failure Breakdown in MAST-Data)
+
+::: en
+Our analysis of MAST-Data reveals that failure distributions differ markedly across various MAS, often reflecting their unique architectural characteristics and design philosophies. For example, as illustrated in Figure 4, we observe specific patterns: AppWorld frequently suffers from premature terminations (FM-3.1), potentially due to its star topology and lack of a predefined workflow making termination conditions less obvious; OpenManus exhibits a tendency towards step repetition (FM-1.3); and HyperAgent could benefit from addressing its dominant failure modes of step repetition (FM-1.3) and incorrect verification (FM-3.3). These system-specific profiles underscore that there is no one-size-fits-all solution to MAS failures.
+:::
+
+我们对 MAST-Data 的分析揭示,不同 MAS 之间的失败分布差异显著,往往反映其独特的架构特征与设计哲学。例如,如图 4 所示,我们观察到一些特定模式:AppWorld 频繁遭受过早终止(FM-3.1),可能因其星型拓扑与缺乏预定义工作流使终止条件不那么明显;OpenManus 呈现步骤重复(FM-1.3)的倾向;HyperAgent 则可从解决其主导失败模式——步骤重复(FM-1.3)与错误验证(FM-3.3)——中获益。这些系统特有的画像凸显:对 MAS 失败而言,不存在万能解法。
+
+::: en
+We also use MAST-Data to study the impact of different underlying language models and MAS designs on failure patterns. For instance, when comparing GPT-4o and Claude 3.7 Sonnet within the MetaGPT framework on programming tasks, we find that while GPT-4o generally performs better than Claude, it shows significantly fewer FC1 (System Design Issues) failures by 39%. We also examine the impact of different MAS designs on the same benchmark, such as comparing MetaGPT and ChatDev on ProgramDev. Here, while MetaGPT generally outperforms ChatDev by having 60-68% less failure in FC1 and FC2, it has 1.56x more FC3 failure than ChatDev. These comparative analyses, detailed further in Appendix F, provide insights into how model choice and architectural patterns influence system performance and distribution of failures.
+:::
+
+我们还用 MAST-Data 研究不同底层语言模型与 MAS 设计对失败模式的影响。例如,在 MetaGPT 框架的编程任务上比较 GPT-4o 与 Claude 3.7 Sonnet 时,我们发现 GPT-4o 总体优于 Claude,其 FC1(系统设计问题)失败显著少 39%。我们也考察了不同 MAS 设计在同一基准上的影响,如在 ProgramDev 上比较 MetaGPT 与 ChatDev:MetaGPT 总体优于 ChatDev,其 FC1 与 FC2 失败少 60–68%,但其 FC3 失败是 ChatDev 的 1.56 倍。这些对比分析(详见附录 F)为模型选择与架构模式如何影响系统性能与失败分布提供了洞见。
+
+#### 5.2 MAST 作为实用开发工具(MAST as a Practical Development Tool)
+
+::: en
+Developing robust MAS is challenging: aggregate success rates can obscure the specific impacts of optimizations. MAST addresses this by providing a structured vocabulary for systematic failure breakdown. Using our LLM annotator with MAST, developers can obtain quantitative analyses of failure profiles for specific systems. We demonstrate MAST’s practical usage in guiding MAS improvement in our case studies (Appendix H). The Failure Mode breakdown analysis (Appendix H.3) shows which failure modes were mitigated and reveals any resulting trade-offs. This granular view, moving beyond aggregate metrics, is crucial for understanding why an intervention works and for iterating effectively towards more robust systems.
+:::
+
+开发稳健的 MAS 极具挑战:聚合成功率会掩盖各项优化的具体影响。MAST 通过提供结构化词汇来做系统性失败拆解来应对这一问题。将我们的 LLM 标注器与 MAST 结合使用,开发者可以获得特定系统失败画像的量化分析。我们在案例研究(附录 H)中展示了 MAST 在指导 MAS 改进上的实用用法。失败模式分解分析(附录 H.3)展示了哪些失败模式被缓解,并揭示由此带来的权衡。这种超越聚合指标的细粒度视角,对理解"干预为什么有效"以及向更稳健系统有效迭代至关重要。
+
+#### 5.3 超越模型能力:系统设计的首要性(Beyond Model Capabilities: The Primacy of System Design)
+
+::: en
+While one could simply attribute failures in MAST-Data to limitations of present-day LLM (e.g., hallucinations, misalignment), we conjecture that improvements in the base model capabilities will be insufficient to address the full MAST. Instead, we argue that good MAS design requires organizational understanding – even organizations of sophisticated individuals can fail catastrophically [49] if the organization structure is flawed. Previous research in high-reliability organizations has shown that well-defined design principles can prevent such failures [50, 51].
+:::
+
+虽然人们可以把 MAST-Data 中的失败简单归因于当代 LLM 的限制(如幻觉、失调),我们推测,基础模型能力的改进并不足以解决 MAST 覆盖的全部问题。相反,我们主张,良好的 MAS 设计需要组织层面的理解——即使是由精明个体构成的组织,若组织结构有缺陷,也可能灾难性地失败 [49]。高可靠性组织(high-reliability organizations)方面的先前研究表明,良定义的设计原则能够预防此类失败 [50, 51]。
+
+::: en
+Consistent with organization theories, our findings indicate that many MAS failures arise from the challenges in organizational design and agent coordination rather than the limitations of individual agents. In our intervention case studies (Appendix H), we apply MAS system workflow and prompt changes respectively (results in Table 5). With the same underlying model, we achieve max improvements of 15.6%. This highlights that MAS failures can be address with better system designs. Although first step interventions lead to performance gains, not all failure modes are resolved, and task completion rates still remain low, indicating that more substantial improvements are needed. Achieving high reliability may requires combinatorial changes ranging from agent system organization to model level improvements (see Table 4). MAST, by providing a clear framework of failure points identified from MAST-Data, helps identify where these structural weaknesses lie and can guide the design and evaluation of more sophisticated MAS architectures.
+:::
+
+与组织理论一致,我们的发现表明:许多 MAS 失败源于组织设计与智能体协调层面的挑战,而非个体智能体的限制。在我们的干预案例研究(附录 H)中,我们分别应用了 MAS 系统工作流改动与提示改动(结果见表 5)。在底层模型不变的情况下,我们取得了最高 15.6% 的提升。这凸显了 MAS 失败可以通过更好的系统设计来解决。虽然第一轮干预带来了性能增益,但并非所有失败模式都被解决,任务完成率仍然偏低,表明还需要更实质性的改进。实现高可靠性可能需要从智能体系统组织到模型级改进的组合式变革(见表 4)。MAST 通过提供从 MAST-Data 中识别出的清晰失败点框架,帮助定位这些结构性弱点所在,并可指导更复杂 MAS 架构的设计与评估。
+
+### 6 结论(Conclusion)
+
+::: en
+In this study, we conduct the first systematic investigation into why MAS fail. This investigation results in the MAST-Data: a comprehensive public resource of over 1600 annotated execution traces from 7 popular MAS frameworks, which we create to outline MAS failure dynamics and guide future system development. To enable MAST-Data’s systematic annotation and analysis, we first develop the Multi-Agent System Failure Taxonomy (MAST). We build MAST through a rigorous Grounded Theory-based analysis of an initial 150 traces, validating its definitions with strong inter-annotator agreement and identifying 14 distinct failure modes across 3 categories. For scalable annotation of MAST-Data using MAST, we then develop an LLM annotator, confirming its high agreement with human experts. Together, MAST-Data and MAST provide a foundational framework and empirical grounding for future MAS research.
+:::
+
+在本研究中,我们对"MAS 为什么失败"开展了首次系统调查。这一调查产出了 MAST-Data:一个来自 7 个流行 MAS 框架、超过 1600 条标注执行轨迹的综合公开资源,我们创建它以勾勒 MAS 失败动态并指导未来系统开发。为实现 MAST-Data 的系统化标注与分析,我们首先构建了多智能体系统失败分类法(MAST)。我们通过对初始 150 条轨迹严谨的扎根理论分析构建 MAST,以强标注者间一致性验证其定义,并在 3 大类别中识别出 14 种独立失败模式。为用 MAST 对 MAST-Data 做可扩展标注,我们又开发了 LLM 标注器,并确认了其与人类专家的高一致性。MAST-Data 与 MAST 共同为未来 MAS 研究提供了基础框架与实证根基。
+
+::: en
+We are excited about the potential of MAS, but their widespread adoption hinges on achieving greater reliability. Our work, through the public release of MAST-Data, MAST, and the LLM annotator, contributes towards this goal. MAST-Data offers a rich empirical basis for understanding current failure dynamics, while MAST provides a standardized language and framework to diagnose and mitigate these failures. By systematically identifying and categorizing challenges, we aim to open up concrete research directions and equip the community to develop more robust and effective multi-agent systems.
+:::
+
+我们对 MAS 的潜力感到兴奋,但其广泛采用取决于能否实现更高的可靠性。我们通过公开发布 MAST-Data、MAST 与 LLM 标注器为这一目标做出贡献。MAST-Data 为理解当前失败动态提供了丰富的实证基础,而 MAST 提供了诊断与缓解这些失败的标准化语言与框架。通过系统性地识别与归类挑战,我们希望开辟具体的研究方向,并使社区有能力开发更稳健、更有效的多智能体系统。
+
+> (译注:论文正文至此结束。References 参考文献 [1]–[84] 列表从略,正文与附录中的引用编号均保留原样,便于对照原论文。)
+
+## 附录(Appendix)
+
+::: en
+Organization of Appendix
+
+The appendix is organized as follows: in Section A further details about failure categories and failure modes are given, in Section B we provide some details about the multi-agent systems we have annotated and studied, in Section C we describe how to use the MAST easily as a python library using pip install, in Section D we describe the tasks in ProgramDev and ProgramDev-v2 Datsaet, in Section E we plot the correlations between MAS failure modes, in Section F we analyze the failure comparison between models and MAS, in Section G we discuss some tactical approaches and structural strategies to make MASs more robust to failures, in Section H we present two case studies where we show that tactical approaches can get only limited results, in Section I we present the failure mode distribution of the MAS frameworks powered by open-source language models, in Section J we present the correlations of failure mode distribution with some crucial statistics such as task completion rates and different benchmarks, in Section K we present the cost breakdown of LLM Annotator used in this paper for different MAS frameworks, in Sections L and M there are prompt interventions we tested on AG2 and ChatDev case studies, in Section N examples of every failure mode are reported and commented.
+:::
+
+附录组织如下:A 节给出失败类别与失败模式的更多细节;B 节提供我们所标注与研究的 MAS 的一些细节;C 节说明如何通过 pip install 将 MAST 作为 Python 库轻松使用;D 节描述 ProgramDev 与 ProgramDev-v2 数据集中的任务;E 节绘制 MAS 失败模式之间的相关性;F 节分析不同模型之间与不同 MAS 之间的失败比较;G 节讨论让 MAS 更稳健的战术方法与结构策略;H 节呈现两个案例研究,表明战术方法只能取得有限效果;I 节给出由开源语言模型驱动的 MAS 框架的失败模式分布;J 节展示失败模式分布与任务完成率、不同基准等关键统计量的相关性;K 节给出本文所用 LLM 标注器在不同 MAS 框架上的成本分解;L 与 M 节是我们在 AG2 与 ChatDev 案例研究中测试的提示词干预;N 节报告并评注每种失败模式的示例。
+
+### 附录 A MAST 失败类别:深入解析(MAST Failure Categories: Deep Dive)
+
+#### A.1 FC1. 系统设计问题(System Design Issues)
+
+::: en
+This category includes failures that arise from deficiencies in the design of the system architecture, poor conversation management, unclear task specifications or violation of constraints, and inadequate definition or adherence to the roles and responsibilities of the agents.
+
+We identify five failure modes under this category:
+
+• FM-1.1: Disobey task specification - Failure to adhere to the specified constraints or requirements of a given task, leading to suboptimal or incorrect outcomes.
+
+• FM-1.2: Disobey role specification - Failure to adhere to the defined responsibilities and constraints of an assigned role, potentially leading to an agent behaving like another.
+
+• FM-1.3: Step repetition - Unnecessary reiteration of previously completed steps in a process, potentially causing delays or errors in task completion.
+
+• FM-1.4: Loss of conversation history - Unexpected context truncation, disregarding recent interaction history and reverting to an antecedent conversational state.
+
+• FM-1.5: Unaware of termination conditions - Lack of recognition or understanding of the criteria that should trigger the termination of the agents’ interaction, potentially leading to unnecessary continuation.
+:::
+
+此类别包括由以下原因引起的失败:系统架构设计的缺陷、糟糕的会话管理、不清晰或违反约束的任务规范,以及智能体角色与职责定义不当或遵循不力。
+
+我们在该类别下识别出五种失败模式:
+
+- FM-1.1:不服从任务规范(Disobey task specification)——未能遵循给定任务的指定约束或要求,导致次优或不正确的结果。
+- FM-1.2:不服从角色规范(Disobey role specification)——未能遵循所指派角色的既定职责与约束,可能导致一个智能体表现得像另一个智能体。
+- FM-1.3:步骤重复(Step repetition)——不必要地重复过程中先前已完成的步骤,可能造成任务完成的延迟或错误。
+- FM-1.4:丢失对话历史(Loss of conversation history)——意外的上下文截断,无视最近的交互历史并退回到先前的会话状态。
+- FM-1.5:不知终止条件(Unaware of termination conditions)——缺乏对应当触发智能体交互终止之标准的识别或理解,可能导致不必要的持续运行。
+
+#### A.2 FC2. 智能体间失调(Inter-Agent Misalignment)
+
+::: en
+This category includes failures arising from ineffective communication, poor collaboration, conflicting behaviors among agents, and gradual derailment from the initial task.
+
+We identify six failure modes under this category:
+
+• FM-2.1: Conversation reset - Unexpected or unwarranted restarting of a dialogue, potentially losing context and progress made in the interaction.
+
+• FM-2.2: Fail to ask for clarification - Inability to request additional information when faced with unclear or incomplete data, potentially resulting in incorrect actions.
+
+• FM-2.3: Task derailment - Deviation from the intended objective or focus of a given task, potentially resulting in irrelevant or unproductive actions.
+
+• FM-2.4: Information withholding - Failure to share or communicate important data or insights that an agent possess and could impact decision-making of other agents if shared.
+
+• FM-2.5: Ignored other agent’s input - Disregarding or failing to adequately consider input or recommendations provided by other agents in the system, potentially leading to suboptimal decisions or missed opportunities for collaboration.
+
+• FM-2.6: Reasoning-action mismatch - Discrepancy between the logical reasoning process and the actual actions taken by the agent, potentially resulting in unexpected or undesired behaviors.
+:::
+
+此类别包括由以下原因引起的失败:无效的沟通、糟糕的协作、智能体之间的冲突行为,以及从初始任务的逐渐偏航。
+
+我们在该类别下识别出六种失败模式:
+
+- FM-2.1:会话重置(Conversation reset)——意外或无正当理由地重启对话,可能丢失交互中已建立的上下文与进展。
+- FM-2.2:未请求澄清(Fail to ask for clarification)——面对不清晰或不完整的数据时无法请求补充信息,可能导致错误的行动。
+- FM-2.3:任务偏航(Task derailment)——偏离给定任务的既定目标或焦点,可能导致无关或无产出的行动。
+- FM-2.4:信息隐瞒(Information withholding)——未能分享或传达智能体所掌握的、若分享将影响其他智能体决策的重要数据或洞见。
+- FM-2.5:忽视其他智能体的输入(Ignored other agent's input)——无视或未充分考虑系统中其他智能体提供的输入或建议,可能导致次优决策或错失协作机会。
+- FM-2.6:推理-行动失配(Reasoning-action mismatch)——智能体的逻辑推理过程与其实际采取的行动之间的不一致,可能导致意外或不希望出现的行为。
+
+#### A.3 FC3. 任务验证(Task Verification)
+
+::: en
+This category includes failures resulting from premature execution termination, as well as insufficient mechanisms to guarantee the accuracy, completeness, and reliability of interactions, decisions, and outcomes.
+
+We identify three failure modes under this category:
+
+• FM-3.1: Premature termination - Ending a dialogue, interaction or task before all necessary information has been exchanged or objectives have been met, potentially resulting in incomplete or incorrect outcomes.
+
+• FM-3.2: No or incomplete verification - (partial) omission of proper checking or confirmation of task outcomes or system outputs, potentially allowing errors or inconsistencies to propagate undetected.
+
+• FM-3.3: Incorrect verification - Failure to adequately validate or cross-check crucial information or decisions during the iterations, potentially leading to errors or vulnerabilities in the system.
+:::
+
+此类别包括由以下原因导致的失败:执行过早终止,以及不足以保证交互、决策与结果的准确性、完整性与可靠性的机制。
+
+我们在该类别下识别出三种失败模式:
+
+- FM-3.1:过早终止(Premature termination)——在所有必要信息尚未交换完毕或目标尚未达成之前结束对话、交互或任务,可能导致不完整或不正确的结果。
+- FM-3.2:无或不完整验证(No or incomplete verification)——(部分地)遗漏对任务结果或系统输出的恰当检查或确认,可能使错误或不一致之处未被检测地传播扩散。
+- FM-3.3:错误验证(Incorrect verification)——在迭代过程中未能充分验证或交叉核对关键信息或决策,可能导致系统中的错误或脆弱点。
+
+### 附录 B 所评估多智能体系统的细节(Details of Multi-Agent Systems Evaluated)
+
+::: en
+In this section, we provide details on MAS we evaluated during this study and their performance benchmark evaluation.
+:::
+
+在本节中,我们提供本研究中所评估 MAS 的细节及其基准评测表现。
+
+[图 5: Failure rates of six popular Multi-Agent LLM Systems with GPT-4o and Claude-3.7-Sonnet. Performances are measured on different benchmarks, therefore they are not directly comparable.]
+
+中文说明:图 5 给出六个流行多智能体 LLM 系统(分别使用 GPT-4o 与 Claude-3.7-Sonnet)的失败率。由于性能在不同基准上测得,因此不可直接横向比较。具体数据如下:
+
+| MAS(基准) | 成功(Success) | 失败(Failure) |
+|---|---|---|
+| Magentic-One(GAIA) | 38.0% | 62.0% |
+| AG2(OlympiadBench) | 59.0% | 41.0% |
+| AppWorld(Test-C) | 13.3% | 86.7% |
+| HyperAgent(SWE-Bench Lite) | 25.3% | 74.7% |
+| ChatDev(ProgramDev) | 33.3% | 66.7% |
+| MetaGPT(ProgramDev) | 40.0% | 60.0% |
+
+#### B.1 MAS 概览(Overview of MAS)
+
+::: en
+In this study, we evaluated 7 open-source frameworks. The architecture and the purpose of the systems is detailed in the table below.
+
+Table 3: Overview of MAS covered in MAST-Data
+
+MAS Agentic Architecture Purpose of the System
+MetaGPT [52] Assembly Line Simulating the SOPs of different roles in Software Companies to create open-ended software applications
+ChatDev [5] Hierarchical Workflow Simulating different Software Engineering phases like (design, code, QA) through simulated roles in a software engineering company
+HyperAgent [53] Hierarchical Workflow Simulating a software engineering team with a central Planner agent coordinating with specialized child agents (Navigator, Editor, and Executor)
+AppWorld [54] Star Topology Tool-calling agents specialized to utility services (ex: Gmail, Spotify, etc.) being orchestrated by a supervisor to achieve cross-service tasks
+AG2 [55] N/A - Agentic Framework An open-source programming framework for building agents and managing their interactions.
+Magentic-One [11] Star Topology A generalist multi-agent system designed to autonomously solve complex, open-ended tasks involving web and file-based environments across various domains.
+OpenManus [10] Hierarchical An open-source multi-agent framework designed to facilitate the development of collaborative AI agents that solve real-world tasks. It was inspired by the Manus AI agent.
+:::
+
+本研究中我们评估了 7 个开源框架。系统的架构与目的详见下表。
+
+表 3:MAST-Data 所覆盖 MAS 的概览
+
+| MAS | 智能体架构 | 系统目的 |
+|---|---|---|
+| MetaGPT [52] | 流水线(Assembly Line) | 模拟软件公司中不同角色的 SOP(标准作业程序),以创建开放式软件应用 |
+| ChatDev [5] | 层级工作流(Hierarchical Workflow) | 通过模拟软件工程公司中的角色来模拟软件工程的不同阶段(设计、编码、QA) |
+| HyperAgent [53] | 层级工作流(Hierarchical Workflow) | 模拟软件工程团队:中心 Planner 智能体与专业化子智能体(Navigator、Editor、Executor)协调 |
+| AppWorld [54] | 星型拓扑(Star Topology) | 专注于公用服务(如 Gmail、Spotify 等)的工具调用智能体,由 supervisor 编排以完成跨服务任务 |
+| AG2 [55] | N/A——智能体框架 | 用于构建智能体并管理其交互的开源编程框架 |
+| Magentic-One [11] | 星型拓扑(Star Topology) | 通用(generalist)多智能体系统,设计用于自主解决涉及网页与文件环境的复杂开放式任务,覆盖多种领域 |
+| OpenManus [10] | 层级式(Hierarchical) | 开源多智能体框架,便于开发解决现实世界任务的协作式 AI 智能体,受 Manus AI 智能体启发 |
+
+#### B.2 初始标注阶段的多智能体系统(Multi-Agent Systems in the Initial Annotation Phase)
+
+::: en
+MetaGPT. MetaGPT [52] is a multi-agent system that simulates a software engineering company and involves agents such as a Coder and a Verifier. The goal is to have agents with domain-expertise (achieved by encoding Standard Operating Procedures of different roles into agents prompts) collaboratively solve a programming task, specified in natural language.
+:::
+
+MetaGPT:MetaGPT [52] 是一个模拟软件工程公司的多智能体系统,涉及 Coder(程序员)与 Verifier(验证者)等智能体。其目标是让具备领域专长的智能体(通过将不同角色的标准作业程序 SOP 编码进智能体提示词实现)协作解决一个以自然语言指定的编程任务。
+
+::: en
+ChatDev. ChatDev is a generalist multi-agent framework that initializes different agents, each assuming common roles in a software-development company [56]. The framework breaks down the process of software development into 3 phases: design, coding and testing. Each phase is divided into sub-tasks, for example, testing is divided into code review (static) and system testing (dynamic). In every sub-task, two agents collaborate where one of the agents acts as the orchestrator and initiates the interaction and the other acts as an assistant to help the orchestrator achieve the task. The 2 agents then hold a multi-turn conversation to achieve the goal stated by the orchestrator ultimately leading to the completion of the task, marked by a specific sentinel by either agents. ChatDev has the following agent roles: CEO, CTO, Programmer, Reviewer and Tester. ChatDev introduces “Communicative Dehallucination”, which encourages the assistant to seek further details about the task over multiple-turns, instead of responding immediately.
+:::
+
+ChatDev:ChatDev 是一个通用(generalist)多智能体框架,初始化多个智能体,各自扮演软件开发公司中的常见角色 [56]。该框架将软件开发过程拆分为 3 个阶段:设计、编码与测试。每个阶段再分为子任务,例如测试被分为代码评审(静态)与系统测试(动态)。在每个子任务中,两个智能体协作:其中一个充当编排者(orchestrator)发起交互,另一个充当助手帮助编排者完成任务。两个智能体随后进行多轮对话以实现编排者陈述的目标,最终由任一智能体发出特定哨兵标记(sentinel)标志任务完成。ChatDev 包含以下智能体角色:CEO、CTO、Programmer、Reviewer 与 Tester。ChatDev 引入了"交流式去幻觉(Communicative Dehallucination)"机制,鼓励助手在多轮对话中逐步询问任务的更多细节,而不是立即作答。
+
+::: en
+HyperAgent. HyperAgent [53] is a framework for software engineering tasks organized around four primary agents: Planner, Navigator, Code Editor, and Executor. These agents are enhanced by specialized tools, designed to provide LLM-interpretable output. The Planner communicates with child agents via a standardized message format with two fields: Context (background and rationale) and Request (actionable instructions). Tasks are broken down into subtasks and published to specific queues. Child agents, such as Navigator, Editor, and Executor instances, monitor these queues and process tasks asynchronously, enabling parallel execution and significantly improving scalability and efficiency. For example, multiple Navigator instances can explore different parts of a large codebase in parallel, the Editor can apply changes across multiple files simultaneously, and the Executor can run tests concurrently, accelerating validation.
+:::
+
+HyperAgent:HyperAgent [53] 是一个面向软件工程任务的框架,围绕四个主要智能体组织:Planner(规划者)、Navigator(导航者)、Code Editor(代码编辑者)与 Executor(执行者)。这些智能体由专门设计的工具增强,工具输出设计为 LLM 可解释的形式。Planner 通过标准化消息格式与子智能体通信,消息包含两个字段:Context(背景与理由)与 Request(可执行的指令)。任务被拆解为子任务并发布到特定队列。子智能体(如 Navigator、Editor、Executor 的实例)监视这些队列并异步处理任务,从而实现并行执行,显著提升可扩展性与效率。例如,多个 Navigator 实例可以并行探索大型代码库的不同部分,Editor 可以同时跨多个文件应用修改,Executor 可以并发运行测试,加速验证过程。
+
+::: en
+AppWorld. AppWorld is a benchmark, that provides an environment with elaborate mocks of various everyday services like eShopping Website, Music Player, Contacts, Cost-sharing app, e-mail, etc [54]. The benchmark consists of tasks that require executing APIs from multiple services to achieve the end-users tasks. The AppWorld benchmark provides a ReAct based agent over GPT-4o as a strong baseline. We create a multi-agent system over AppWorld derived from the baseline ReAct agent, where each agent specializes in using one of the services mocked in AppWorld, with detailed instructions about the APIs available in that service, and access to the documentation for that specific service. A supervisor agent receives the task instruction to be completed, and can hold one-on-one multi-turn conversations with each of the service-specific agents. The service-agents are instructed to seek clarification with the supervisor, whenever required. The supervisor agent holds access to various information about the human-user, for example, credentials to access various services, name, email-id and contact of the user, etc, which the service-agents need to access the services, and must clarify with the supervisor agent.
+:::
+
+AppWorld:AppWorld 是一个基准,提供了对多种日常服务的精细模拟(mock)环境,如电商购物网站、音乐播放器、通讯录、费用分摊应用、电子邮件等 [54]。该基准由需要执行多个服务的 API 来完成最终用户任务的任务组成。AppWorld 基准在 GPT-4o 之上提供了一个基于 ReAct 的智能体作为强基线。我们在 AppWorld 之上、由该 ReAct 基线智能体派生出一个多智能体系统:每个智能体专精于使用 AppWorld 中模拟的一项服务,带有关于该服务可用 API 的详细指令,并可访问该服务的文档。一个 supervisor(监督)智能体接收待完成的任务指令,可与每个服务专属智能体进行一对一的多轮对话。服务智能体被指示在需要时向 supervisor 请求澄清。supervisor 智能体持有人类用户的多项信息,例如访问各服务的凭据、用户姓名、电子邮箱与联系方式等,服务智能体访问这些服务时需要这些信息,必须向 supervisor 智能体澄清获取。
+
+::: en
+AG2. AG2 (formerly AutoGen) [57] is an open-source programming framework for building agents and managing their interactions. With this framework, it is possible to build various flexible conversational patterns, integrating tools usage and customizing the termination strategy.
+:::
+
+AG2:AG2(前身为 AutoGen)[57] 是一个用于构建智能体并管理其交互的开源编程框架。借助该框架,可以构建多种灵活的会话模式,集成工具使用,并自定义终止策略。
+
+#### B.3 闭源 MAS(Closed-Source MAS)
+
+::: en
+In our efforts to build a comprehensive dataset, we also explore popular closed-source platforms that are speculated to function as MAS. A notable example is Manus [45], a general AI agent platform. However, evaluating and incorporating such systems into MAST-Data for fine-grained failure analysis presents significant challenges. Specifically, with systems like Manus, the underlying language model is often not disclosed, and more critically, the platforms may not provide access to full agent execution traces. This lack of transparency into the internal conversational and operational steps makes reliable, detailed failure annotation using MAST infeasible. While we conduct human evaluation of task correctness for some closed-source systems (for instance, Manus achieves a 60% success rate on our ProgramDev benchmark), the absence of comprehensive trace data prevents their inclusion in the primary MAST-Data which focuses on deeply annotated failure dynamics. Our focus for MAST-Data thus remains on systems where such trace analysis can yield robust insights.
+:::
+
+在构建综合数据集的努力中,我们也探索了那些被推测以 MAS 方式运作的流行闭源平台。一个显著例子是 Manus [45]——一个通用 AI 智能体平台。然而,评估此类系统并将其纳入 MAST-Data 做细粒度失败分析存在重大挑战。具体而言,对于 Manus 这类系统,其底层语言模型通常不公开;更关键的是,这些平台可能不提供完整的智能体执行轨迹。这种对内部会话与操作步骤缺乏透明度的情况,使得用 MAST 做可靠、详细的失败标注不可行。虽然我们对部分闭源系统做了任务正确性的人类评测(例如 Manus 在我们的 ProgramDev 基准上取得 60% 的成功率),但缺乏完整轨迹数据使其无法被纳入以深度标注失败动态为核心的 MAST-Data 主体。因此,我们对 MAST-Data 的关注点仍然放在那些轨迹分析能够产生稳健洞见的系统上。
+
+### 附录 C MAST Python 库(MAST Python Library)
+
+::: en
+In order to ease the usage of MAST, we also package our code as a pip installable python library, under the name agentdash. The example usage is shown below.
+:::
+
+为了让 MAST 更易于使用,我们还将代码打包为可通过 pip 安装的 Python 库,名称为 agentdash。示例用法如下(代码原样保留,附中文注释):
+
+```python
+# 安装该库(如果在 notebook 中)
+!pip install agentdash
+
+from agentdash import annotator
+
+# 用你的 OpenAI API key 初始化标注器
+openai_api_key = "your-api-key"
+MASTAnnotator = annotator(openai_api_key)
+
+# 标注一条多智能体系统轨迹
+trace = """
+Agent1: I need to calculate the sum of 1 + 1.
+Agent2: I'll help you with that. The answer is 3.
+Agent1: Thank you! Task completed.
+"""
+mast_annotation = MASTAnnotator.produce_taxonomy(trace)
+
+# 查看结果
+print("Failure Modes Detected:")
+for failure_mode_id, detected in mast_annotation["failure_modes"].items():
+    if detected:
+        info = MASTAnnotator.get_failure_mode_info(failure_mode_id)
+        print(f"  {failure_mode_id}: {info['name']}")
+print(f"\nSummary: {mast_annotation['summary']}")
+print(f"Task Completed: {mast_annotation['task_completion']}")
+print(f"Total Failures: {mast_annotation['total_failures']}")
+```
+
+(中文说明:该示例演示了三步用法——初始化标注器、用 `produce_taxonomy(trace)` 对任意 MAS 轨迹文本自动标注失败模式、再遍历 `failure_modes` 字典输出检测到的模式及统计摘要。示例轨迹中 Agent2 给出错误答案 3,正是 MAST 要捕捉的一类典型失败。)
+
+### 附录 D ProgramDev 与 ProgramDev-v2 数据集(ProgramDev and ProgramDev-v2 Datasets)
+
+::: en
+The ProgramDev dataset contains 30 coding problems³. These tasks are programming challenges, such as implementing Tic-Tac-Toe, Chess, or Sudoku, for which abundant solutions and descriptions are readily available online. We design ProgramDev with tasks intended to be relatively straightforward for MAS, rather than exceptionally difficult, to better isolate specific failure dynamics. We later extend this to ProgramDev-v2, a 100-problem dataset developed primarily for the comparative analyses of MAS architectures and underlying LLMs presented in Figure 8.
+:::
+
+ProgramDev 数据集包含 30 个编程题³。这些任务是编程挑战,例如实现井字棋(Tic-Tac-Toe)、国际象棋(Chess)或数独(Sudoku),网上有大量现成的解答与描述。我们设计 ProgramDev 时,有意让任务对 MAS 而言相对直接,而非异常困难,以便更好地隔离出具体的失败动态。我们后来将其扩展为 ProgramDev-v2——一个包含 100 道题的数据集,主要为图 8 所呈现的 MAS 架构与底层 LLM 对比分析而开发。
+
+(注 3:数据见 https://github.com/multi-agent-systems-failure-taxonomy/MAST/blob/main/traces/programdev/programdev_dataset.json )
+
+### 附录 E MAS 失败模式相关性(MAS Failure Modes Correlation)
+
+::: en
+We evaluate MAST’s effectiveness based on three key aspects: its generalization to unseen systems and datasets, the balanced distribution of identified failures, and the distinctiveness of its failure categories. This section details the correlation analysis.
+
+Figure 6 shows low correlations (0.17-0.32). This suggests that the categories capture distinct aspects of MAS failures with limited overlap, supporting the taxonomy’s structure. This distinctiveness is crucial because, as noted in Insight 2, failures with similar surface behaviors can stem from different root causes (e.g., memory management vs. agent coordination).
+
+Although MAST’s fine-grained nature helps differentiate root cause, it also poses a challenge for our LLM annotator. Analyzing correlations between specific failure modes (see Appendix E for Figure 7) shows moderate correlations (max of 0.63) between modes with similar symptoms might lead automated evaluators to conflate distinct root causes.
+:::
+
+我们基于三个关键方面评估 MAST 的有效性:对未见过系统与数据集的泛化性、所识别失败的分布均衡性,以及失败类别的独特性。本节详述相关性分析。
+
+图 6 显示(类别间)相关性较低(0.17–0.32)。这表明各类别捕捉的是 MAS 失败中相互独立的方面,重叠有限,支持了分类法的结构。这种独特性至关重要,因为如洞见 2 所述,表层行为相似的失败可能源于不同根因(例如记忆管理 vs. 智能体协调)。
+
+虽然 MAST 的细粒度特性有助于区分根因,但它也给我们的 LLM 标注器带来了挑战。对具体失败模式之间的相关性分析(图 7)显示,症状相似的模式之间存在中等程度的相关性(最高 0.63),这可能导致自动化评估者混淆不同的根因。
+
+[图 6: MAS failure modes correlation matrix]
+
+中文说明:图 6 为三大失败类别之间的相关性矩阵,数据保留如下(对角线为 1):
+
+| | 系统设计问题 | 智能体间失调 | 任务验证 |
+|---|---|---|---|
+| 系统设计问题 | 1 | 0.32 | 0.17 |
+| 智能体间失调 | 0.32 | 1 | 0.28 |
+| 任务验证 | 0.17 | 0.28 | 1 |
+
+[图 7: MAS failure modes correlation matrix]
+
+中文说明:图 7 为 14 种失败模式(1.1–3.3)之间的 14×14 相关矩阵(对角线为 1,色标从 -0.24 到 1.00)。值得注意的取值包括:FM-1.3 步骤重复与 FM-1.5 不知终止条件相关 0.55、FM-1.4 丢失对话历史与 FM-2.1 会话重置相关 0.63(矩阵中最高)、FM-2.2 与 FM-2.3 相关 0.52、FM-1.1 与 FM-2.6 相关 0.43、FM-1.5 与 FM-2.2 相关 0.48、FM-2.6 与 FM-2.3 相关 0.48;而 FM-3.2 与 FM-3.3 呈负相关(-0.24)、FM-2.5 与多数模式相关性接近零。完整矩阵见原论文图 7。
+
+### 附录 F 理解失败:不同 LLM 与智能体架构的影响(Understanding Failures: The Impact of Different LLMs and Agent Architectures)
+
+::: en
+To understand how choices of underlying LLMs and MAS architectures influence failure patterns, we analyze results from our MAST-Data, categorized by MAST in the Figures 8 and 9.
+
+First, we examine the impact of different LLMs by comparing GPT-4o and Claude 3.7 Sonnet within the MetaGPT framework on programming tasks Figure 8. Our findings indicate that GPT-4o exhibits substantially fewer failures in FC1 (System Design Issues, e.g., disobeying task or role specifications) and FC2 (Inter-Agent Misalignment, e.g., issues in coordination or communication) compared to Claude 3.7 Sonnet. This suggests GPT-4o may possess stronger capabilities in instruction following or aspects of ‘social reasoning’ for agentic collaboration within this setup. However, both models show a high number of failures in FC3 (Task Verification), indicating that robust verification remains a significant challenge regardless of the LLM used, though GPT-4o has a marginally lower count here.
+:::
+
+为了理解底层 LLM 与 MAS 架构的选择如何影响失败模式,我们分析了 MAST-Data 中由 MAST 标注的结果,见图 8 与图 9。
+
+首先,我们通过在 MetaGPT 框架的编程任务上比较 GPT-4o 与 Claude 3.7 Sonnet(图 8)来考察不同 LLM 的影响。我们的发现表明:与 Claude 3.7 Sonnet 相比,GPT-4o 在 FC1(系统设计问题,如不服从任务或角色规范)与 FC2(智能体间失调,如协调或沟通问题)上的失败明显更少。这表明在该设置下,GPT-4o 可能在指令遵循或智能体协作所需的"社会推理"方面具备更强能力。然而,两个模型在 FC3(任务验证)上都显示出大量失败,表明无论使用哪种 LLM,稳健验证仍是重大挑战,不过 GPT-4o 在此项上的数量略低。
+
+[图 8: Comparison on MAST failure modes and categories on ProgramDev-v2 dataset explained in Section D to analyze LLM choice effect. MetaGPT is used for both cases with GPT-4o and Claude-3.7-Sonnet on two comparative cases.]
+
+中文说明:图 8 在 ProgramDev-v2 数据集(见附录 D)上比较不同 LLM 选择对 MAST 失败模式与类别分布的影响:两组对比案例均使用 MetaGPT,分别搭配 GPT-4o 与 Claude-3.7-Sonnet,按 14 种失败模式与三大类别给出失败次数对比(如"Failure Mode Distribution Comparison: Effect of Underlying LLM"所示)。
+
+::: en
+Next, we investigate the effect of MAS architecture by comparing MetaGPT and ChatDev, both using GPT-4o as the underlying LLM, on the ProgramDev-v2 benchmark in Figure 9. We observe distinct failure profiles: MetaGPT demonstrates significantly fewer failures in FC1 (System Design Issues) and FC2 (Inter-Agent Misalignment) compared to ChatDev. This could imply that MetaGPT’s architecture or operational flow is more effective at maintaining adherence to specifications and ensuring smoother agent coordination with GPT-4o. Interestingly, despite its stronger performance in FC1 and FC2, MetaGPT exhibits a considerably higher number of FC3 (Task Verification) failures than ChatDev. This may stem from the fact that in MetaGPT, the adherence to task specifications and role specifications ar done mostly through SoPs, demonstrating strong performance in FC1 especially. However ChatDev places a higher importance in verification as it is reflected by the specific testing and reviewing phases in ChatDev’s archiectural design, causing fewer verification issues. These results show that both the choice of LLM and the specific design of the MAS architecture critically shape the landscape of potential failures, and improvements likely require a holistic approach considering both aspects.
+:::
+
+接着,我们通过在 ProgramDev-v2 基准上比较 MetaGPT 与 ChatDev(两者都以 GPT-4o 为底层 LLM)来考察 MAS 架构的影响(图 9)。我们观察到截然不同的失败画像:与 ChatDev 相比,MetaGPT 在 FC1(系统设计问题)与 FC2(智能体间失调)上的失败明显更少。这可能意味着 MetaGPT 的架构或运行流程在搭配 GPT-4o 时,更能保持对规范的遵循并确保更顺畅的智能体协调。有趣的是,尽管 MetaGPT 在 FC1 与 FC2 上表现更强,其 FC3(任务验证)失败数量却显著高于 ChatDev。这可能源于:在 MetaGPT 中,对任务规范与角色规范的遵循主要通过 SOP 完成(尤其使其在 FC1 上表现突出);而 ChatDev 更重视验证,这反映在 ChatDev 架构设计中专门的测试与评审阶段,使其验证问题更少。这些结果表明:LLM 的选择与 MAS 架构的具体设计都至关重要地塑造着潜在失败的全景,改进很可能需要兼顾两者的整体性方案。
+
+[图 9: Comparison on MAST failure modes and categories on ProgramDev-v2 dataset explained in Section D to analyze MAS architecture effect. GPT-4o is used on two comparative cases, one using ChatDev and the other on MetaGPT.]
+
+中文说明:图 9 在 ProgramDev-v2 数据集上比较不同 MAS 架构对 MAST 失败模式与类别分布的影响:两组对比案例均使用 GPT-4o,一组用 ChatDev、另一组用 MetaGPT,按 14 种失败模式与三大类别给出失败次数对比(如"Failure Mode Distribution Comparison: Effect of MAS Framework"所示)。
+
+### 附录 G 改进 MAS 的方法与策略(Approaches and strategies to improve MASs)
+
+::: en
+In this section, we discuss some approaches to make MASs more robust to failures. We categorize these strategies into two main groups: (i) tactical approaches, (ii) structural strategies. Tactical approaches involve straightforward modifications tailored for specific failure modes, such as improving the prompts, topology of the network of agents, and conversation management. In Section H, we experiment with such approaches in two case studies, and demonstrate that the effectiveness of these methods is not consistent. This leads us to consider a second category of strategies that are more comprehensive methods with system-wide impacts: strong verification, enhanced communication protocols, uncertainty quantification, and memory and state management. These strategies require more in-depth study and meticulous implementation, and remain open research topics for future exploration. See Table 4 for our proposed mapping between different solution strategies and the failure categories.
+:::
+
+在本节中,我们讨论一些让 MAS 对失败更稳健的方法。我们把这些策略分为两大组:(i) 战术方法(tactical approaches);(ii) 结构策略(structural strategies)。战术方法指针对特定失败模式量身定制的直接修改,例如改进提示词、智能体网络的拓扑以及会话管理。在附录 H 中,我们在两个案例研究中实验了这类方法,并证明这些方法的效果并不稳定。这促使我们考虑第二类策略——影响范围覆盖整个系统的更综合的方法:强验证、增强的通信协议、不确定性量化,以及记忆与状态管理。这些策略需要更深入的研究与细致的实现,仍是未来探索的开放研究课题。不同解决方案策略与失败类别之间的映射见表 4。
+
+#### G.1 战术方法(Tactical Approaches)
+
+::: en
+This category includes strategies related to improving prompts and optimizing agent organization and interactions. The prompts of MAS agents should provide clear description of instructions, and the role of each agent should be clearly specified (see L.2 as an example) [58, 59]. Prompts can also clarify roles and tasks while encouraging proactive dialogue. Agents can re-engage or retry if inconsistencies arise, as shown in Appendix L.5 [60]. After completing a complex multi-step task, add a self-verification step to the prompt to retrace the reasoning by restating solutions, checking conditions, and testing for errors [61]. However, it may miss flaws, rely on vague conditions, or be impractical [36]. Moreover, clear role specifications can be reinforced by defining conversation patterns and setting termination conditions [55, 62]. A modular approach with simple, well-defined agents, rather than complex, multitasked ones, enhances performance and simplifies debugging [63].
+
+The group dynamics also enable other interesting possibilities of multi-agent systems: different agents can propose various solutions [64], discuss their assumptions, and findings (cross-verifications) [65]. For instance, in [66], a multi-agent strategy simulates the academic peer review process to catch deeper inconsistencies. Another set of tactical approaches for cross verifications consist in multiple LLM calls with majority voting or resampling until verification [67, 68]. However, these seemingly straightforward solutions often prove inconsistent, echoing our case studies’ findings. This underscores the need for more robust, structural strategies, as discussed in the following sections.
+:::
+
+此类别包括与改进提示词、优化智能体组织与交互相关的策略。MAS 智能体的提示词应提供清晰的指令说明,每个智能体的角色都应被明确指定(示例见 L.2)[58, 59]。提示词还可以在鼓励主动对话的同时澄清角色与任务。当出现不一致时,智能体可以重新介入或重试,如附录 L.5 所示 [60]。在完成一个复杂的多步任务后,可在提示词中加入自我验证步骤,通过重述解法、检查条件与测试错误来回溯推理 [61]。然而,这种做法可能遗漏缺陷、依赖含糊的条件,或不切实际 [36]。此外,清晰的角色规范可以通过定义会话模式与设置终止条件来强化 [55, 62]。采用模块化方式、使用简单且定义明确的智能体(而非复杂的多任务智能体),能提升性能并简化调试 [63]。
+
+群体动态也为多智能体系统带来了其他有趣的 possibilities:不同智能体可以提出多种解法 [64]、讨论各自的假设与发现(交叉验证)[65]。例如,[66] 中的一种多智能体策略模拟学术同行评审过程以捕捉更深层次的不一致。另一类交叉验证的战术方法是多次调用 LLM 并做多数投票,或不断重采样直至通过验证 [67, 68]。然而,这些看似直截了当的解决方案往往被证明效果不稳定,与我们的案例研究发现相呼应。这凸显了采用更稳健的结构策略的必要性,详见后续小节。
+
+#### G.2 结构策略(Structural Strategies)
+
+::: en
+Apart from the tactical approaches we discussed above, there exist a need for more involved solutions that will shape the structure of the MAS at hand. We first observe the critical role of verification processes and verifier agents in multi-agent systems. Our annotations reveal that weak or inadequate verification mechanisms were a significant contributor to system failures. While unit test generation aids verification in software engineering [69], creating a universal verification mechanism remains challenging. Even in coding, covering all edge cases is complex, even for experts. Verification varies by domain: coding requires thorough test coverage, QA demands certified data checks [70], and reasoning benefits from symbolic validation [71]. Adapting verification across domains remains an ongoing research challenge.
+
+A complementary strategy to verification is establishing a standardized communication protocol [72]. LLM-based agents mainly communicate via unstructured text, leading to ambiguities. Clearly defining intentions and parameters enhances alignment and enables formal coherence checks during and after interactions. [73] introduce Multi-Agent Graph Attention, leveraging a graph attention mechanism to model agent interactions and enhance coordination. Similarly, [74] propose Attentional Communication, enabling agents to selectively focus on relevant information. Likewise, [75] develop a learned selective communication protocol to improve cooperation efficiency.
+
+Another important research direction is fine-tuning MAS agents with reinforcement learning. Agents can be trained with role-specific algorithms, rewarding task-aligned actions and penalizing inefficiencies. MAPPO [76] optimizes agents’ adherence to defined roles. Similarly, SHPPO [77] uses a latent network to learn strategies before applying a heterogeneous decision layer. Optima [78] further enhances communication efficiency and task effectiveness through iterative reinforcement learning.
+
+On a different note, incorporating probabilistic confidence measures into agent interactions can significantly enhance decision-making and communication reliability. Drawing inspiration from the framework proposed by Horvitz et al. [79], agents can be designed to take action only when their confidence exceeds a predefined threshold. Conversely, when confidence is low, agents can pause to gather additional information. Furthermore, the system could benefit from adaptive thresholding, where confidence thresholds are dynamically adjusted.
+
+Although often seen as a single-agent property, memory and state management are crucial for multi-agent interactions, which can enhance context understanding and reduces ambiguity in communication. However, most research focuses on single-agent systems. MemGPT [3] introduces OS-inspired context management for an extended context window, while TapeAgents [80] use a structured, replayable log (“tape”) to iteratively document and refine agent actions, facilitating dynamic task decomposition and continuous improvement.
+:::
+
+除上述战术方法外,还需要更深入的、能塑造 MAS 本身结构的解决方案。我们首先观察到验证过程与验证者智能体在多智能体系统中的关键作用。我们的标注揭示:薄弱或不足的验证机制是系统失败的重要成因。虽然单元测试生成有助于软件工程中的验证 [69],但构建通用验证机制仍然困难。即便在编码领域,覆盖所有边界情况也很复杂,即使对专家也是如此。验证因领域而异:编码需要全面的测试覆盖,QA 需要经认证的数据检查 [70],推理则受益于符号化验证 [71]。让验证跨领域适配仍是一个持续的研究挑战。
+
+与验证互补的策略是建立标准化的通信协议 [72]。基于 LLM 的智能体主要通过非结构化文本通信,这会导致歧义。清晰地定义意图与参数可以增强对齐(alignment),并使交互期间与交互后的形式化一致性检查成为可能。[73] 提出多智能体图注意力(Multi-Agent Graph Attention),利用图注意力机制建模智能体交互并增强协调。类似地,[74] 提出注意力通信(Attentional Communication),使智能体能选择性地聚焦相关信息。同样,[75] 开发了一种习得的选择性通信协议以提升协作效率。
+
+另一个重要研究方向是用强化学习微调 MAS 智能体。智能体可以用角色特定的算法训练,奖励与任务对齐的动作、惩罚低效行为。MAPPO [76] 优化智能体对既定角色的遵循。类似地,SHPPO [77] 使用潜网络先学习策略,再应用异构决策层。Optima [78] 则通过迭代式强化学习进一步提升通信效率与任务有效性。
+
+换个角度,将概率化置信度度量纳入智能体交互可以显著增强决策与通信的可靠性。借鉴 Horvitz et al. [79] 提出的框架,可以把智能体设计成仅当其置信度超过预定义阈值时才行动;反之,当置信度低时,智能体可以暂停以收集更多信息。此外,系统还可以受益于自适应阈值,即动态调整置信度阈值。
+
+虽然记忆与状态管理常被视为单智能体属性,它们对多智能体交互同样关键,可以增强上下文理解并减少通信歧义。然而,多数研究聚焦单智能体系统。MemGPT [3] 引入受操作系统启发的上下文管理以扩展上下文窗口;TapeAgents [80] 则使用结构化、可重放的日志("磁带" tape)来迭代记录并精炼智能体动作,便于动态任务分解与持续改进。
+
+::: en
+Table 4: Solution Strategies vs. Failure Category in Multi-Agent Systems
+
+Failure Category Tactical Approaches Structural Strategies
+System Design Issues Clear role/task definitions, Engage in further discussions, Self-verification, Conversation pattern design Comprehensive verification, Confidence quantification
+Inter-Agent Misalignment Cross-verification, Conversation pattern design, Mutual disambiguation, Modular agents design Standardized communication protocols, Probabilistic confidence measures
+Task Verification Self-verification, Cross-verification, Topology redesign for verification Comprehensive verification & unit test generation
+:::
+
+表 4:多智能体系统中解决方案策略与失败类别的对应关系
+
+| 失败类别 | 战术方法 | 结构策略 |
+|---|---|---|
+| 系统设计问题 | 清晰的角色/任务定义、开展进一步讨论、自我验证、会话模式设计 | 全面验证、置信度量化 |
+| 智能体间失调 | 交叉验证、会话模式设计、相互消歧、模块化智能体设计 | 标准化通信协议、概率化置信度度量 |
+| 任务验证 | 自我验证、交叉验证、面向验证的拓扑重设计 | 全面验证与单元测试生成 |
+
+### 附录 H 干预案例研究(Intervention Case Studies)
+
+::: en
+In this section, we present the two case studies where we apply some of the tactical approaches. We also present the usage of MAST as a debugging tool, where we measure the failure modes in the system before applying any of the interventions, and then after applying the interventions we discuss below, and show that MAST can guide the intervention process as well as capture the improvements of augmentations.
+:::
+
+在本节中,我们呈现应用部分战术方法的两个案例研究。我们还展示了 MAST 作为调试工具的用法:在应用任何干预之前测量系统中的失败模式,再在应用下文讨论的干预之后测量,并证明 MAST 既能引导干预过程,也能捕捉增强(augmentation)带来的改进。
+
+#### H.1 案例研究 1:AG2 – MathChat(Case Study 1: AG2 - MathChat)
+
+::: en
+In this case study, we use the MathChat scenario implementation in AG2 [57] as our baseline, where a Student agent collaborates with an Assistant agent capable of Python code execution to solve problems. For benchmarking, we randomly select 200 exercises from the GSM-Plus dataset [81], an augmented version of GSM8K [82] with various adversarial perturbations. The first strategy is to improve the original prompt with a clear structure and a new section dedicated to the verification. The detailed prompts are provided in Appendices L.1 and L.2. The second strategy refines the agent configuration into a more specialized system with three distinct roles: a Problem Solver who solves the problem using a chain-of-thought approach without tools (see Appendix L.3); a Coder who writes and executes Python code to derive the final answer (see Appendix L.4); a Verifier who reviews the discussion and critically evaluate the solutions, either confirming the answer or prompting further debate (see Appendix L.5). In this setting, only the Verifier can terminate the conversation once a solution is found. See Appendix L.6 for an example of conversation in this setting.
+
+To assess the effectiveness of these strategies, we conduct benchmarking experiments across three configurations (baseline, improved prompt, and new topology) using two different LLMs (GPT-4 and GPT-4o). We also perform six repetitions to evaluate the consistency of the results. Table 5 summarizes the results. The second column of Table 5 show that with GPT-4, the improved prompt with verification significantly outperforms the baseline. However, the new topology does not yield the same improvement. A Wilcoxon test returned a p-value of 0.4, indicating the small gain is not statistically significant. With GPT-4o (the third column of Table 5), the Wilcoxon test yields a p-value of 0.03 when comparing the baseline to both the improved prompt and the new topology, indicating statistically significant improvements. These results suggest that refining prompts and defining clear agent roles can reduce failures. However, these strategies are not universal, and their effectiveness varies based on factors such as the underlying LLM.
+:::
+
+在本案例研究中,我们以 AG2 [57] 中 MathChat 场景的实现作为基线:一个 Student(学生)智能体与一个能执行 Python 代码的 Assistant(助手)智能体协作解题。用于基准测试的题目从 GSM-Plus 数据集 [81](GSM8K [82] 加上多种对抗性扰动的增强版)中随机抽取 200 道。第一种策略是改进原始提示词,使其结构清晰,并新增一个专门用于验证的小节;详细提示词见附录 L.1 与 L.2。第二种策略将智能体配置精炼为更专业化的系统,包含三个不同角色:Problem Solver(问题求解者),不用工具、以思维链(chain-of-thought)方式解题(见附录 L.3);Coder(程序员),编写并执行 Python 代码以得出最终答案(见附录 L.4);Verifier(验证者),审视讨论并批判性评估各个解法,或确认答案、或引发进一步讨论(见附录 L.5)。在该设置中,只有 Verifier 能在找到解后终止对话。该设置下的对话示例见附录 L.6。
+
+为评估这些策略的有效性,我们在三种配置(基线、改进提示词、新拓扑)与两种 LLM(GPT-4 与 GPT-4o)上做基准实验,并重复六次以评估结果的一致性。表 5 汇总了结果。表 5 第二列显示:使用 GPT-4 时,带验证环节的改进提示词显著优于基线;然而新拓扑并未带来同等提升——Wilcoxon 检验返回 p 值 0.4,表明其小幅增益不具统计显著性。使用 GPT-4o 时(表 5 第三列),将基线分别与改进提示词和新拓扑比较,Wilcoxon 检验得到 p 值 0.03,表明提升具有统计显著性。这些结果表明,精炼提示词与定义清晰的智能体角色可以减少失败;但这些策略并非普适,其有效性随底层 LLM 等因素而变化。
+
+#### H.2 案例研究 2:ChatDev(Case Study 2: ChatDev)
+
+::: en
+ChatDev [5] simulates a multiagent software company where different agents have different role specifications, such as a CEO, a CTO, a software engineer and a reviewer, who try to collaboratively solve a software generation task. In an attempt to address the challenges we observed frequently in the traces, we implement two different interventions. Our first solution is refining role-specific prompts to enforce hierarchy and role adherence. For instance, we observed cases where the CPO prematurely ended discussions with the CEO without fully addressing constraints. To prevent this, we ensured that only superior agents can finalize conversations. Additionally, we enhanced verifier role specifications to focus on task-specific edge cases. Details of these interventions are in Section M. The second solution attempt involved a fundamental change to the framework’s topology. We modified the framework’s topology from a directed acyclic graph (DAG) to a cyclic graph. The process now terminates only when the CTO agent confirms that all reviews are properly satisfied, with a maximum iteration cutoff to prevent infinite loops. This approach enables iterative refinement and more comprehensive quality assurance. We test our interventions in two different benchmarks. The first one of them is a custom generated set of 32 different tasks (which we call as ProgramDev-v0, which consists of slightly different questions than the ProgamDev dataset we discussed in Section 4) where we ask the framework to generate programs ranging from “Write me a two-player chess game playable in the terminal” to ”Write me a BMI calculator”. The other benchmark is the HumanEval task of OpenAI. We report our results in Table 5. Notice that even though our interventions are successful in improving the performance of the framework in different tasks, they do not constitute substantial improvements, and more comprehensive solutions as we lay out in Section G.2 are required.
+:::
+
+ChatDev [5] 模拟一家多智能体软件公司,不同智能体有不同角色规范,如 CEO、CTO、软件工程师与评审者,它们尝试协作完成软件生成任务。为应对我们在轨迹中频繁观察到的挑战,我们实施了两项不同干预。第一个方案是精炼角色专属提示词,以强化层级与角色遵循。例如,我们观察到 CPO 在未充分处理约束的情况下就提前结束与 CEO 的讨论;为防止这一点,我们确保只有上级(superior)智能体才能终结会话。此外,我们强化了验证者角色规范,使其聚焦任务特定的边界情况。这些干预的细节见附录 M。第二个方案是对框架拓扑的根本性改动:我们把框架拓扑从有向无环图(DAG)改为循环图。流程现在只在 CTO 智能体确认所有评审都被妥善满足后才终止,并带有防止无限循环的最大迭代截断。这一方式支持迭代精炼与更全面的质量保证。我们在两个不同基准上测试干预。第一个是我们自建的 32 个不同任务的集合(称为 ProgramDev-v0,题目与我们第 4 节讨论的 ProgramDev 数据集略有不同),要求框架生成从"给我写一个可在终端双人对弈的国际象棋游戏"到"给我写一个 BMI 计算器"的程序;另一个基准是 OpenAI 的 HumanEval 任务。结果见表 5。请注意:尽管我们的干预成功提升了框架在不同任务上的表现,但并不构成实质性的改进,仍需要 G.2 节所述的更全面的解决方案。
+
+::: en
+Table 5: Case Studies Accuracy Comparison. This table presents the performance accuracies (in percentages) for various scenarios in our case studies. The header rows group results by strategy: AG2 and ChatDev. Under AG2, GSM-Plus results are reported using GPT-4 and GPT-4o; under ChatDev, results for ProgramDev and HumanEval are reported. Each row represents a particular configuration: baseline implementation, improved prompts, and a redesigned agent topology.
+
+Configuration AG2 ChatDev
+GSM-Plus (w/ GPT-4) GSM-Plus (w/ GPT-4o) ProgramDev-v0 HumanEval
+Baseline 84.75±1.94 84.25±1.86 25.0 89.6
+Improved prompt 89.75±1.44 89.00±1.38 34.4 90.3
+New topology 85.50±1.18 88.83±1.51 40.6 91.5
+:::
+
+表 5:案例研究准确率对比。该表呈现案例研究中各场景的性能准确率(百分比)。表头按策略分组:AG2 与 ChatDev。AG2 之下报告使用 GPT-4 与 GPT-4o 的 GSM-Plus 结果;ChatDev 之下报告 ProgramDev 与 HumanEval 的结果。每行代表一种配置:基线实现、改进提示词、重设计的智能体拓扑。
+
+| 配置 | AG2 GSM-Plus(GPT-4) | AG2 GSM-Plus(GPT-4o) | ChatDev ProgramDev-v0 | ChatDev HumanEval |
+|---|---|---|---|---|
+| 基线(Baseline) | 84.75±1.94 | 84.25±1.86 | 25.0 | 89.6 |
+| 改进提示词(Improved prompt) | 89.75±1.44 | 89.00±1.38 | 34.4 | 90.3 |
+| 新拓扑(New topology) | 85.50±1.18 | 88.83±1.51 | 40.6 | 91.5 |
+
+#### H.3 干预对 MAST(失败分布)的影响(Effect of the interventions on MAST)
+
+::: en
+After carrying out the aforementioned interventions, we initially inspect the task completion rates as in Table 5. However, MAST offers us the opportunity to look beyond the task completion rates, and we can investigate the effects of these interventions on the failure mode distribution on these MASs (AG2 and ChatDev). As illustrated in Figures 10 and 11, we observe that both of these interventions cause a decrease across the different failure modes observed, and it is possible to conclude that topology-based changes are more effective than prompt-based changes for both systems. Moreover, this displays another usage of MAST, which is as well as an analysis tool after execution, it can serve as a debugging tool for future improvements as it shows which failure modes particular augmentations to the system can solve or miss, guiding future intervention decisions.
+:::
+
+在实施上述干预后,我们首先查看表 5 所示的任务完成率。但 MAST 让我们有机会超越任务完成率,去考察这些干预对这两个 MAS(AG2 与 ChatDev)失败模式分布的影响。如图 10 与图 11 所示,我们观察到两种干预都使观察到的各失败模式计数普遍下降,并且可以得出结论:对两个系统而言,基于拓扑的改动都比基于提示词的改动更有效。此外,这还展示了 MAST 的另一种用法:它不仅是执行后的分析工具,还可以作为面向未来改进的调试工具——它能显示对系统的特定增强能解决或遗漏哪些失败模式,从而指导未来的干预决策。
+
+[图 10: Effect of prompt and topology interventions on AG2 as captured by MAST using the automated LLM-as-a-Judge]
+
+中文说明:图 10 展示用 MAST(经自动化 LLM-as-a-Judge)捕捉的提示词干预与拓扑干预对 AG2 的影响:上方按 14 种失败模式、下方按三大失败类别,分别比较 Original(原始)、Prompt Intervention(提示干预)与 Topology Intervention(拓扑干预)三组的失败次数,可见两类干预整体都降低了失败计数,且拓扑干预降幅更大。
+
+[图 11: Effect of prompt and topology interventions on ChatDev as captured by MAST using the automated LLM-as-a-Judge]
+
+中文说明:图 11(原文图题误标为 AG2,实为 ChatDev)展示用 MAST(经自动化 LLM-as-a-Judge)捕捉的提示词干预与拓扑干预对 ChatDev 的影响:同样按 14 种失败模式与三大失败类别比较 Original、Prompt Intervention 与 Topology Intervention 三组的失败次数,结论与图 10 一致——拓扑干预比提示干预更有效。
+
+### 附录 I 开源模型多智能体系统分析(Analysis on Multi-Agent Systems with Open-Source Models)
+
+::: en
+In this section, we also provide the analysis of failure modes on MetaGPT and ChatDev frameworks where the underlying LLMs are open-source models. In particular, we chose to use Qwen2.5-Coder-32B-Instruct [83] and CodeLlama-7b-Instruct-hf [84] models for these two frameworks. The analysis of failure modes is shown in Table 6. This new analysis reveals two key findings:
+
+• There is a significant performance difference between the two open-source models. Qwen2.5-Coder-32B-Instruct is substantially more robust than CodeLlama-7b-Instruct-hf on these tasks, exhibiting far fewer failures overall.
+
+• Both open-source models show a higher frequency of failures compared to the leading closed-source models analyzed in our paper (GPT-4o and Claude-3). This suggests a performance gap and highlights important areas for future improvement in open-source models for multi-agent tasks.
+:::
+
+在本节中,我们补充给出以开源模型为底层 LLM 的 MetaGPT 与 ChatDev 框架上的失败模式分析。具体而言,我们为这两个框架选用 Qwen2.5-Coder-32B-Instruct [83] 与 CodeLlama-7b-Instruct-hf [84] 模型。失败模式分析见表 6。这一新分析揭示两个关键发现:
+
+- 两个开源模型之间存在显著的性能差异:Qwen2.5-Coder-32B-Instruct 在这些任务上明显比 CodeLlama-7b-Instruct-hf 更稳健,总体失败远少。
+- 与本文分析的主流闭源模型(GPT-4o 与 Claude-3)相比,两个开源模型的失败频率都更高。这提示存在性能差距,并凸显了开源模型在多智能体任务上亟待改进的重要方向。
+
+::: en
+Table 6: Failure Mode Occurrences in 400 Traces with Open-Source Models. Results are grouped by model family (Qwen vs. CodeLlama) and development framework (ChatDev vs. MetaGPT).
+
+Failure Mode Qwen CodeLlama
+ChatDev MetaGPT ChatDev MetaGPT
+1.1 35 12 76 94
+1.2 4 1 45 12
+1.3 96 35 97 99
+1.4 1 0 46 23
+1.5 94 3 97 76
+2.1 2 0 50 9
+2.2 1 4 16 15
+2.3 9 0 76 57
+2.4 0 0 2 0
+2.5 2 12 42 40
+2.6 20 16 93 18
+3.1 1 47 25 26
+3.2 16 51 67 55
+3.3 12 32 69 56
+:::
+
+表 6:400 条开源模型轨迹中的失败模式出现次数。结果按模型家族(Qwen vs. CodeLlama)与开发框架(ChatDev vs. MetaGPT)分组。
+
+| 失败模式 | Qwen-ChatDev | Qwen-MetaGPT | CodeLlama-ChatDev | CodeLlama-MetaGPT |
+|---|---|---|---|---|
+| 1.1 | 35 | 12 | 76 | 94 |
+| 1.2 | 4 | 1 | 45 | 12 |
+| 1.3 | 96 | 35 | 97 | 99 |
+| 1.4 | 1 | 0 | 46 | 23 |
+| 1.5 | 94 | 3 | 97 | 76 |
+| 2.1 | 2 | 0 | 50 | 9 |
+| 2.2 | 1 | 4 | 16 | 15 |
+| 2.3 | 9 | 0 | 76 | 57 |
+| 2.4 | 0 | 0 | 2 | 0 |
+| 2.5 | 2 | 12 | 42 | 40 |
+| 2.6 | 20 | 16 | 93 | 18 |
+| 3.1 | 1 | 47 | 25 | 26 |
+| 3.2 | 16 | 51 | 67 | 55 |
+| 3.3 | 12 | 32 | 69 | 56 |
+
+### 附录 J 失败模式与不同统计量的相关性(Correlation of Failure Modes with Different Statistics)
+
+::: en
+In this section, we provide how the failure modes in MAST correlate with some important statistics, such as the actual task completion rates, and different benchmarks.
+:::
+
+在本节中,我们给出 MAST 中的失败模式与一些重要统计量(如实际任务完成率、不同基准)之间的相关性。
+
+#### J.1 不同失败模式对实际成功的指示性如何?(How Indicative are Different Failure Modes of Actual Success?)
+
+::: en
+One important question to ask is, for traces where we know whether they succeeded or failed and if we do not provide the success or failure result to the LLM Annotator, how do different failure modes correlate with actual task success and failures? In particular, we want to measure how indicative of the failure modes given by the LLM Annotator on actual task completions. The analysis on ChatDev and MetaGPT are provided in Table 7. This new analysis reveals three key findings:
+
+• Successful runs are not failure-free. Our results show that failures occur in both successful and failed traces, but failed traces have a higher overall frequency of failures. This confirms that a higher number of failures do signal a higher chance of final task failure.
+
+• Some failures are more ”fatal” than others. The data shows a clear distinction between failure types. Certain failures, such as 1.5 Unaware of Termination Conditions and 2.4 Information Withholding, appear almost exclusively in failed runs, suggesting they are critical bugs that are highly likely to derail the task.
+
+• Some failures are non-fatal. In contrast, verification-related failures like 3.2 No or Incomplete Verification and 3.3 Incorrect Verification appear frequently even in successful runs. This suggests that while these systems can complete some tasks, their verification process still contains flaws. MAST identifies such systemic weaknesses, even when they do not cause an immediate task failure.
+:::
+
+一个值得提出的重要问题是:对于那些我们已知成败、且未向 LLM 标注器提供成败结果的轨迹,不同失败模式与实际任务成败之间的相关性如何?具体而言,我们想度量 LLM 标注器给出的失败模式对实际任务完成的指示程度。对 ChatDev 与 MetaGPT 的分析见表 7。这一新分析揭示三个关键发现:
+
+- 成功的运行并非没有失败。结果显示,成功与失败的轨迹中都会出现失败,但失败轨迹的总体失败频率更高。这证实:失败次数越多,确实预示着最终任务失败的几率越高。
+- 某些失败比其他失败更"致命"。数据显示出失败类型之间的清晰区分:某些失败,如 1.5 不知终止条件与 2.4 信息隐瞒,几乎只出现在失败的运行中,表明它们是极有可能使任务脱轨的关键缺陷。
+- 某些失败是非致命的。相比之下,与验证相关的失败,如 3.2 无或不完整验证与 3.3 错误验证,即便在成功的运行中也频繁出现。这表明:尽管这些系统能完成某些任务,其验证过程仍存在缺陷。MAST 能识别出这类系统性弱点——即便它们并未直接导致任务失败。
+
+::: en
+Table 7: Failure mode occurrence rates for ChatDev and MetaGPT on successful and unsuccessful examples.
+
+MAS Framework Failure mode occurrence (%)
+1.1 1.2 1.3 1.4 1.5 2.1 2.2 2.3 2.4 2.5 2.6 3.1 3.2 3.3
+ChatDev Success 20.0 0.0 20.0 0.0 0.0 0.0 10.0 10.0 0.0 0.0 10.0 0.0 10.0 20.0
+ChatDev Fail 25.0 0.0 20.0 5.0 10.0 5.0 5.0 5.0 5.0 0.0 15.0 5.0 10.0 25.0
+MetaGPT Success 33.3 0.0 16.7 0.0 0.0 0.0 8.3 8.3 0.0 0.0 8.3 0.0 16.7 16.7
+MetaGPT Fail 16.7 0.0 22.2 5.6 11.1 5.6 5.6 5.6 5.6 0.0 16.7 5.6 5.6 27.8
+:::
+
+表 7:ChatDev 与 MetaGPT 在成功与不成功样本上的失败模式出现率。
+
+| MAS 框架 | 结果 | 1.1 | 1.2 | 1.3 | 1.4 | 1.5 | 2.1 | 2.2 | 2.3 | 2.4 | 2.5 | 2.6 | 3.1 | 3.2 | 3.3 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| ChatDev | 成功 | 20.0 | 0.0 | 20.0 | 0.0 | 0.0 | 0.0 | 10.0 | 10.0 | 0.0 | 0.0 | 10.0 | 0.0 | 10.0 | 20.0 |
+| ChatDev | 失败 | 25.0 | 0.0 | 20.0 | 5.0 | 10.0 | 5.0 | 5.0 | 5.0 | 5.0 | 0.0 | 15.0 | 5.0 | 10.0 | 25.0 |
+| MetaGPT | 成功 | 33.3 | 0.0 | 16.7 | 0.0 | 0.0 | 0.0 | 8.3 | 8.3 | 0.0 | 0.0 | 8.3 | 0.0 | 16.7 | 16.7 |
+| MetaGPT | 失败 | 16.7 | 0.0 | 22.2 | 5.6 | 11.1 | 5.6 | 5.6 | 5.6 | 5.6 | 0.0 | 16.7 | 5.6 | 5.6 | 27.8 |
+
+#### J.2 不同基准上的失败模式出现率(Failure Mode Occurrence Rates on Different Benchmarks)
+
+::: en
+We also analyze the rate of failure modes on different benchmarks, ranging from general question answering like MMLU to math problems like GSM and harder reasoning problems in OlympiadBench. For this, we fixed the MAS framework (AG2) and the model (GPT-4o) while varying the benchmark. The results are presented in Table 8. The failure rate is normalized by the number of traces. We observed that the more challenging the benchmark is (e.g., Olympiad vs. GSM), the higher the failure rate. The distribution also changes significantly. While the failure profiles for MMLU and Olympiad are similar, the GSM benchmark results in a much lower number of Inter-Agent Misalignment and Specification failures.
+:::
+
+我们还分析了不同基准上的失败模式出现率,基准从通用问答(如 MMLU)到数学问题(如 GSM),再到更难的推理题(OlympiadBench)。为此,我们固定 MAS 框架(AG2)与模型(GPT-4o),仅改变基准。结果见表 8(失败率按轨迹数归一化)。我们观察到:基准越具挑战性(如 Olympiad 对比 GSM),失败率越高;分布也随之显著变化——MMLU 与 Olympiad 的失败画像相似,而 GSM 基准上的智能体间失调类与规范(Specification)类失败要少得多。
+
+::: en
+Table 8: Failure Category Rates on Different Benchmarks
+
+MAS / LLM Benchmark FC1: System Design FC2: Inter-Agent Misalignment FC3: Verification
+AG2 / GPT-4o GSM 0.53 1.33 0.37
+AG2 / GPT-4o MMLU 1.06 1.01 0.60
+AG2 / GPT-4o Olympiad 1.19 1.21 0.67
+:::
+
+表 8:不同基准上的失败类别出现率(按轨迹数归一化)
+
+| MAS / LLM | 基准 | FC1:系统设计 | FC2:智能体间失调 | FC3:验证 |
+|---|---|---|---|---|
+| AG2 / GPT-4o | GSM | 0.53 | 1.33 | 0.37 |
+| AG2 / GPT-4o | MMLU | 1.06 | 1.01 | 0.60 |
+| AG2 / GPT-4o | Olympiad | 1.19 | 1.21 | 0.67 |
+
+### 附录 K LLM 标注器成本(LLM Annotator Cost)
+
+::: en
+We have analyzed the API costs for our LLM-as-a-Judge pipeline across all traces in our study. The average cost across all MAS frameworks is $1.8, and the average cost per MAS highly depends on the length of the traces. The cost breakdown by MAS framework (normalized by the number of traces collected) is shown in Table 9.
+:::
+
+我们分析了本研究中 LLM-as-a-Judge 管线在所有轨迹上的 API 成本。所有 MAS 框架的平均成本为每条轨迹 1.8 美元(原文:The average cost across all MAS frameworks is $1.8),且每个 MAS 的平均成本高度依赖轨迹长度。按 MAS 框架的(按收集轨迹数归一化的)成本明细见表 9。
+
+::: en
+Table 9: Average failure cost by MAS framework.
+
+MAS Average Cost
+AppWorld 0.3740
+HyperAgent 0.9695
+AG2 1.1656
+ChatDev 2.1272
+MetaGPT 2.4455
+MagenticOne 1.3056
+OpenManus 4.1409
+:::
+
+表 9:各 MAS 框架的平均(每条轨迹)标注成本(美元)
+
+| MAS | 平均成本 |
+|---|---|
+| AppWorld | 0.3740 |
+| HyperAgent | 0.9695 |
+| AG2 | 1.1656 |
+| ChatDev | 2.1272 |
+| MetaGPT | 2.4455 |
+| MagenticOne | 1.3056 |
+| OpenManus | 4.1409 |
+
+### 附录 L AG2 – MathChat 场景(AG2 - MathChat Scenario)
+
+::: en
+L.1 Initial prompt
+:::
+
+L.1 初始提示词(以下提示词为实验材料,原样保留英文,不作翻译)
+
+```text
+Let’s use Python to solve a math problem.
+Query requirements:
+You should always use the ‘print’ function for the output and use fractions/radical
+forms instead of decimals.
+You can use packages like sympy to help you.
+You must follow the formats below to write your code:
+‘‘‘python
+# your code
+‘‘‘
+First state the key idea to solve the problem. You may choose from three ways to
+solve the problem:
+Case 1: If the problem can be solved with Python code directly, please write a
+program to solve it. You can enumerate all possible arrangements if needed.
+Case 2: If the problem is mostly reasoning, you can solve it by yourself directly.
+Case 3: If the problem cannot be handled in the above two ways, please follow this
+process:
+1. Solve the problem step by step (do not over-divide the steps).
+2. Take out any queries that can be asked through Python (for example, any
+calculations or equations that can be calculated).
+3. Wait for me to give the results.
+4. Continue if you think the result is correct. If the result is invalid or
+unexpected, please correct your query or reasoning.
+After all the queries are run and you get the answer, put the answer in \boxed{}.
+Problem:
+```
+
+::: en
+L.2 Structured prompt with verification section
+:::
+
+L.2 带验证小节的结构化提示词(原样保留;这是 H.1 案例研究中"改进提示词"策略所用的提示词,相对 L.1 增加了结构化的查询要求与"Verification Steps"验证小节)
+
+```text
+Let’s use Python to tackle a math problem effectively.
+Query Requirements:
+1. Output Format: Always utilize the print function for displaying results. Use
+fractions or radical forms instead of decimal numbers.
+2. Libraries: You are encouraged to use packages such as sympy to facilitate
+calculations.
+Code Formatting:
+Please adhere to the following format when writing your code:
+‘‘‘python
+# your code
+‘‘‘
+Problem-Solving Approach:
+First, articulate the key idea or concept necessary to solve the problem. You can
+choose from the following three approaches:
+Case 1: Direct Python Solution. If the problem can be solved directly using Python
+code, write a program to solve it. Feel free to enumerate all possible
+arrangements if necessary.
+Case 2: Reasoning-Based Solution. If the problem primarily involves reasoning, solve
+it directly without coding.
+Case 3: Step-by-Step Process. If the problem cannot be addressed using the above
+methods, follow this structured approach:
+1. Break down the problem into manageable steps (avoid excessive granularity).
+2. Identify any queries that can be computed using Python (e.g., calculations or
+equations).
+3. Await my input for any results obtained.
+4. If the results are valid and expected, proceed with your solution. If not, revise
+your query or reasoning accordingly.
+Handling Missing Data:
+If a problem is deemed unsolvable due to missing data, return \boxed{’None’}.
+Ensure that only numerical values are placed inside the \boxed{}; any accompanying
+words should be outside.
+Verification Steps:
+Before presenting your final answer, please complete the following steps:
+1. Take a moment to breathe deeply and ensure clarity of thought.
+2. Verify your solution step by step, documenting each part of the verification
+process in a designated VERIFICATION section.
+3. Once you are confident in your verification and certain of your answer, present
+your final result in the format \boxed{_you_answer_}, ensuring only numbers are
+inside.
+Problem Statement:
+```
+
+::: en
+L.3 Agent Problem Solver’s System Prompt
+:::
+
+L.3 Problem Solver 智能体的系统提示词(原样保留)
+
+```text
+You are Agent Problem Solver, and your role is to collaborate with other agents to
+address various challenges.
+For each problem, please follow these steps:
+1. **Document Your Solution**: Write your solution step by step, ensuring it is
+independent of the solutions provided by other agents.
+2. **Engage in Discussion**: Once you have outlined your solution, discuss your
+approach and findings with the other agents.
+```
+
+::: en
+L.4 Agent Coder’s System Prompt
+:::
+
+L.4 Coder(代码执行)智能体的系统提示词(原样保留)
+
+```text
+You are Agent Code Executor. You can solve problems only writing commented Python
+code.
+For each problem, please follow these steps:
+1. **Develop Your Solution**: Write your solution in Python code, detailing each
+step independently from the solutions provided by other agents.
+2. **Utilize SymPy**: Feel free to use the SymPy package to facilitate calculations
+and enhance your code’s efficiency.
+3. **Display Results**: Ensure that you **print the final result at the end of your
+Python code** (e.g., ‘print(_result_)‘).
+4. **Engage in Discussion**: After obtaining the result from your Python code,
+discuss your findings with the other agents.
+Always format your Python code within:
+‘‘‘python
+# your code here
+print(_result_)
+‘‘‘
+If you wish to execute your code, please indicate this by stating "SUGGESTED NEXT
+SPEAKER: Agent Code Executor" at the end of your message.
+```
+
+::: en
+L.5 Agent Verifier’s System Prompt
+:::
+
+L.5 Verifier 智能体的系统提示词(原样保留;该角色是唯一可终止对话的角色)
+
+```text
+You are Agent Verifier.
+Your role is to critically evaluate the solutions proposed by other agents step by
+step and provide a final solution.
+1. **Solution Requirement**: Before making any decisions, ensure you have received
+solutions from both Agent Code Executor and Agent Problem Solver. If either
+proposed solution is missing, do not draw any conclusions; instead, suggest the
+next speaker by stating: SUGGESTED NEXT SPEAKER: _suggested_agent_name_.
+2. **Avoid Assumptions**: Pay attention to the variables provided in the original
+problem statement versus those assumed by the agents. **Assumed values are not
+valid for the solution** and can lead to inaccuracies. Never base your solution
+on assumed values. Always base your solution on the explicitly given variables
+to ensure correctness. If a problem is deemed unsolvable due to missing
+information, return: **SOLUTION_FOUND \boxed{’None’}**.
+3. **Evaluating Conflicting Solutions**: If different answers are presented during
+the discussion, choose the most appropriate solution based on your evidence or
+initiate further discussion to clarify.
+4. **Final Solution Declaration**: When you are confident about the final solution,
+return it as follows: **SOLUTION_FOUND \boxed{_solution_value_here_}**. Ensure
+that only numerical values are placed inside the \boxed{}; any accompanying
+text should be outside.
+```
+
+::: en
+L.6 AG2 - MathChat: an example of conversation with three specialized agents
+:::
+
+L.6 AG2 – MathChat:三个专业化智能体的对话示例(对话与代码原样保留)
+
+```text
+[Agent Verifier]
+Sara wants to buy herself a new jacket and 2 pairs of shoes. The jacket she wants
+costs $120 and each pair of shoes cost $100. Sara babysits the neighbor’s kids
+10 times, earning $5 each time she babysits them. Her parents pay her $10 each
+time she mows the lawn. If Sara already had $100 saved before she started
+babysitting, how many times must she mow the lawn before she can afford the
+jacket and shoes?
+
+[Agent Problem Solver]
+First, let’s break down the problem:,
+- The costs are: $120 for the jacket, $100 for each pair of shoes, and she wants 2
+pairs. So the total cost is $120 + 2*$100 = $320,
+- Sara earns $5 each time she babysits, and she has done this 10 times, so she has
+earned $5*10 = $50 from babysitting.
+- Sara also has $100 saved from before.
+- The amount Sara has after babysitting and her savings is $100 + $50 = $150.
+- The amount Sara still needs is the total cost minus what she has, which is $320 -
+$150 = $170.
+- Sara earns $10 for every time she mows the lawn, to determine how many times she
+must do this, we divide the amount she needs by the amount she earns each time:
+$170 / $10 = 17 times.
+So, Sara must mow the lawn 17 times to afford the jacket and shoes.
+
+[Agent Verifier]
+SUGGESTED NEXT SPEAKER: Agent_Code_Executor
+
+[Agent Coder]
+Sure, I’ll write a Python code for the calculation.
+‘‘‘python
+# cost of items
+jacket_cost = 120
+shoes_cost = 100 * 2  # since she wants 2 pairs of shoes
+# total cost of items
+total_cost = jacket_cost + shoes_cost
+# earnings from babysitting
+babysitting_earning = 5 * 10  # $5 each time, done 10 times
+# initial money
+initial_money = 100
+# total money after babysitting
+total_money_after_babysitting = initial_money + babysitting_earning
+# amount still needed
+amount_needed = total_cost - total_money_after_babysitting
+# how much sara earns from mowing each time
+mowing_earning = 10
+# calculate how many times she needs to mow the lawn
+num_times_mowing = amount_needed // mowing_earning  # using integer division for
+whole number of times
+# print result
+print(num_times_mowing)
+‘‘‘
+When you execute this, the result should be 17, confirming Agent Problem Solver’s
+solution.
+
+[Agent Verifier]
+exitcode: 0 (execution succeeded)
+Code output: 17
+
+[Agent Problem Solver]
+Agent Code Executor’s Python program has provided the solution - Sara must mow the
+lawn 17 times to afford the jacket and shoes, which supports Agent Problem
+Solver’s proposal. Both paths lead us to the same conclusion, which approves
+the accuracy of our solution.
+Great team work, Agents.
+
+[Agent Verifier]
+SOLUTION_FOUND \boxed{17}
+```
+
+(中文说明:该示例展示新拓扑的一次完整协作——Verifier 先抛出问题并点名 Coder 执行;Problem Solver 用自然语言推理得出 17 次;Coder 写 Python 代码验证输出 17;最后由 Verifier 确认 SOLUTION_FOUND \boxed{17} 并终止对话。)
+
+### 附录 M ChatDev 提示词干预(ChatDev Prompt Interventions)
+
+::: en
+M.1 Initial Prompt
+:::
+
+M.1 初始提示词(以下为 ChatDev 各角色的原始系统提示词,原样保留)
+
+::: en
+M.1.1 Programmer
+:::
+
+M.1.1 Programmer(程序员)
+
+```text
+"{chatdev_prompt}",
+"You are Programmer. we are both working at ChatDev. We share a common interest
+in collaborating to successfully complete a task assigned by a new customer
+.",
+"You can write/create computer software or applications by providing a specific
+programming language to the computer. You have extensive computing and
+coding experience in many varieties of programming languages and platforms,
+such as Python, Java, C, C++, HTML, CSS, JavaScript, XML, SQL, PHP, etc,.",
+"Here is a new customer’s task: {task}.",
+"To complete the task, you must write a response that appropriately solves the
+requested instruction based on your expertise and customer’s needs."
+```
+
+::: en
+M.1.2 Code Reviewer
+:::
+
+M.1.2 Code Reviewer(代码评审者)
+
+```text
+"{chatdev_prompt}",
+"You are Code Reviewer. we are both working at ChatDev. We share a common
+interest in collaborating to successfully complete a task assigned by a new
+customer.",
+"You can help programmers to assess source codes for software troubleshooting,
+fix bugs to increase code quality and robustness, and offer proposals to
+improve the source codes.",
+"Here is a new customer’s task: {task}.",
+"To complete the task, you must write a response that appropriately solves the
+requested instruction based on your expertise and customer’s needs."
+```
+
+::: en
+M.1.3 Software Test Engineer
+:::
+
+M.1.3 Software Test Engineer(软件测试工程师)
+
+```text
+"{chatdev_prompt}",
+"You are Software Test Engineer. we are both working at ChatDev. We share a common
+interest in collaborating to successfully complete a task assigned by a new
+customer.",
+"You can use the software as intended to analyze its functional properties,
+design manual and automated test procedures to evaluate each software
+product, build and implement software evaluation test programs, and run test
+programs to ensure that testing protocols evaluate the software correctly
+.",
+"Here is a new customer’s task: {task}.",
+"To complete the task, you must write a response that appropriately solves the
+requested instruction based on your expertise and customer’s needs."
+```
+
+::: en
+M.1.4 Chief Executive Officer
+:::
+
+M.1.4 Chief Executive Officer(首席执行官)
+
+```text
+"{chatdev_prompt}",
+"You are Chief Executive Officer. Now, we are both working at ChatDev and we
+share a common interest in collaborating to successfully complete a task
+assigned by a new customer.",
+"Your main responsibilities include being an active decision-maker on users’
+demands and other key policy issues, leader, manager, and executor. Your
+decision-making role involves high-level decisions about policy and strategy
+; and your communicator role can involve speaking to the organization’s
+management and employees.",
+"Here is a new customer’s task: {task}.",
+"To complete the task, I will give you one or more instructions, and you must
+help me to write a specific solution that appropriately solves the requested
+instruction based on your expertise and my needs."
+```
+
+::: en
+M.1.5 Chief Technology Officer
+:::
+
+M.1.5 Chief Technology Officer(首席技术官)
+
+```text
+"{chatdev_prompt}",
+"You are Chief Technology Officer. we are both working at ChatDev. We share a common
+interest in collaborating to successfully complete a task assigned by a new
+customer.",
+"You are very familiar to information technology. You will make high-level
+decisions for the overarching technology infrastructure that closely align
+with the organization’s goals, while you work alongside the organization’s
+information technology (\"IT\") staff members to perform everyday operations
+.",
+"Here is a new customer’s task: {task}.",
+"To complete the task, You must write a response that appropriately solves the
+requested instruction based on your expertise and customer’s needs."
+```
+
+::: en
+M.2 Modified System Prompts
+:::
+
+M.2 修改后的系统提示词(这是 H.2 案例研究"精炼角色专属提示词"干预所用的提示词,原样保留;要点:明确汇报关系、强调层级与角色遵循、CEO 拥有终结对话的最终权力、测试工程师须覆盖边界情况)
+
+::: en
+M.2.1 Programmer
+:::
+
+M.2.1 Programmer(程序员)
+
+```text
+"{chatdev_prompt}",
+"You are a Programmer at ChatDev. Your primary responsibility is to develop
+software applications by writing code in various programming languages.
+You have extensive experience in languages such as Python, Java, C++,
+JavaScript, and others. You translate project requirements into functional
+and efficient code.",
+"You report to the technical lead or CTO and collaborate with other
+programmers and team members.",
+"Here is a new customer’s task: {task}.",
+"To complete the task, you will write code to implement the required
+functionality, ensuring it meets the customer’s specifications and quality
+standards."
+```
+
+::: en
+M.2.2 Software Test Engineer
+:::
+
+M.2.2 Software Test Engineer(软件测试工程师)
+
+```text
+"{chatdev_prompt}",
+"You are a Software Test Engineer at ChatDev. Your primary responsibility is
+to design and execute tests to ensure the quality and functionality of
+software products. You develop test plans, create test cases, and report
+on software performance. You identify defects and collaborate with the
+development team to resolve them.",
+"You need to ensure that the software is working as expected and meets the
+customer’s requirements.",
+"Check the edge cases and special cases and instances for the task we are
+doing. Do not miss any cases. Do not suffice with generic and superficial
+cases.",
+"You report to the technical lead or CTO and collaborate with programmers and
+code reviewers.",
+"Here is a new customer’s task: {task}.",
+"To complete the task, you will design and implement test procedures, report
+issues found, and verify that the software meets the customer’s
+requirements."
+```
+
+::: en
+M.2.3 Code Reviewer
+:::
+
+M.2.3 Code Reviewer(代码评审者)
+
+```text
+"{chatdev_prompt}",
+"You are a Code Reviewer at ChatDev. Your primary responsibility is to review
+and assess source code written by programmers. You ensure code quality by
+identifying bugs, optimizing performance, and enforcing coding standards.
+You provide constructive feedback to improve software robustness.",
+"You report to the technical lead or CTO and work closely with programmers.",
+"Here is a new customer’s task: {task}.",
+"To complete the task, you will review the code submitted by programmers,
+identify issues, and suggest improvements to meet quality standards."
+```
+
+::: en
+M.2.4 Chief Executive Officer
+:::
+
+M.2.4 Chief Executive Officer(首席执行官)
+
+```text
+"{chatdev_prompt}",
+"You are the Chief Executive Officer (CEO) of ChatDev. Your primary
+responsibilities include making high-level decisions about policy and
+strategy, overseeing the overall operations and resources of ChatDev, and
+acting as the main point of communication between the board and corporate
+operations.",
+"As the CEO, you have the authority to make final decisions and terminate
+conversations when appropriate.",
+"Here is a new customer’s task: {task}.",
+"To complete the task, you will provide strategic guidance and instructions to
+your team, ensuring that the solution meets the customer’s needs and
+aligns with the company’s objectives."
+```
+
+::: en
+M.2.5 Chief Technology Officer
+:::
+
+M.2.5 Chief Technology Officer(首席技术官)
+
+```text
+"{chatdev_prompt}",
+"You are the Chief Technology Officer (CTO) of ChatDev. Your primary
+responsibilities include overseeing all technical aspects of the company.
+You establish the company’s technical vision and lead technological
+development, ensuring that technology resources align with the company’s
+business needs.",
+"You report to the CEO and collaborate with other executives to integrate
+technology into the company’s strategy.",
+"Here is a new customer’s task: {task}.",
+"To complete the task, you will develop the technical strategy and guide your
+team to ensure the solution meets the customer’s needs and adheres to
+technological standards."
+```
+
+### 附录 N 各失败模式示例(Examples of Different Failure Modes)
+
+(译注:以下 N.1–N.13 为论文附录 N 的全部案例。每个案例的描述文字(MAS/任务/发生了什么/哪里出了问题)均给出中文全译;「Where it went wrong」中的执行轨迹日志属于代码/日志材料,原样保留于代码块中,不作翻译。)
+
+#### N.1 示例:FM-1.3 步骤重复、FM-2.1 会话重置、FM-1.2 不服从角色规范
+
+::: en
+• MAS: Hyperagent
+• Task: Matplotlib visualization code bug fix.
+• What happened: The Navigator internally proposes a solution without communicating it to the Planner. They did not manage to replicate the issue described and started to unrelated steps to find something to edit. At the end the Planner decided to ’Wait for the user’s response’.
+• Where it went wrong:
+:::
+
+- MAS:HyperAgent
+- 任务:修复 Matplotlib 可视化代码的 bug。
+- 发生了什么:Navigator 内部提出了一个解决方案,却没有传达给 Planner。它们未能复现所描述的问题,转而开始无关的步骤去寻找可以编辑的东西。最后 Planner 决定"等待用户的响应"。
+- 哪里出了问题(轨迹日志,原样保留):
+
+```text
+[...]
+HyperAgent_matplotlib__matplotlib-23563 - INFO - Planner’s Response: Thought:
+To address this issue, we need to understand the root cause of the ’
+Line3D’ object not having the ’_verts3d’ attribute. This error typically
+occurs when the data passed to the plot function is invalid or when
+there’s an issue with the 3D rendering. Let’s start by examining the
+code and reproducing the issue.
+[...]
+HyperAgent_matplotlib__matplotlib-23563 - INFO - Planner’s Response: Thought:
+To address this issue, we need to understand the root cause of the ’
+Line3D’ object not having the ’_verts3d’ attribute. This error typically
+occurs when the data passed to the plot function is invalid or when
+there’s an issue with the 3D rendering. Let’s start by examining the
+code and reproducing the issue.
+[...]
+Intern Name: Codebase Editor
+Subgoal: Please prepare a response for the user with the following content:
+1. Explain the identified issue and recommend updating matplotlib to version
+3.5.1 or later.
+2. Provide a modified version of their code that attempts to work around the
+issue.
+3. Suggest an alternative plotting method using scatter plots instead of
+lines.
+[...]
+HyperAgent_matplotlib__matplotlib-23563 - INFO - Inner-Navigator-Assistant’s
+Response: Thought: To find the implementation of the ‘Line3D‘ class and
+understand how the ‘_verts3d‘ attribute is set and used, I will take
+the following steps:
+1. Search for the ‘Line3D‘ class in the matplotlib codebase using the ‘
+code_search‘ tool. [...]
+HyperAgent_matplotlib__matplotlib-23563 - INFO - Inner-Navigator-Assistant’s
+Response: Thought: To find the implementation of the ‘Line3D‘ class and
+understand how the ‘_verts3d‘ attribute is set and used, I will take
+the following steps:
+1. Search for the ‘Line3D‘ class in the matplotlib codebase using the ‘
+code_search‘ tool.
+[...]
+```
+
+#### N.2 示例:FM-1.5 不知(停止)终止条件
+
+::: en
+• MAS: AG2
+• Task: Solving a mathematical problem
+• What happened: The solution is correct. The mathproxyagent keeps asking to continue even if it was clear that the problem was unsolvable.
+• Where it went wrong:
+:::
+
+- MAS:AG2
+- 任务:求解一道数学题
+- 发生了什么:解答是正确的(即"该题无解"的判断是对的),但 mathproxyagent 不断要求继续,即便问题明显不可解。
+- 哪里出了问题(轨迹日志,原样保留):
+
+```text
+[...]
+[Assistant] This problem is a reasoning problem. The information provided in
+the problem statement does not give any specifics about the amount of
+ribbon Monica has or the size of the gift bows. Therefore, this problem
+cannot be solved with the information provided. More context or
+information is needed, such as \"Monica has 120 inches of ribbon\" or \"
+Each bow uses X inches of ribbon\"."
+[mathproxyagent] Continue. Please keep solving the problem until you need to
+query. (If you get to the answer, put it in \\boxed{}.)
+[Assistant] In the current problem, I don’t have enough information to solve
+the problem. [...]
+[mathproxyagent] Continue. Please keep solving the problem until you need to
+query. (If you get to the answer, put it in \\boxed{}.)
+[Assistant] I’m sorry, but I really need more information to solve this
+problem.
+[mathproxyagent] Continue. Please keep solving the problem until you need to
+query. (If you get to the answer, put it in \\boxed{}.)
+[...]
+```
+
+#### N.3 示例:FM-2.3 任务偏航
+
+::: en
+• MAS: AG2
+• Task: Solving a mathematical problem.
+• What happened: The answer was given the the question. The agents solved another problem.
+• Where it went wrong:
+:::
+
+- MAS:AG2
+- 任务:求解一道数学题
+- 发生了什么:答案其实已经包含在题目之中(题目已给出真实人数 40),而智能体们却去解了另一道题。
+- 哪里出了问题(轨迹日志,原样保留):
+
+```text
+[mathproxyagent] Let’s use Python to solve a math problem. [...] Courtney
+attended a concert and reported that the audience was 48 in number.
+However, Kelly went to the same concert and said that Courtney had made
+the mistake of overstating the number of people in attendance by 20%. If
+Kelly was right, 40 people really attended the concert. What was the
+audience size according to Courtney?"
+[assistant] First, the key idea here is calculating [...]
+‘‘‘python
+import sympy as sp
+C = 48 # Courtney’s estimation
+R = sp.Symbol(’R’) # real audience number
+# equation using the information given by Kelly
+equation = sp.Eq(C, R + 0.2 * R)
+real_audience = sp.solve(equation, R)[0]
+print(f\"The real audience was: {real_audience}\")
+‘‘‘
+We subtract the estimated audience size from the real audience size to find
+the number of people Courtney overstated.
+‘‘‘python
+overstated = C - real_audience
+print(f\"The number of people Courtney overstated is: {overstated}\")
+‘‘‘
+[...]
+[assistant] [...] So, the final answer is \\boxed{8}.
+```
+
+#### N.4 示例:FM-2.2 未请求澄清
+
+::: en
+• MAS: AppWorld
+• Task: Give a 5-star rating to all songs in my Spotify playlists.
+• What happened: The agent used the password as token.
+• Where it went wrong:
+:::
+
+- MAS:AppWorld
+- 任务:给我 Spotify 播放列表中的所有歌曲打 5 星评价。
+- 发生了什么:智能体把(账户)密码当作访问令牌(token)来用。
+- 哪里出了问题(轨迹日志,原样保留):
+
+```text
+[...]
+[Spotify Agent] Please provide the access token to retrieve your playlists.
+[Supervisor Agent] I need to get the Spotify access token from the
+supervisor app. Let’s retrieve the account credentials to find the
+access token. print(apis.supervisor.show_account_passwords())
+[...]
+```
+
+#### N.5 示例:FM-3.2 无或不完整验证
+
+::: en
+• MAS: AG2
+• Task: Mathematical problem solving
+• What happened: Confused the number of fish with the cost of them.
+• Where it went wrong:
+:::
+
+- MAS:AG2
+- 任务:数学问题求解
+- 发生了什么:把鱼的数量与鱼的价格混淆了。
+- 哪里出了问题(轨迹日志,原样保留):
+
+```text
+[mathproxyagent] [...] Scarlett found an aquarium for $10.00 at a yard sale.
+At the pet store, she bought 2 bags of rocks for $2.50 each and 3
+pieces of coral at $2.00 apiece. She bought 20 fish and she needed fish
+food that cost $2.00. How much did she spend?
+[assistant] [... ] fish_cost = 20.00 [...] total_cost = aquarium_cost + 2*
+rock_cost + 3*coral_cost + fish_cost + fish_food_cost [...] print(
+total_cost)
+[mathproxyagent] 43.0
+[assistant] So, Scarlett spent a total of $43.00. So, the answer is \\boxed
+{43}.
+```
+
+#### N.6 示例:FM-2.3 任务偏航、FM-3.2 无或不完整验证
+
+::: en
+• MAS: AG2
+• Task: Solving a mathematical problem.
+• What happened: Found the solution correctly, then it decides to answer to another problem.
+• Where it went wrong:
+:::
+
+- MAS:AG2
+- 任务:求解一道数学题
+- 发生了什么:已正确求出(花费金额的)解,随后却决定去回答另一个问题(剩下多少钱)。
+- 哪里出了问题(轨迹日志,原样保留):
+
+```text
+[mathproxyagent] [...] John goes to the market with $10,000 in his pocket.
+He buys 3 goats for $500 each and 2 cows for $1500 each. He also
+considers buying a horse for $2000 but decides against it. How much
+money did he spend at the market?
+[...]
+[assistant] Great, the total spent by John on buying goats and cows is $4500.
+To find the remaining money John had after his purchases, we subtract
+the total spent from the initial amount of money he had. [...] This code
+will output how much money John had left after he made his purchases at
+the market.
+[...]
+[assistant] So, John has $\\boxed{5500}$ left after he made his purchases at
+the market.
+```
+
+#### N.7 示例:FM-3.2 无或不完整验证
+
+::: en
+• MAS: AG2
+• Task: Solving a mathematical problem.
+• What happened: They did not verify the answer. They counted one number more even if the numbers were listed. They did not verify the result even if it was straightforward.
+• Where it went wrong:
+:::
+
+- MAS:AG2
+- 任务:求解一道数学题
+- 发生了什么:他们没有验证答案。即便各分数都已列出,他们还是多数了一个数。即便验证非常直接,他们也没有检查结果。
+- 哪里出了问题(轨迹日志,原样保留):
+
+```text
+[mathproxyagent] [...] Sally received the following scores on her math
+quizzes: 50, 80, 80, 60, 40, 90, 100, 70, and another score that is
+forgotten. If the mean score is 70, what’s the forgortten score?
+[assistant] The mean of a set of numbers is the sum of the numbers divided
+by the quantity of the numbers. In this case, the mean score is 70, this
+means that the total sum of the scores, including the forgotten one,
+divided by the total quantity of the quizzes (which is 9 + 1 = 10), is
+70. [...] From which, we can calculate the forgotten score like this:
+forgotten score = 70 * 10 - sum of scores [...]
+[mathproxyagent] Continue. Please keep solving the problem until you need to
+query. (If you get to the answer, put it in \\boxed{}.)
+[...]
+[assistant] Therefore, the forgotten score is \\boxed{130}.
+```
+
+#### N.8 示例:FM-1.2 不服从角色规范、FM-2.4 信息隐瞒
+
+::: en
+• MAS: HyperAgent
+• Task: Solving a bug of matplotlib.
+• What happened: The Navigator thinks also about possible solutions (not required) but then it does not communicate it to the Planner. At certain point the Executor states ’The above output is just an example’ but the Planner thinks that the test are passed ’Thank you for running the test and providing the results’.
+• Where it went wrong:
+:::
+
+- MAS:HyperAgent
+- 任务:修复一个 matplotlib 的 bug。
+- 发生了什么:Navigator 还顺便思考了可能的解决方案(这并非其职责要求),但之后却没有传达给 Planner。某时刻 Executor 声明"上述输出只是一个示例",而 Planner 却以为测试通过了("感谢你运行测试并提供结果")。
+- 哪里出了问题(轨迹日志,原样保留):
+
+```text
+[...]
+HyperAgent_matplotlib__matplotlib-25433 - INFO - Inner-Navigator-Assistant’s
+Response: Thought: [...] To work around this issue, a possible solution
+is to update [...] Here’s an example of how you can modify the code to
+achieve this: [...] In this modified code, the ‘onchanged‘ function
+updates the slider value and then calls ‘pyplot.draw()‘ to redraw the
+figure. This should prevent the input to the widgets from being blocked.
+HyperAgent_matplotlib__matplotlib-25433 - INFO - Navigator->Planner: Here
+are the code snippets for the RangeSlider and Button classes from the ‘
+lib/matplotlib/widgets.py‘ file: [...]
+```
+
+#### N.9 示例:FM-1.1 不服从任务规范、FM-3.3 错误验证
+
+::: en
+• MAS: MetaGPT
+• Task: Implementing chess.
+• What happened: Missing coverage of movement restrictions for non-pawn pieces in initial tests, and lack of verification for complete chess rules.
+• Where it went wrong:
+:::
+
+- MAS:MetaGPT
+- 任务:实现国际象棋。
+- 发生了什么:初始测试缺失对非兵棋子移动限制的覆盖,且缺乏对完整棋规的验证。
+- 哪里出了问题(轨迹日志,原样保留):
+
+```text
+2025-01-12 14:46:45.578 | INFO | metagpt.roles.role:_act:391 - Alice(
+SimpleCoder): to do SimpleWriteCode(SimpleWriteCode)
+‘‘‘python
+def main():
+    import itertools
+    class ChessPiece:
+        def __init__(self, color, name):
+            self.color = color
+            self.name = name
+        def __str__(self):
+            return f"{self.color[0]}{self.name[0]}"
+        def valid_moves(self, position, board):
+            moves = []
+            if self.name == "Pawn":
+                direction = 1 if self.color == "White" else -1
+                forward = (position[0] + direction, position[1])
+                if 0 <= forward[0] <= 7 and board[forward[0]][forward[1]] is
+                None:
+                    moves.append(forward)
+                if position[0] == (6 if self.color == "White" else 1): #
+                Starting position
+                double_forward = (position[0] + 2 * direction, position
+                [1])
+                if board[double_forward[0]][double_forward[1]] is None:
+                    moves.append(double_forward)
+            # Add more piece logic here
+            return moves
+[...]
+def test_knight_valid_moves(setup_board):
+    board = setup_board
+    # Place a knight on the board
+    board.board[0][1] = ChessPiece("White", "Knight")
+    # Test if knight can move to a valid position
+    assert board.move_piece(get_position(’b1’), get_position(’c3’)) == True
+
+def test_bishop_valid_moves(setup_board):
+    board = setup_board
+    # Place a bishop on the board
+    board.board[0][2] = ChessPiece("White", "Bishop")
+    # Test if bishop can move diagonally
+    assert board.move_piece(get_position(’c1’), get_position(’a3’)) == True
+
+def test_rook_valid_moves(setup_board):
+    board = setup_board
+    # Place a rook on the board
+    board.board[0][0] = ChessPiece("White", "Rook")
+    # Test if rook can move vertically
+    assert board.move_piece(get_position(’a1’), get_position(’a4’)) == True
+
+def test_queen_valid_moves(setup_board):
+    board = setup_board
+    # Place a queen on the board
+    board.board[0][3] = ChessPiece("White", "Queen")
+    # Test if queen can move diagonally
+    assert board.move_piece(get_position(’d1’), get_position(’f3’)) == True
+
+def test_king_valid_moves(setup_board):
+    board = setup_board
+    # Place a king on the board
+    board.board[0][4] = ChessPiece("White", "King")
+    # Test if king can move one square in any direction
+    assert board.move_piece(get_position(’e1’), get_position(’e2’)) == True
+[...]
+```
+
+#### N.10 示例:FM-2.6 推理-行动失配
+
+::: en
+• MAS: HyperAgent
+• Task: Solving a bug of pylint.
+• What happened: Initially, the navigator has already found the solution but it tells other things to planner.
+• Where it went wrong:
+:::
+
+- MAS:HyperAgent
+- 任务:修复一个 pylint 的 bug。
+- 发生了什么:起初 Navigator 其实已经找到了解决方案,但它向 Planner 汇报的却是别的内容。
+- 哪里出了问题(轨迹日志,原样保留):
+
+```text
+[...]
+HyperAgent_pylint-dev__pylint-6506 - INFO - Inner-Navigator-Assistant’s
+Response: Thought: The ‘_config_initialization‘ function in ‘pylint/
+config/config_initialization.py‘ is responsible for parsing the command-
+line arguments and configuration files for Pylint. It looks like the
+unrecognized ‘-Q‘ option is being handled in the following section:
+‘‘‘python
+# Check if there are any options that we do not recognize
+unrecognized_options: list[str] = []
+for opt in parsed_args_list:
+    if opt.startswith(\"--\"):
+        unrecognized_options.append(opt[2:])
+    elif opt.startswith(\"-\"):
+        unrecognized_options.append(opt[1:])
+if unrecognized_options:
+    msg = \", \".join(unrecognized_options)
+    linter.add_message(\"unrecognized-option\", line=0, args=msg)
+    raise _UnrecognizedOptionError(options=unrecognized_options)
+‘‘‘
+This code checks the parsed command-line arguments for any unrecognized
+options, and if found, it adds a message to the linter and raises an ‘
+_UnrecognizedOptionError‘ exception.
+The issue mentioned in the GitHub report is that the traceback is being
+printed, which is not the expected behavior. The expected behavior
+should be to print a more user-friendly error message, similar to what
+the top part of the output already provides.
+To resolve this issue, I would suggest modifying the exception handling in
+the ‘_config_initialization‘ function to catch the ‘
+_UnrecognizedOptionError‘ exception and print a more user-friendly error
+message instead of the full traceback.
+Final Answer:
+The root cause of the issue is in the ‘pylint/config/config_initialization.
+py‘ file, where the ‘_config_initialization‘ function is responsible for
+parsing the command-line arguments and configuration files. When an
+unrecognized option is found, the function raises an ‘
+_UnrecognizedOptionError‘ exception, which is causing the full traceback
+to be printed.
+To resolve this issue, the ‘_config_initialization‘ function should be
+modified to catch the ‘_UnrecognizedOptionError‘ exception and print
+a more user-friendly error message instead of the full traceback. Here’s
+an example of how the code could be updated:
+‘‘‘python
+try:
+    linter._parse_configuration_file(config_args)
+except _UnrecognizedOptionError as exc:
+    msg = \"Unrecognized option(s) found: {}\\nUsage: pylint [options]
+    modules_or_packages\".format(\", \".join(exc.options))
+    print(msg, file=sys.stderr)
+    sys.exit(2)
+‘‘‘
+This change would ensure that the user sees a clear and concise error
+message when an unrecognized option is passed, without the full
+traceback. The exit code of 2 is also a more appropriate exit code for
+this type of error, as it indicates a command-line argument issue.
+HyperAgent_pylint-dev__pylint-6506 - INFO - Navigator->Planner: The file
+responsible for handling command-line arguments in Pylint is ‘pylint/
+config/config_initialization.py‘. The function responsible for handling
+command-line arguments is ‘_config_initialization‘ in this file.
+Here’s the key code snippet from this function:
+‘‘‘python
+def _config_initialization(
+    linter: PyLinter,
+    args_list: list[str],
+    reporter: reporters.BaseReporter | reporters.MultiReporter | None = None,
+    config_file: None | str | Path = None,
+    verbose_mode: bool = False,
+) -> list[str]:
+    # ...
+    # Now we parse any options from the command line, so they can override
+    # the configuration file
+    parsed_args_list = linter._parse_command_line_configuration(args_list)
+    # ...
+‘‘‘
+This function is responsible for parsing command-line arguments and setting
+options accordingly. It calls the ‘_parse_command_line_configuration‘
+method of the ‘PyLinter‘ class to parse the command-line arguments.
+The ‘_parse_command_line_configuration‘ method is not shown in the provided
+code snippet, but it is likely defined in the ‘pylint/lint/pylinter.py‘
+file.
+Here’s the key code snippet from the ‘pylint/lint/pylinter.py‘ file:
+‘‘‘python
+class PyLinter:
+    # ...
+    def _parse_command_line_configuration(self, args_list: list[str]) ->
+    list[str]:
+        # implementation of command line argument parsing
+        pass
+‘‘‘
+This method is responsible for parsing the command-line arguments and
+returning a list of parsed arguments.
+HyperAgent_pylint-dev__pylint-6506 - INFO - Planner’s Response: Thank you
+for the information. Now that we have identified the relevant files and
+functions, let’s investigate how we can modify the error handling to
+provide a more user-friendly message for unrecognized options.
+[...]
+```
+
+#### N.11 示例:FM-2.5 忽视其他智能体输入、FM-3.3 错误验证
+
+::: en
+• MAS: Multi-Agent Peer Review
+• Task: Solving a mathematical problem.
+• What happened: The solution presented by another agent is correct. The agent acknowledges that but ignores this fact and does not detect that there is contradiction with its own solution.
+• Where it went wrong:
+:::
+
+- MAS:多智能体同行评审(Multi-Agent Peer Review)
+- 任务:求解一道数学题
+- 发生了什么:另一个智能体给出的解是正确的。该智能体承认这一点,却无视这一事实,也没有检测出它与自己的解存在矛盾。
+- 哪里出了问题(轨迹日志,原样保留):
+
+```text
+[...]
+[user] Can you solve the following math problem? A painter needed to paint
+12 rooms in a building. Each room takes 7 hours to paint. If he already
+painted 5 rooms, how much longer will he take to paint the rest? Explain
+your reasoning. Your final answer should be a single numerical number,
+in the form \\boxed{answer}, at the end of your response.
+[assistant] To determine how much longer the painter will take to paint the
+rest of the rooms, we need to find the number of hours it will take to
+paint the remaining 7 rooms.\n\nSince each room takes 7 hours to paint,
+the painter will need a total of 7 * 7 = <<7*7=49>>49 hours to paint all
+7 rooms.\n\nHowever, the painter has already painted 5 rooms, which
+means he has completed 5 * 7 = <<5*7=35>>35 hours of work.\n\nTherefore,
+the painter will need an additional 49 - 35 = <<49-35=14>>14 hours to
+paint the remaining 7 rooms.\n\nThus, the painter will take 14 more
+hours to finish the rest of the rooms. \n\nThe answer is therefore \\
+boxed{14}.
+[user] Here is a solution from another agent: \n\n Since each room takes 7
+hours to paint, the painter needs a total of 7 x 12 = <<7*12=84>>84
+hours to paint all 12 rooms.\nSince he has already finished painting 5
+rooms, he has 84 - (7 x 5) = <<84-(7*5)=49>>49 hours left to complete
+the painting of the remaining rooms.\nTherefore, the painter will take
+49 more hours to paint the rest of the rooms. \n\n\\boxed{49}.\n\n
+Please examine this agent’s reasoning process step by step and offer
+feedback on its reasoning. You can rate your confidence in your feedback
+on a scale from 1-10, where 10 indicates the highest level of
+confidence.
+[assistant] I would rate my confidence in my feedback as a 10.\n\nFeedback
+on the other agent’s reasoning process:\n1. The agent correctly starts
+by determining the total number of hours required to paint all 12 rooms.
+Each room takes 7 hours to paint, so 7 x 12 = 84 hours is the correct
+total.\n2. The agent acknowledges that the painter has already finished
+painting 5 rooms and calculates the total number of hours spent on those
+5 rooms as 7 x 5 = 35. This calculation is correct.\n3. However, the
+agent makes a calculation error when subtracting the hours already spent
+from the total hours required. The correct calculation should be 84 -
+35 = 49, not 84 - (7 x 5) = 49. \n4. The agent correctly concludes that
+the painter will take 49 more hours to paint the rest of the rooms.\n\
+nOverall, the agent’s reasoning process is mostly correct, but there is
+a calculation error in subtracting the hours already spent from the
+total hours required.
+[...]
+[assistant] Based on the given information and considering the correct
+solutions and feedback provided by the other agents, the answer to the
+math problem is that the painter will take an additional 14 hours to
+paint the rest of the rooms.\n\nTherefore, the final answer is \\boxed
+{14}.
+[...]
+```
+
+#### N.12 示例:FM-1.4 丢失对话历史
+
+::: en
+• MAS: HyperAgent
+• Task: Solving a scikit-learn bug.
+• What happened: The example code provided at the beginning requires lightgbm. The agents decides to substitute this with a model inside scikit-learn. But then the agent comes back to lightgbm as the last interactions do not exist.
+• Where it went wrong:
+:::
+
+- MAS:HyperAgent
+- 任务:修复一个 scikit-learn 的 bug。
+- 发生了什么:最初提供的示例代码需要 lightgbm。智能体们决定用 scikit-learn 内置的模型替代它;但随后智能体又回到了 lightgbm,仿佛最近的交互不存在一样。
+- 哪里出了问题(轨迹日志,原样保留):
+
+```text
+[...]
+HyperAgent_scikit-learn__scikit-learn-25570 - INFO - Inner-Executor-
+Assistant’s Response: Thought: Let’s run the provided code snippet to
+test the modified ‘ColumnTransformer‘ implementation.
+Action:
+‘‘‘bash
+python -c \"
+import numpy as np
+import pandas as pd
+from lightgbm import LGBMClassifier
+from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import RobustScaler
+[...]
+HyperAgent_scikit-learn__scikit-learn-25570 - INFO - Inner-Executor-
+Assistant’s Response: Ah, I see the issue - the code you provided
+requires the ‘lightgbm‘ library, which is not installed in the current
+environment. Let me modify the code to use a library that is more
+readily available.
+[...]
+import numpy as np
+import pandas as pd
+from sklearn.linear_model import LogisticRegression
+from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import RobustScaler
+[...]
+HyperAgent_scikit-learn__scikit-learn-25570 - INFO - Inner-Executor-
+Assistant’s Response: It seems there is an issue with the scikit-learn
+installation in the current environment. The error message indicates
+that the ‘sklearn.__check_build._check_build‘ module is not found, which
+suggests that the scikit-learn package has not been built correctly.
+[...]
+‘‘‘bash
+pip uninstall scikit-learn -y
+pip install scikit-learn
+‘‘‘
+[...]
+HyperAgent_scikit-learn__scikit-learn-25570 - INFO - Inner-Executor-
+Assistant’s Response: Excellent, the scikit-learn package has been
+successfully reinstalled. Let’s now try running the modified test code
+again.
+Action:
+‘‘‘bash
+python -c \"
+import numpy as np
+import pandas as pd
+from sklearn.linear_model import LogisticRegression
+from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import RobustScaler
+[...]
+‘‘‘
+HyperAgent_scikit-learn__scikit-learn-25570 - INFO - Executor->Planner: The
+issue here is that the ‘lightgbm‘ library is not installed, and the ‘
+scikit-learn‘ installation was not built correctly. We have already
+resolved the ‘scikit-learn‘ issue by reinstalling it. However, we still
+need to install the ‘lightgbm‘ library.
+Here’s the modified code snippet to install ‘lightgbm‘:
+‘‘‘bash
+pip install lightgbm
+‘‘‘
+[...]
+```
+
+#### N.13 示例:FM-3.1 过早终止
+
+::: en
+• MAS: HyperAgent
+• Task: Solving a Flask bug.
+• What happened: The editor claimed an edit that was not made.
+• Where it went wrong:
+:::
+
+- MAS:HyperAgent
+- 任务:修复一个 Flask 的 bug。
+- 发生了什么:Editor 声称完成了一项实际上并未做出的编辑。
+- 哪里出了问题(轨迹日志,原样保留):
+
+```text
+[...]
+HyperAgent_pallets__flask-4992 - INFO - Inner-Editor-Assistant’s Response:
+Thought: Now that I have located the ‘from_file()‘ method, I can proceed
+with making the requested modifications. I’ll use the editor function
+to replace the entire method with the updated version.
+Action:
+‘‘‘python
+patch = ’’’
+def from_file(
+    self,
+    filename: str,
+    load: t.Callable[[t.IO[t.Any]], t.Mapping],
+    silent: bool = False,
+    mode: str = \"r\",
+) -> bool:
+[...]
+HyperAgent_pallets__flask-4992 - INFO - Inner-Editor-Assistant’s Response:
+Thought: The modification has been successfully applied to the ‘
+from_file()‘ method in the ‘src/flask/config.py‘ file. The changes
+include [...]
+[...]
+HyperAgent_pallets__flask-4992 - INFO - Inner-Executor-Assistant’s Response:
+Thought: The test script failed because the ‘from_file()‘ method does
+not recognize the ‘mode‘ parameter, indicating that the modification to
+the method has not been applied yet. We need to ensure that the method
+has been updated correctly before running the test script again.
+[...]
+```
+
+> (附录 N 至此结束,全文对照翻译完毕。)
+
+## 要点速览
+
+- 7 个 SOTA 开源 MAS 的任务失败率在 41%–86.7% 之间,多智能体并未自动带来收益。
+- MAST 是首个实证落地的 MAS 失败分类法:14 种失败模式,归为系统设计问题(FC1, 44.2%)、智能体间失调(FC2, 32.3%)、任务验证(FC3, 23.5%)三大类。
+- 发生率最高的失败模式是步骤重复(FM-1.3, 15.7%),其次是推理-行动失配(FM-2.6, 13.2%)与不知终止条件(FM-1.5, 12.4%)。
+- 方法论采用扎根理论:6 位专家分析 150 条轨迹(每条均超 1.5 万行),人均投入 20+ 小时,迭代三轮 IAA 达 κ = 0.88。
+- LLM-as-a-Judge 标注器(o1 少样本)与人类专家一致率:准确率 94%、Cohen's κ 0.77;在未见的 MAS 与基准上泛化验证 κ = 0.79。
+- MAST-Data 共 1642 条标注轨迹,覆盖 ChatDev、MetaGPT、HyperAgent、AppWorld、AG2、Magentic-One、OpenManus 与 GPT-4/Claude/Qwen2.5/CodeLlama 四个模型家族。
+- 同一模型下仅改进系统设计即可提升成功率:ChatDev 角色规范修复 +9.4%,增加高层目标验证步骤 +15.6%。
+- 换模型改变失败结构:MetaGPT 中 GPT-4o 的系统设计类失败比 Claude 3.7 Sonnet 少 39%,但两者的验证类失败都居高不下。
+- 换架构同样改变失败结构:MetaGPT 的 FC1/FC2 失败比 ChatDev 少 60–68%,但 FC3(验证)失败反而是其 1.56 倍。
+- 核心论断:多数 MAS 失败源于组织与设计层面而非个体模型能力,需要结构性重设计(多级验证、标准化通信协议、置信度量化、记忆管理),而非提示词层面的战术修补。

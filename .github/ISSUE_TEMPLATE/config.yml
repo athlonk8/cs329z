@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📖 在线阅读
+    url: https://cs.xuyili.com
+    about: 先去网站找到对应页面,再把链接贴进 Issue

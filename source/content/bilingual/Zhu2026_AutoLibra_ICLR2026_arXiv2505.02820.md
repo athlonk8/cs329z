@@ -1,0 +1,407 @@
+---
+title: "AutoLibra: Agent Metric Induction from Open-Ended Human Feedback"
+title_zh: "AutoLibra:从开放式人类反馈归纳 Agent 评测指标"
+authors: "Hao Zhu et al."
+venue: "ICLR 2026 · Stanford University / University of Toronto / University of Pennsylvania"
+kind: paper
+importance: recommended
+tags: Agent 评测, 指标归纳, 开放式反馈, LLM-as-a-Judge, 主题分析, Agent 自我改进
+summary: "提出 AutoLibra:把「按钮禁用就别再点」这类开放式人类反馈落地到轨迹行为、聚类归纳为可解释指标,并以覆盖度/冗余度两个元指标自动优化,可反哺提示优化使 Agent 成功率提升 20% 以上。"
+---
+
+## 导读
+
+前三份材料分别回答了「能不能用 LLM 当评审」(Zheng2023)、「工业上怎么搭评测」(Anthropic 博客)与「如何从打分型反馈合成指标」(AutoMetrics)。本篇补上最后一块拼图:当人类反馈连「分数」都不是,而是「如果你发现按钮是禁用的,就别再点它」「这个 Agent 自主权太大了」这样的开放式自然语言时,如何把它变成可复用的评测指标?
+
+AutoLibra 的思路源自社会科学中的主题分析(thematic analysis):先把每条反馈「落地(grounding)」为轨迹中的具体行为切面(aspect,行为-反馈-符号三元组),再把相似行为聚类成带定义、正例、反例的指标,交给 LLM-as-a-Judge 给轨迹打 +1/-1/N/A。最有创意的一步是「元评测」:用覆盖度(多少人类反馈切面能被指标命中)与冗余度(多少检出的特质是人类没提的)这两个元指标自动搜索最优指标集,让整个流程自验证、自优化。「作为透镜」一节展示它诱导出的指标比专家手工设计的失败分类更细;「作为阶梯」一节展示用诱导指标做提示优化,在 Baba-Is-AI 上不直接优化成功率却把成功率提升了 20% 以上。对于思考「Agent 评测的粒度应该多细」「评测指标能否随 Agent 进化」的同学,这是必读的方法论样本。
+
+## 全文对照翻译
+
+> **译注**:覆盖论文正文——摘要、第 1-8 节与致谢(原文第 1-14 页,arXiv:2505.02820v3)。References(参考文献)与附录 A-P(AutoLibra 方法图解与 Ladder 算法伪代码、Baba-Is-AI 与 MiniHack 的规则/环境细节与实验结果、各迭代指标得分表、诱导指标完整示例、全部提示词、Agent 表现定性观察、WebVoyager/NNetNav-Live 诱导指标)未收录,请查阅原文 PDF;附录要点已浓缩在精读页与文末「要点速览」。英文段落照抄原文(仅修复 PDF 提取产生的断词与连字符),每段后紧跟中文全译。
+
+**AutoLibra: Agent Metric Induction from Open-Ended Human Feedback**
+Hao Zhu, Phil Cuvin, Xinkai Yu, Charlotte Ka Yee Yan, Jason Zhang, Diyi Yang
+Stanford University · University of Toronto · University of Pennsylvania
+Code / Data / Website: https://autolibra.opensocial.world
+
+### 摘要
+
+::: en
+Agents are predominantly evaluated and optimized via task success metrics, which are coarse, rely on manual design from experts, and fail to reward intermediate emergent behaviors. We propose AutoLibra, a framework for agent evaluation, that transforms open-ended human feedback e.g. "If you find that the button is disabled, don't click it again", or "This agent has too much autonomy to decide what to do on its own" into metrics for evaluating fine-grained behaviors in agent trajectories. AutoLibra accomplishes this by grounding feedback to an agent's behavior, clustering similar positive and negative behaviors, and creating concrete metrics with clear definitions and concrete examples, which can be used for prompting LLM-as-a-Judge as evaluators. We further propose two meta-metrics to evaluate the alignment of a set of (induced) metrics with open feedback: "coverage" and "redundancy". Through optimizing these meta-metrics, we experimentally demonstrate AutoLibra's ability to induce more concrete agent evaluation metrics than the ones proposed in previous agent evaluation benchmarks and discover new metrics to analyze agents. We also present two applications of AutoLibra in agent improvement: First, we show that AutoLibra serve human prompt engineers for diagonalize agent failures and improve prompts iterative. Moreover, we find that AutoLibra can induce metrics for automatic optimization for agents, which makes agents improve through self-regulation. Our results suggest that AutoLibra is a powerful task-agnostic tool for evaluating and improving language agents.
+:::
+
+Agent 目前主要通过任务成功率指标来评测与优化,这类指标粗粒度、依赖专家手工设计、也无法奖励中间的涌现行为。我们提出 **AutoLibra**——一个 Agent 评测框架,能把开放式人类反馈(例如「如果你发现按钮是禁用的,就别再点它」,或「这个 Agent 自主权太大,自己决定做什么的事太多了」)转化为用于评测 Agent 轨迹中细粒度行为的指标。AutoLibra 的做法是:把反馈落地(grounding)到 Agent 的行为、对相似的正/负行为进行聚类、并创建带有清晰定义与具体示例的具体指标——这些指标可用于提示 LLM-as-a-Judge 充当评审器。我们进一步提出两个**元指标(meta-metric)**来评估一组(诱导出的)指标与开放式反馈的对齐程度:「覆盖度(coverage)」与「冗余度(redundancy)」。通过优化这两个元指标,我们用实验证明 AutoLibra 能诱导出比以往 Agent 评测基准所提出的更具体的评测指标,并发现可用于分析 Agent 的新指标。我们还展示 AutoLibra 在 Agent 改进上的两个应用:第一,AutoLibra 能帮助人类提示工程师诊断 Agent 失败并迭代改进提示;此外,我们发现 AutoLibra 能为 Agent 的自动优化诱导指标,使 Agent 通过自我调节(self-regulation)得到改进。结果表明,AutoLibra 是一个强大的、任务无关的语言 Agent 评测与改进工具。
+
+### 1 引言
+
+::: en
+Humans readily acquire skills from open-ended instructions and feedback from others (Tomasello et al., 1993). These instructions and feedback are internalized for self-regulated learning (Nicol & Macfarlane-Dick, 2006; Pintrich & Zusho, 2002), providing internal signals for continuous improvement. Drawing inspiration from this process, we investigate how well AI agents can benefit from open-ended human feedback through induction of generalizable metrics.
+:::
+
+人类能轻松地从他人的开放式指令与反馈中习得技能(Tomasello et al., 1993)。这些指令与反馈会被内化,用于自我调节学习(self-regulated learning)(Nicol & Macfarlane-Dick, 2006; Pintrich & Zusho, 2002),为持续改进提供内部信号。受这一过程的启发,我们研究 AI Agent 能否通过「可泛化指标的归纳(induction)」从开放式人类反馈中获益。
+
+::: en
+In this paper, we introduce AutoLibra, a metric induction method, as a novel agent evaluation framework that mitigates the limitations of current evaluation paradigms. AutoLibra is an evaluation tool that induces interpretable metrics for AI agents from open-ended human feedback, which can be collected from end users of AI agents or experts. This offers two advantages: (1) It is much easier to provide concrete feedback for trajectories than creating metrics, and (2) AutoLibra allows us to evaluate agents from the perspective of the users. AutoLibra-induced metrics provide concrete definitions of behaviors that the model-based evaluation method should look for, which could be used to understand agent behavior, as well as optimization targets to improve agents.
+:::
+
+本文提出 AutoLibra——一种指标归纳(metric induction)方法——作为一个缓解当前评测范式局限的新型 Agent 评测框架。AutoLibra 是一个从开放式人类反馈(可从 AI Agent 的终端用户或专家处收集)中为 AI Agent 诱导可解释指标的评测工具。这带来两点优势:(1) 对轨迹给出具体反馈远比凭空创造指标容易;(2) AutoLibra 让我们能从用户的视角评测 Agent。AutoLibra 诱导的指标为基于模型的评测方法提供了「应关注哪些行为」的具体定义,既可用于理解 Agent 行为,也可作为改进 Agent 的优化目标。
+
+::: en
+Inspired by the code-theme steps of thematic analysis conducted by experts in social sciences (Braun & Clarke, 2006), we design the AutoLibra induction process (§2.2) as two steps: (1) feedback grounding: where we ground every aspect of human feedback on some behavior in the entire agent trajectory, and (2) behavior clustering: where we cluster the aspects into multiple clusters of similar behaviors to summarize into metrics. As illustrated in Fig. 1, the user gives a web agent feedback "the agent did not choose iPhone 14/15" which is grounded to the agent's behavior, choosing "iPhone 16 Pro" from the drop-down menu. Similar behaviors are clustered into a common cluster, summarized as Element Interaction Accuracy.
+:::
+
+受社会科学专家进行主题分析(thematic analysis)中「编码-主题」步骤(Braun & Clarke, 2006)的启发,我们把 AutoLibra 归纳过程(§2.2)设计为两步:(1) **反馈落地(feedback grounding)**:把人类反馈的每个切面(aspect)落地到完整 Agent 轨迹中的某个行为上;(2) **行为聚类(behavior clustering)**:把切面聚成多个相似行为簇并总结为指标。如图 1 所示,用户给 Web Agent 的反馈「Agent 没有选 iPhone 14/15」被落地为 Agent 的行为——在下拉菜单中选择了「iPhone 16 Pro」;相似行为被聚入同一个簇,总结为「元素交互准确性(Element Interaction Accuracy)」指标。
+
+::: en
+The AutoLibra evaluation process is designed to provide a closed-loop feedback signal for the induction process. The agent trajectories used in the induction process are scored by LLM-as-a-Judge (Zheng et al., 2023) on the induced metrics. The evaluation process (§2.3) then tries to match the feedback aspects, e.g. "recipe does not contain quinoa", with the traits, e.g. task-requirement-achievement. In this way, we can meta-evaluate the quality of the metrics: (i) coverage (what proportion of feedback aspects can be matched with an agent trait), and (ii) redundancy of the metrics (what proportion of the detected traits are not mentioned by humans). These two metrics provide an overall statistical picture of the quality of the induced metrics. Based on these two metrics, we can search for the set of metrics with the lowest redundancy and the highest coverage. As shown in §3.1, we find that as the number of metrics increases, the redundancy increases, and the coverage ultimately converges to the maximum coverage. With AutoLibra, our aim is to answer the following research questions:
+:::
+
+AutoLibra 评测过程旨在为归纳过程提供闭环反馈信号。归纳过程所用的 Agent 轨迹由 LLM-as-a-Judge(Zheng et al., 2023)按诱导出的指标打分。评测过程(§2.3)随后尝试把反馈切面(例如「食谱不含藜麦」)与特质(trait,例如「任务要求达成」)匹配。这样我们就能**元评测(meta-evaluate)**指标的质量:(i) 覆盖度——多大比例的反馈切面能匹配到某个 Agent 特质;(ii) 指标的冗余度——多大比例的检出特质未被人类提及。这两个指标给出了诱导指标质量的总体统计图景。基于它们,我们可以搜索冗余最低、覆盖最高的指标集。如 §3.1 所示,我们发现随着指标数量增加,冗余度上升,覆盖度最终收敛到最大覆盖。借助 AutoLibra,我们的目标是回答以下研究问题:
+
+::: en
+RQ1: How well do AutoLibra's step-wise results align with human judgment?
+RQ2: Does AutoLibra provide insights into agent behavior beyond expert-designed metrics?
+RQ3: Can AutoLibra provide optimization signals for improving agents' performance?
+:::
+
+RQ1:AutoLibra 各步的结果与人类判断的对齐程度如何?
+RQ2:AutoLibra 能否提供专家设计指标之外的 Agent 行为洞察?
+RQ3:AutoLibra 能否为改进 Agent 表现提供优化信号?
+
+::: en
+Experiments within multiple agent domains, including collaborative agents (Shao et al., 2024), social agents (Zhou et al., 2024b), web agents (He et al., 2024; Zhou et al., 2024a), and text game agents (Cloos et al., 2024; Paglieri et al., 2024), demonstrate that AutoLibra is able to induce fine-grained and interpretable metrics with high coverage and low redundancy in unseen human feedback with 80 trajectories per dataset annotated with one feedback for each. These metrics are more concrete, and some of them were even overlooked in expert designed metrics or error analysis (§4). AutoLibra can iteratively discover new, emergent metrics (§3.2) throughout the agent optimization process, and provide optimization signals helps improve the performance of frontier LLM in a challenging 2D text game by over 20% (§5) in 3 stages with only 18 trajectory annotated per stage.
+:::
+
+在多个 Agent 领域——包括协作 Agent(CoGym,Shao et al., 2024)、社交 Agent(Sotopia,Zhou et al., 2024b)、Web Agent(WebVoyager,He et al., 2024;WebArena,Zhou et al., 2024a)与文字游戏 Agent(Baba-is-ai,Cloos et al., 2024;Balrog/MiniHack,Paglieri et al., 2024)——的实验表明:每数据集仅用 80 条轨迹、每条轨迹只标注一条反馈,AutoLibra 就能在未见人类反馈上诱导出高覆盖、低冗余的细粒度可解释指标。这些指标更加具体,其中一些甚至在专家设计的指标或错误分析中被忽视(§4)。AutoLibra 能在整个 Agent 优化过程中迭代发现新的涌现指标(§3.2),并提供优化信号,帮助前沿 LLM 在一个高难 2D 文字游戏上以仅 3 个阶段、每阶段仅 18 条标注轨迹的实现提升超过 20%(§5)。
+
+**[图 1:Figure 1 | AutoLibra induces agent evaluation metrics from human feedback, and uses these metrics to evaluate agents, which can be meta-evaluated via evaluating the coverage on unseen human feedback. Here we show real examples of agent trajectories, human feedback, aspects, induced metrics, evaluation results on WebVoyager (He et al., 2024).]**
+
+**中文说明**:图 1 以 WebVoyager 上的真实例子展示 AutoLibra 的完整闭环,自上而下分四层。(1) **任务实例与轨迹**:如「你能找一个含鸡肉和藜麦(Chicken and Quinoa)的食谱并保存吗?」,Agent 点击「Slow Cooked Chicken Stew」再点「Save」;又如「比较 iPhone 14 Pro 与 iPhone 15 Pro 的价格和芯片……」,Agent 点击「iPhone」标签、再点「iPhone 16 Pro Max」;「搜索 climbing gear 并按价格排序」等。(2) **收集反馈并落地为切面**:未见过的人类反馈「Agent 没有通过下拉框选择 iPhone 14/15 pro」以及其他反馈切面(如「特定查询不被支持」「Agent 用了正确的查询」)被逐一落地为「人类反馈切面/行为切面」对——例如「Agent 在任务中未选 iPhone 14/15」对应行为「Agent 选了 iPhone 16 Pro Max」,「没有用正确的价格排序下拉框」等。(3) **从切面诱导指标**:相似行为聚成簇,总结为带定义、正例、反例的指标,如「元素交互准确性(Element Interaction Accuracy)」——「评测 Agent 是否与正确的 UI 元素交互;好行为准确点击链接、按钮与文本框,坏行为则……」,好行为示例包括「正确用搜索栏搜索 Brexit 相关新闻」「用过滤器功能查看音频数据集」;另一指标为「查询与搜索策略(Query and Search Strategy)」。(4) **用 LLM 评测与元评测**:LLM 评审输出正特质/负特质/不适用(N/A)指标(如「搜索查询正确」「用了正确的按钮」「应选含鸡肉的……」「食谱没有想要的藜麦」等);元评测中,「Agent 高效地找到了食谱」未被覆盖(因为对应特质被判为 N/A),而「Agent 找的食谱不含鸡胸肉或藜麦」被相应指标覆盖——2 个反馈切面覆盖了 1 个、4 个检出特质中有 3 个冗余;整体聚合反馈覆盖度 82%、聚合指标冗余度 75%。
+
+### 2 AutoLibra 框架
+
+::: en
+To address the limitations of existing evaluation paradigms, AutoLibra is designed to meet the following desiderata: (1) induced from agent behavior: This ensures that metrics are grounded in agent trajectories rather than predefined by human experts, (2) self-validating: Allows choosing minimal set of metrics that cover unseen human feedback with sufficient abstraction to be useful across different tasks, and (3) generalizable: Applicable to various agent environments, independent of domain-specific design. Based on feedback data collected from humans (§2.1), AutoLibra achieves these desiderata through a closed-loop pipeline consisting of two processes: Induction Process that converts agent behaviors and corresponding feedback into metrics, (§2.2) and Evaluation Process that predicts ratings and quality of new agent behaviors on the induced metrics (§2.3).
+:::
+
+为解决既有评测范式的局限,AutoLibra 的设计满足以下**期望特性(desiderata)**:(1) **从 Agent 行为诱导**:确保指标落地于 Agent 轨迹而非由人类专家预定义;(2) **自验证(self-validating)**:允许选出覆盖未见人类反馈的最小指标集,且抽象程度足以跨任务复用;(3) **可泛化(generalizable)**:不依赖领域特定设计、适用于各种 Agent 环境。基于从人类收集的反馈数据(§2.1),AutoLibra 通过由两个过程组成的闭环流水线实现这些目标:把 Agent 行为与相应反馈转化为指标的**归纳过程**(§2.2),以及在诱导指标上预测新 Agent 行为评分与质量的**评测过程**(§2.3)。
+
+#### 2.1 收集人类反馈
+
+::: en
+In this paper, we use human feedback from two groups: (1) End-users – for agents that interact directly with humans, we use the feedback from the users who interact and converse with the agents. CoGym (Shao et al., 2024) is the environment that belongs to this category, and we use the user comments collected in their study, resulting in 197 trajectories with feedback. (2) Experts – for agents that do not directly interact with humans, we use the feedback from human annotators (five authors in this paper) who observe agent trajectories. All other environments belong to this category, these being Sotopia (Zhou et al., 2024b), WebArena (Zhou et al., 2024a), WebVoyager (He et al., 2024), Baba-is-ai (Cloos et al., 2024), and MiniHack (Samvelyan et al., 2021). For each trajectory, we collect only one element of feedback based on the complete agent trajectories.
+:::
+
+本文使用来自两类人群的人类反馈:(1) **终端用户(end-users)**——对直接与人交互的 Agent,使用与之交互对话的用户的反馈。CoGym(Shao et al., 2024)属于这一类环境,我们使用该研究收集的用户评论,得到 197 条带反馈的轨迹。(2) **专家(experts)**——对不直接与人交互的 Agent,使用观察 Agent 轨迹的人类标注者(本文五位作者)的反馈。其余环境均属此类:Sotopia(Zhou et al., 2024b)、WebArena(Zhou et al., 2024a)、WebVoyager(He et al., 2024)、Baba-is-ai(Cloos et al., 2024)与 MiniHack(Samvelyan et al., 2021)。对每条轨迹,我们基于完整 Agent 轨迹只收集一条反馈。
+
+::: en
+Annotators are instructed to explicitly indicate the aspects of agent behavior that they classify as good or bad, and to avoid general comments such as "The agent is good at solving the task". The annotators can also choose from a terminal or a web interface; in both cases the annotator is provided with the agent's task and then view the agent's observation and actions step by step, in text form. For multi-agent tasks, we annotate each agent's trajectory in a given interaction separately. For Sotopia (Zhou et al., 2024b), WebArena (Zhou et al., 2024a), and WebVoyager (He et al., 2024), we annotate 100 trajectories of agents based on GPT-4 (Achiam et al., 2023) with feedback for each dataset. For experiments in §5 we annotate 18 trajectories for each dataset in each iteration. The annotation process is fast: Human annotators spend less than 5 minutes to provide feedback for each trajectory; §4, we randomly hold out 20% of the trajectories for validation.
+:::
+
+标注者被要求明确指出其认定为好或坏的 Agent 行为切面,并避免「这个 Agent 很擅长解决任务」这类空泛评论。标注者可选用终端或网页界面;两种情形下都是先给标注者展示 Agent 的任务,再以文本形式逐步查看 Agent 的观察与动作。对多智能体任务,我们分别标注给定交互中每个 Agent 的轨迹。对 Sotopia(Zhou et al., 2024b)、WebArena(Zhou et al., 2024a)与 WebVoyager(He et al., 2024),每个数据集各标注 100 条基于 GPT-4(Achiam et al., 2023)的 Agent 轨迹的反馈。§5 的实验中,每数据集每次迭代标注 18 条轨迹。标注过程很快:人类标注者给每条轨迹提供反馈耗时不足 5 分钟;§4 中,我们随机留出 20% 的轨迹用于验证。
+
+> **脚注 1**:While in theory we can leverage feedback on specific steps to achieve better feedback grounding and multiple feedback for single trajectory, we leave it as future work. —— 虽然理论上可以利用针对特定步骤的反馈来实现更好的反馈落地、并对单条轨迹收集多条反馈,我们将其留作未来工作。
+> **脚注 2**:While viewing screenshots is standard for web navigation tasks, we keep the observation format consistent across agents and humans to encourage more grounded feedback. —— 虽然查看截图对网页导航任务是标准做法,但我们让观察格式在 Agent 与人类之间保持一致,以鼓励更落地的反馈。
+
+#### 2.2 归纳过程
+
+::: en
+Feedback Grounding The feedback of human annotators can contain multiple aspects; e.g. "AI agent was pretty good at giving me a consistent itinerary and vacation plan, although it froze on the last couple of minutes.", collected from human annotators in CoGym (Shao et al., 2024), contains a positive aspect about the agent's ability to generate a consistent itinerary, and a negative aspect about the agent freezing at the end. Here we define an aspect as a triple (behavior, feedback, sign). In the positive aspect of the previous example, the behavior is the agent's actions to create a 20-day itinerary for the Maldives, the feedback is that the created itinerary is consistent and the sign is positive. This grounding procedure is similar to the coding procedure in thematic analysis.
+:::
+
+**反馈落地(Feedback Grounding)** 人类标注者的反馈可包含多个切面;例如从 CoGym(Shao et al., 2024)人类标注者处收集的「AI agent 相当擅长给我一致的行程和度假计划,尽管最后几分钟它卡住了」,包含一个关于 Agent 生成一致行程能力的正切面,和一个关于 Agent 结尾卡死的负切面。这里我们把**切面(aspect)**定义为三元组(行为,反馈,符号)。在上例的正切面中,行为是 Agent 为马尔代夫制定 20 天行程的动作,反馈是「所制定的行程一致」,符号为正。这一落地过程类似于主题分析中的**编码(coding)**过程。
+
+::: en
+We feed the trajectory and the feedback into the LLM (we use GPT-4o (OpenAI et al., 2024) as it yields good results in our pilot experiments) and prompt the LLM with the following instructions: (1) break down the feedback into bullet points; (2) for each bullet point, find the corresponding part of the trajectory to which the feedback refers. Finally, we use constrained decoding to force GPT-4o to output the aspects in the previous format. In our experiments, we find that on most datasets, for each trajectory, the LLM can generate one to five aspects, with a mean of one to two aspects.
+:::
+
+我们把轨迹与反馈输入 LLM(我们用 GPT-4o(OpenAI et al., 2024),因其在试点实验中效果良好),并按以下指令提示 LLM:(1) 把反馈拆解为要点;(2) 为每个要点找到反馈所指的轨迹对应部分。最后,我们用**受限解码(constrained decoding)**强制 GPT-4o 按前述格式输出切面。实验中我们发现在多数数据集上,对每条轨迹,LLM 能生成一到五个切面,均值为一到两个。
+
+::: en
+Behavior Clustering The second step of the extraction process is to group the aspects into N metrics. To illustrate this step, we consider another example in the same dataset "The AI responds quickly to write and run the Python script" where the behavior is the agent's action to quickly write and run a Python script, the feedback is that the agent responds quickly, and the sign is positive. Although this aspect is a positive aspect, it reflects the same dimension of the agent's behavior as the previous negative aspect, with an opposite value. Each metric is a cluster of aspects, with a definition summarizing the criteria of positive behaviors, a list of positive behavior examples, and a list of negative behavior examples. This clustering procedure is similar to the theme induction step in thematic analysis.
+:::
+
+**行为聚类(Behavior Clustering)** 提取过程的第二步是把切面分组为 N 个指标。为说明这一步,考虑同一数据集的另一个例子「AI 快速写好并运行了 Python 脚本」,其中行为是 Agent 快速写好并运行 Python 脚本的动作,反馈是「Agent 响应迅速」,符号为正。虽然这个切面是正切面,但它与前一个负切面反映的是 Agent 行为的**同一维度**,只是取值相反。每个指标都是一个切面簇,附带:一个总结正行为标准的**定义**、一份正行为示例列表、一份负行为示例列表。这一聚类过程类似于主题分析中的**主题归纳(theme induction)**步骤。
+
+::: en
+However, clustering similar agent behaviors together is challenging for statistical clustering methods. Inspired by LLM-based semantic clustering and concept induction methods (Lam et al., 2024; Viswanathan et al., 2024), we prompt an LLM (o3-mini high, as it produces the most accurate coverage and redundancy scores as evaluated later) to cluster the aspects into metrics. As illustrated in Fig. 7, we gather all the aspects of M trajectories and cluster into N metrics, where N is a parameter set through the optimization process (§3.1). We provide the LLM with the following instructions: The granularity of the grouping should be minimal; only very similar behaviors are grouped together; but don't limit to one particular website or one particular character, which empirically makes the metrics more concrete but still applicable across different tasks.
+:::
+
+然而,把相似的 Agent 行为聚在一起对统计聚类方法很有挑战性。受基于 LLM 的语义聚类与概念归纳方法(Lam et al., 2024; Viswanathan et al., 2024)启发,我们提示一个 LLM(o3-mini high,因其产生后文评估中最准确的覆盖度与冗余度得分)把切面聚成指标。如图 7 所示,我们收集 M 条轨迹的全部切面并聚成 N 个指标,其中 N 是通过优化过程(§3.1)设定的参数。我们给 LLM 的指令是:分组的粒度应当最小化,只有非常相似的行为才合并;但不要局限于某个特定网站或某个特定角色——经验上,这使指标既具体又能跨任务适用。
+
+> **脚注 3**:In preliminary experiments, we tried to use K-means clustering on the aspect vectors generated by embedding model text-embedding-3-large, but the clusters are mostly based on tasks and not on the behaviors. —— 初步实验中,我们尝试对嵌入模型 text-embedding-3-large 生成的切面向量做 K-means 聚类,但得到的簇基本按任务而非行为划分。
+> **脚注 4**:https://openai.com/index/openai-o3-mini/
+
+#### 2.3 评测过程
+
+::: en
+Evaluating agents with induced metrics LLM-as-a-Judge (Zheng et al., 2023), or more broadly, model-based evaluation (Celikyilmaz et al., 2021; Zhang et al., 2019) is a method to use machine learning models to evaluate the output of other machine learning models. The success of LLM-as-a-Judge depends on the gap between the difficulty of evaluation or verification and that of generation and action. In agentic tasks, this gap is often large, as the policy model must perform multiple steps in decision-making, while the evaluation model must only classify the trajectories, which make LLM-as-a-Judge widely used (He et al., 2024; Zhou et al., 2024a,b). In AutoLibra, we employ LLM-as-a-Judge to evaluate the agent trajectories configured with the induced metrics. However, LLM-as-a-Judge can be replaced by any other evaluation methods implementing the induced metrics; e.g. an interact-valid-element metric could be evaluated by a rule-based evaluator that checks if the agent interacts with valid elements on the webpage. We note that AutoLibra could be used with other evaluation methods, such as programmatic evaluation (Ma et al., 2024); we leave generating programs for the induced metrics for future work.
+:::
+
+**用诱导指标评测 Agent** LLM-as-a-Judge(Zheng et al., 2023),或更广义的**基于模型的评测(model-based evaluation)**(Celikyilmaz et al., 2021; Zhang et al., 2019),是用机器学习模型来评测其他机器学习模型输出的方法。LLM-as-a-Judge 的成败取决于「评测或验证的难度」与「生成与行动的难度」之间的差距。在 Agent 任务中这一差距通常很大:策略模型必须在决策中执行多个步骤,而评测模型只需对轨迹做分类——这使 LLM-as-a-Judge 被广泛使用(He et al., 2024; Zhou et al., 2024a,b)。在 AutoLibra 中,我们用配置了诱导指标的 LLM-as-a-Judge 来评测 Agent 轨迹。但 LLM-as-a-Judge 可以被实现了相同诱导指标的任何其他评测方法替换;例如 interact-valid-element(交互有效元素)指标可以由一个检查 Agent 是否与网页上有效元素交互的规则评审器来评测。我们注意到 AutoLibra 也可以与其他评测方法(如程序化评测(Ma et al., 2024))配合使用;为诱导指标生成评测程序留作未来工作。
+
+::: en
+As illustrated in Fig. 8, taking the induced metrics as input, an LLM (we use o3-mini medium, as it provides similar results in this step to o3-mini high) is prompted to rate the agent trajectories to {+1, -1, N/A} for each metric. For an agent trajectory, the metrics labeled +1 are the positive traits, and the ones labeled -1 are the negative traits. When we calculate the scores of the metrics, we use the ratio of agent trajectories rated as positive to the ones that are rated as positive or negative, ignoring those rated as N/A, since not all metrics are applicable to all trajectories (some metrics like valid-search-terms are only applicable when the task involves searching).
+:::
+
+如图 8 所示,以诱导指标为输入,提示一个 LLM(我们用 o3-mini medium,因这一步的结果与 o3-mini high 相近)对 Agent 轨迹按每个指标评分为 {+1, -1, N/A}。对一条 Agent 轨迹,标为 +1 的指标是**正特质(positive trait)**,标为 -1 的是**负特质(negative trait)**。计算指标得分时,我们用「被评正的轨迹数」除以「被评正或评负的轨迹数」(忽略评 N/A 的),因为并非所有指标都适用于所有轨迹(像 valid-search-terms 这类指标只在任务涉及搜索时适用)。
+
+**[图 2:Figure 2 | Metric optimization: optimizing the induction process through maximizing the coverage while minimizing redundancy of the metrics, calculated via the evaluation process.]**
+
+**中文说明**:图 2 展示指标优化回路:归纳(INDUCTION)以「轨迹-反馈」对为输入,产出指标(含指标描述、好行为、坏行为);评测(EVALUATION)用指标给轨迹打分并计算覆盖度(Coverage)与冗余度(Redundancy);优化目标为「最大化覆盖、最小化冗余(MAX/MIN)」,反过来调控归纳过程。
+
+::: en
+Meta evaluation The final loop component is the meta-evaluation, i.e. evaluating the evaluation metrics induced by AutoLibra. This step matches the traits detected by the LLM-as-a-Judge with aspects grounded from the human feedback. The goal is to verify whether (1) the induced metrics cover the behaviors the human annotators care about, and (2) LLM-as-a-Judge can produce accurate evaluation results based on the induced metrics. In the previous example, if the respond-promptly is extracted as a metric, and the LLM-as-a-Judge has the same opinion as the human annotators, then this aspect is considered as successfully covered. If either a similar metric was not extracted, or the LLM-as-a-Judge assigns a different score, then this aspect is considered as not covered.
+:::
+
+**元评测(Meta evaluation)** 闭环的最后一个组件是元评测,即评估 AutoLibra 诱导出的评测指标。这一步把 LLM-as-a-Judge 检出的特质与从人类反馈落地的切面相匹配,目标是验证:(1) 诱导指标是否覆盖人类标注者关心的行为;(2) LLM-as-a-Judge 能否基于诱导指标给出准确的评测结果。在前面的例子中,若 respond-promptly(响应及时)被提取为指标,且 LLM-as-a-Judge 与人类标注者意见一致,则该切面视为被**成功覆盖**;若相似指标未被提取、或 LLM-as-a-Judge 给出了不同评分,则该切面视为未被覆盖。
+
+::: en
+As illustrated in Fig. 9, we perform meta-evaluation for each trajectory-feedback pair by classifying the aspects into positive and negative aspects, classifying traits into positive and negative traits based on rating, then matching the positive aspects with positive traits and the negative aspects with negative traits. We prompt an LLM (we use GPT-4o (OpenAI et al., 2024)) with a list of aspects and another list of traits and ask the LLM to find the best matching trait for each aspect or decide that there is no matching trait. The coverage of the whole dataset is calculated as the proportion of aspects of all instances that have a matching trait, and the redundancy is calculated as the proportion of traits of all instances that have not been matched with any aspect.
+:::
+
+如图 9 所示,我们对每个「轨迹-反馈」对做元评测:把切面分为正、负切面,把特质按评分分为正、负特质,再把正切面与正特质匹配、负切面与负特质匹配。我们给一个 LLM(我们用 GPT-4o(OpenAI et al., 2024))一份切面列表与一份特质列表,让 LLM 为每个切面找到最佳匹配的特质、或判定不存在匹配特质。整个数据集的**覆盖度**按「所有实例中有匹配特质的切面占比」计算,**冗余度**按「所有实例中未匹配任何切面的特质占比」计算。
+
+### 3 优化与验证 AutoLibra
+
+::: en
+AutoLibra is designed to be self-validating through the evaluation process, which allows us to search the optimal set of metrics that cover the human opinion the best (§3.1). This optimization process can also be applied iteratively throughout the agent improvement process. As the agent is optimized, new metrics can be added to existing metrics (§3.2), which is similar to how unit tests are kept throughout software development to prevent new features from interfere with existing features. In the last part of this section, we study the alignment between each step of AutoLibra and human judgment.
+:::
+
+AutoLibra 的设计通过评测过程实现**自验证**,使我们能搜索最优覆盖人类意见的指标集(§3.1)。这一优化过程也可以在整个 Agent 改进过程中迭代应用:随着 Agent 被优化,可以把新指标加入既有指标(§3.2)——这与软件开发中全程保留单元测试、以防新功能干扰既有功能的做法类似。本节最后一部分,我们研究 AutoLibra 每一步与人类判断的对齐程度。
+
+#### 3.1 指标优化
+
+::: en
+Illustrated in Fig. 2, we optimize the metric induction process to maximize coverage and minimize redundancy. Among the two, we prioritize coverage of the metrics to provide a comprehensive evaluation of the agent behavior, while minimizing overlap within the metrics to avoid redundancy, thus maximizing the utility of induced metrics. To optimize for this objective, we generate 20 different sets of metrics, with metric count N ranging from 4 to 13, and calculate the coverage and redundancy of the metrics in human feedback. We then select metrics with a coverage of at least the highest coverage minus 1%, and the lowest redundancy. This is performed iteratively, by resetting the range of N to the number of metrics selected previously ±2, repeating until the coverage and redundancy of the selected metrics converge, normally within 3 iterations. While this optimization process is simple, experiments with various other optimization strategies, including genetic algorithms and iterative clustering saw none of them yield better results than the simple strategy. Fig. 3 shows the highest coverages of the metrics of size N, which converge around N = 6 to 10 depending on the datasets. The best coverage on Sotopia (Zhou et al., 2024b) is the lowest among all four datasets, 60%, likely due to the diversity of the tasks in the dataset, while coverage on WebArena (Zhou et al., 2024a) and WebVoyager (He et al., 2024) are the highest, 88%. We also find that the coverage of the held-out trajectories is only slightly worse (< 5%) than the trajectories we use to induce the metrics, which is expected since we use the exact examples extracted from the latter. Lastly, we show that the good and bad behaviors are crucial in the metrics, dropping which resulting in up to 30% coverage decrease on CoGym.
+:::
+
+如图 2 所示,我们优化指标归纳过程以**最大化覆盖度、最小化冗余度**。两者之中,我们优先指标的覆盖度,以对 Agent 行为给出全面评测;同时最小化指标间的重叠以避免冗余,从而最大化诱导指标的效用。为优化这一目标,我们生成 20 组不同的指标集,指标数 N 从 4 到 13,并在人类反馈上计算覆盖度与冗余度;然后选出覆盖度不低于「最高覆盖减 1%」且冗余度最低的指标。这一过程迭代执行:把 N 的范围重设为上次所选指标数 ±2,重复直至所选指标的覆盖度与冗余度收敛——通常 3 轮内完成。虽然这一优化过程很简单,但用多种其他优化策略(包括遗传算法与迭代聚类)做的实验表明,没有一个比这个简单策略效果更好。图 3 展示了各规模 N 指标的最高覆盖度,它们约在 N = 6 到 10 之间(依数据集而定)收敛。Sotopia(Zhou et al., 2024b)的最佳覆盖度在四个数据集中最低,为 60%,可能因该数据集任务的多样性;而 WebArena(Zhou et al., 2024a)与 WebVoyager(He et al., 2024)的覆盖度最高,为 88%。我们还发现,留出轨迹上的覆盖度只比用于诱导指标的轨迹差不到 5%——这符合预期,因为我们使用了从后者提取的确切示例。最后,我们表明好/坏行为示例在指标中至关重要:去掉它们会使 CoGym 上的覆盖度最多下降 30%。
+
+**[图 3:Figure 3 | Coverage and redundancy of AutoLibra metrics on four agentic datasets. Circles indicate coverage and redundancy for different induced metrics; stars indicate the best metrics' coverage and redundancy on held-out human feedback; squares show an ablation test, indicating the effect when good and bad behavior examples are removed from metrics, demonstrating the criticality of concrete behavior examples.]**
+
+**中文说明**:图 3 给出四个 Agent 数据集(CoGym、Sotopia、WebArena、WebVoyager)上 AutoLibra 指标的覆盖度-冗余度散点(横轴为冗余度,纵轴为覆盖度,范围 0.4-0.8;颜色对应指标数 N=2~12)。圆圈为不同诱导指标的覆盖度与冗余度;星形为最佳指标在**留出**人类反馈上的覆盖度与冗余度;方块为消融测试——从指标中去掉好/坏行为示例后的效果,可见覆盖度显著下降(在 CoGym 上最多降 30%),证明了具体行为示例的关键性。
+
+#### 3.2 迭代指标归纳
+
+::: en
+When applying AutoLibra to agent optimization, we can iteratively induce new metrics, as agents develop new failure modes or new behaviors as they improve, which is useful for tracking agents' progress across different iterations. To do this, we modify the behavior clustering step: we provide the LLM with the existing metrics and definitions, asking the LLM not to change the definitions of the existing metrics, to only add new behaviors to the existing metrics, and to add new metrics if necessary. We apply the same optimization strategy as in the metric optimization step ensure the newly induced metrics cover emerging behaviors and do not overlap with existing metrics.
+:::
+
+把 AutoLibra 应用于 Agent 优化时,我们可以**迭代诱导新指标**——因为 Agent 随着改进会发展出新的失败模式或新行为,这有利于跨迭代跟踪 Agent 的进展。为此,我们修改行为聚类步骤:向 LLM 提供既有指标与定义,要求 LLM 不更改既有指标的定义、只向既有指标添加新行为、必要时才新增指标。我们采用与指标优化步骤相同的优化策略,以确保新诱导的指标覆盖涌现行为、且与既有指标不重叠。
+
+> **脚注 5**:Alternatively, a new set of metrics can be induced from scratch for each iteration - in practice, we do not find that this results in any coverage loss, but we choose the former method for consistency. —— 另一种做法是每次迭代都从零诱导一组新指标——实践中我们没有发现这造成任何覆盖度损失,但为了一致性,我们选择前一种做法。
+
+#### 3.3 AutoLibra 各步与人类判断的对齐度如何?
+
+::: en
+Since AutoLibra uses LLMs in each step, we first ask whether LLM outputs are reliable or aligned with human judgment. To measure the alignment of AutoLibra metric induction with human judgment, we validate the feedback grounding, agent evaluation, and meta evaluation steps by having human experts manually review each step (with exception of the behavior clustering step, as it is prohibitively time-intensive for human annotators to process and cluster more than 400 aspects), scoring (1/0) based on whether they agree with the outcomes of each iteration. The coverage and redundancy scores, in combination with the validation results of the other steps in the loop, thus serve as an indirect validation for the behavior clustering step. Table 1 shows the agreement rate of human annotators in AutoLibra steps. It should be noted that these tasks are significantly different; e.g., grounding for WebVoyager (He et al., 2024) is challenging due to the length and wide action space of the trajectory, and LLM-as-a-Judge for Sotopia (Zhou et al., 2024b) is difficult due to the complexity of the evaluation of social interactions. Our results show that the majority (significantly over 85%) of results in AutoLibra are reliable according to human validation.
+:::
+
+由于 AutoLibra 每一步都用 LLM,我们首先要问:LLM 的输出是否可靠、是否与人类判断对齐?为度量 AutoLibra 指标归纳与人类判断的对齐度,我们让人类专家逐步人工复核**反馈落地、Agent 评测与元评测**三个步骤(行为聚类步骤除外——让人类标注者处理并聚类 400 多个切面过于耗时),按「是否同意各项输出结果」打分(1/0)。这样,覆盖度与冗余度得分,加上闭环中其他步骤的验证结果,就构成了对行为聚类步骤的间接验证。表 1 给出人类标注者在 AutoLibra 各步骤上的一致率。需要注意的是,这些任务的难度差别很大:例如 WebVoyager(He et al., 2024)因轨迹长、动作空间宽而落地困难,Sotopia(Zhou et al., 2024b)因社交互动评测的复杂性而评审困难。结果表明,按人类验证,AutoLibra 的结果中绝大多数(显著超过 85%)是可靠的。
+
+**表 1 | The ratio of instances marked as fully correct in human validation. For each step and each task, we randomly sample 40 instances to reach a relatively small confidence interval of 0.04 and ask human annotators to label them as completely correct or not. Although the agreement scores vary across tasks and steps, the average agreement for each step and dataset is above 0.85 significantly.**
+(人类验证中被标记为完全正确的实例比例。对每步、每任务随机抽取 40 个实例,以达到相对较小的 0.04 置信区间,让人类标注者标注其是否完全正确。虽然一致率随任务与步骤而变,但每步与每数据集的平均一致率都显著高于 0.85。)
+
+| 步骤 | CoGym | Sotopia | WebArena | WebVoyager | Baba-is-AI | 平均 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 反馈落地 Grounding | 0.95 | 0.95 | 0.98 | 0.93 | 0.93 | 0.95 (±0.03) |
+| LLM-as-a-Judge | 0.90 | 0.85 | 0.95 | 1.00 | 0.90 | 0.92 (±0.04) |
+| 元评测 Meta-Evaluation | 0.98 | 0.90 | 0.85 | 0.83 | 0.95 | 0.90 (±0.04) |
+
+### 4 作为透镜:用 AutoLibra 评测 Agent
+
+::: en
+In this section, we use AutoLibra as a lens to provide grounded, behavior-salient insights into agent trajectories. In three data sets, CoGym (Shao et al., 2024), Sotopia (Zhou et al., 2024b), and WebVoyager (He et al., 2024), we compare induced metrics with heuristically proposed evaluation dimensions and failure modes summarized by the authors. We find that AutoLibra can discover more concrete metrics than heuristically defined categories, and novel metrics that are overlooked by experts. Tab. 2 summarizes the comparison between AutoLibra-induced metrics and evaluation criteria across the three aforementioned datasets.
+:::
+
+本节把 AutoLibra 当作**透镜(lens)**,为 Agent 轨迹提供落地的、行为显著的洞察。在 CoGym(Shao et al., 2024)、Sotopia(Zhou et al., 2024b)与 WebVoyager(He et al., 2024)三个数据集上,我们把诱导指标与原作者启发式提出的评测维度和失败模式做对比。我们发现 AutoLibra 能发现比启发式定义类别**更具体**的指标,以及被专家**忽视的新指标**。表 2 总结了上述三个数据集上 AutoLibra 诱导指标与评测标准的对比。
+
+::: en
+CoGym For CoGym (Shao et al., 2024), AutoLibra induces 9 metrics from feedback from end users, which can correspond to the five failure categories proposed by the authors. The failure rate (frequency of a metric score of -1) measured by AutoLibra also roughly matches the failure rate of the manually labeled CoGym categories by the authors. This shows that AutoLibra induces metrics that reflect human-expert categorization and provide an automated measurement of agent failures.
+:::
+
+**CoGym** 对 CoGym(Shao et al., 2024),AutoLibra 从终端用户反馈中诱导出 9 个指标,可与作者提出的五类失败对应。AutoLibra 测得的失败率(某指标评分为 -1 的频率)也与作者人工标注的 CoGym 类别失败率大致吻合。这说明 AutoLibra 诱导的指标能反映人类专家的分类,并提供了 Agent 失败的自动化度量。
+
+::: en
+Sotopia Sotopia (Zhou et al., 2024b) proposed 7 dimensions for evaluating social intelligence in AI agents. With AutoLibra, we recover the exact dimension Goal Completion, and 3 metrics as the subdimensions of Believability, indicating that Believability could be too high-level, while AutoLibra provides more concrete breakdown metrics. The failure rate (frequency of a score of -1 metric rating, indicating the agent performs poorly on that metric) measured by AutoLibra in these two categories roughly matches the score of the Sotopia dimensions of the agent we studied. AutoLibra induces another four metrics overlooked in the heuristically proposed Sotopia-Eval dimensions. We note that the other five dimensions in Sotopia are still valuable evaluation dimensions for social intelligence. However, behaviors captured by dimensions Financial and Material Benefits, Knowledge, and Secret are often also captured by Goal Completion and Believability. As a result, AutoLibra produces the single Goal Achievement and Outcome Effectiveness by minimizing redundancy. Whereas, Relationship and Social Rules captures long-tailed behaviors not captured by AutoLibra.
+:::
+
+**Sotopia** Sotopia(Zhou et al., 2024b)为评测 AI Agent 的社交智能提出了 7 个维度。用 AutoLibra,我们精确恢复了「目标完成(Goal Completion)」这一维度,并有 3 个指标对应「可信度(Believability)」的子维度——说明 Believability 可能过于高层,而 AutoLibra 给出了更具体的分解指标。AutoLibra 在这两类上测得的失败率(指标评分为 -1 的频率,表示 Agent 在该指标上表现不佳)与我们所研究 Agent 的 Sotopia 维度得分大致吻合。AutoLibra 还诱导出另外 4 个被启发式提出的 Sotopia-Eval 维度忽视的指标。我们注意到 Sotopia 的其余五个维度仍是评估社交智能的有价值维度;不过「财务与物质收益(Financial and Material Benefits)」「知识(Knowledge)」「秘密(Secret)」这些维度所捕捉的行为,也常被 Goal Completion 与 Believability 捕捉——因此 AutoLibra 通过最小化冗余,把它们合并成了单一的「目标达成与结果有效性(Goal Achievement and Outcome Effectiveness)」;而「关系(Relationship)」与「社会规则(Social Rules)」捕捉的是 AutoLibra 未覆盖的长尾行为。
+
+::: en
+WebVoyager Similarly, for web navigation tasks, AutoLibra also discovers metrics such as Access Barrier Handling, Error Recovery and Adjustment, Step Efficiency and Action Redundancy, and Navigation Accuracy, which much more closely reflect concrete agent behavior than the failure analysis categories proposed in previous work (He et al., 2024; Zhou et al., 2024c), where they are often simply classified as "navigation stuck". We also find additional metrics that are not mentioned in the failure analysis, such as Query and Search Strategy Efficiency and Final Output and Summarization Quality, which are frequent issues (with frequencies of 7% and 18%). Since AutoLibra only observes the behavior of the agents, it cannot interpret the neural representation, not able to capture the visual grounding issues, which are mentioned in the WebVoyager paper. This further demonstrates AutoLibra's utility in extracting behavior-salient metrics, and particularly its ability to obtain fine-grained metrics that expert design would not have been able to extract.
+:::
+
+**WebVoyager** 类似地,对网页导航任务,AutoLibra 还发现了诸如「访问障碍处理(Access Barrier Handling)」「错误恢复与调整(Error Recovery and Adjustment)」「步骤效率与动作冗余(Step Efficiency and Action Redundancy)」「导航准确性(Navigation Accuracy)」等指标,它们比以往工作(He et al., 2024; Zhou et al., 2024c)失败分析提出的类别**更贴近具体的 Agent 行为**——在那里它们常被简单归为「导航卡住(navigation stuck)」。我们还发现了失败分析中未提及的其他指标,如「查询与搜索策略效率(Query and Search Strategy Efficiency)」与「最终输出与总结质量(Final Output and Summarization Quality)」,它们是高频问题(频率分别为 7% 与 18%)。由于 AutoLibra 只观察 Agent 的行为、无法解读神经表征,它捕捉不到 WebVoyager 论文中提到的**视觉接地(visual grounding)**问题。这进一步证明了 AutoLibra 在提取行为显著指标上的效用,尤其是它获取专家设计所无法提取的细粒度指标的能力。
+
+**表 2 | AutoLibra-induced metrics and expert-proposed evaluation dimensions and failure categories. (Percentage %) denotes failure frequency or score from AutoLibra or the original papers.**
+(AutoLibra 诱导指标与专家提出的评测维度、失败类别。百分比(%)表示来自 AutoLibra 或原论文的失败频率或得分。)
+
+**CoGym(Shao et al., 2024)— 相互匹配的指标与失败类别:**
+
+| AutoLibra 诱导指标(失败率) | 专家失败类别(频率) |
+| --- | --- |
+| 响应性与效率 Responsiveness and Efficiency(75%) | |
+| 沟通清晰度与通知 Communication Clarity & Notification(8%) | 沟通 Communication(65%) |
+| 指令遵循与执行 Instruction Adherence & Follow-Through(24%) | 情境感知 Situational Awareness(40%) |
+| 迭代精炼与适应性 Iterative Refinement and Adaptability(47%) | |
+| 自主性与主动性 Autonomy and Proactiveness(28%) | 规划 Planning(39%) |
+| 内容质量与连贯性 Content Quality and Coherence(16%) | |
+| 搜索与检索准确性 Search and Retrieval Accuracy(13%) | |
+| 数据分析能力 Data Analysis Competence(2%) | |
+| 环境感知 Environmental Awareness(28%) | |
+| 界面与用户体验 Interface and User Experience(23%) | 个性化 Personalization(16%) |
+
+**Sotopia(Zhou et al., 2024b)— 相互匹配的指标与社交维度:**
+
+| AutoLibra 诱导指标(失败率) | Sotopia 评测维度(得分) |
+| --- | --- |
+| 目标达成与结果有效性 Goal Achievement & Outcome Effectiveness(19%) | 目标完成 Goal Completion(14%) |
+| 对话自然度与效率 Conversational Naturalness & Efficiency(5%) | 可信度 Believability(4%) |
+| 人格一致性与对齐 Personality Consistency and Alignment(2%) | |
+| 上下文中的身份整合 Contextual Integration of Identity(1%) | |
+
+未匹配的 AutoLibra 诱导指标:谈判策略与策略性适应 Negotiation Tactics and Strategic Adaptability(14%)、响应性与对话收尾 Responsiveness and Conversational Termination(5%)、对话中的适应性与灵活性 Adaptability and Flexibility in Dialogue(7%)。
+未匹配的 Sotopia-Eval 维度:关系 Relationship、知识 Knowledge、秘密 Secret、财务与物质收益 Financial and Material Benefits、社会规则 Social Rules。
+
+**WebVoyager(He et al., 2024)— 相互匹配的指标与失败原因:**
+
+| AutoLibra 诱导指标(失败率) | 专家失败原因(频率) |
+| --- | --- |
+| 错误恢复与调整 Error Recovery & Adjustment(15%) | 导航卡住 Navigation Stuck(44%) |
+| 步骤效率与动作冗余 Step Efficiency & Action Redundancy(13%) | |
+| 导航准确性 Navigation Accuracy(11%) | |
+| 访问障碍处理 Access Barrier Handling(2%) | |
+| 信息与验证准确性 Information & Verification Accuracy(16%) | 幻觉 Hallucination(22%) |
+| 结果相关性准确性 Result Relevance Accuracy(9%) | 提示不对齐 Prompt Misalignment(9%) |
+
+未匹配的 AutoLibra 诱导指标:查询与搜索策略效率 Query and Search Strategy Efficiency(7%)、最终输出与总结质量 Final Output and Summarization Quality(18%)。
+未匹配的 WebVoyager 失败原因:视觉接地问题 Visual Grounding Issue(25%)。
+
+### 5 作为阶梯:用 AutoLibra 改进 Agent
+
+::: en
+As AutoLibra can automatically induce metrics from human feedback, a natural question to ask is whether it can enable self-regulated improvement in agents through iterative feedback. This can be achieved through optimizing the agent prompts towards higher scores on the metrics extracted by AutoLibra. To answer this question, we use a challenging 2D game Baba-Is-AI (Cloos et al., 2024; Paglieri et al., 2024) as a benchmark.
+:::
+
+既然 AutoLibra 能从人类反馈自动诱导指标,一个自然的问题随之而来:它能否通过迭代反馈实现 Agent 的**自我调节式改进**?这可以通过朝着 AutoLibra 提取指标上的更高得分优化 Agent 提示来实现。为回答这个问题,我们用一个高难 2D 游戏 **Baba-Is-AI**(Cloos et al., 2024; Paglieri et al., 2024)作为基准。
+
+**[图 4:Figure 4 | AutoLibra iteratively induce metrics and improves the agent prompts through optimizing for the induced metrics. Although not optimized for, the success rate of the agent continuously improve until Stage 3, when the agent begins to overthink.]**
+
+**中文说明**:图 4 展示 AutoLibra 迭代诱导指标并通过为诱导指标优化来改进 Agent 提示:三个阶段依次诱导 5 个指标、再 5 个、再 1 个(如「形成新规则时展现对地图边界的意识」「一致地形成获胜条件」「形成自指规则」等),每阶段前由人类提供反馈;成功率曲线(40%-70% 区间)与累计平均指标分随迭代持续上升;尽管从未直接优化成功率,Agent 成功率仍持续改进——直到阶段 3,Agent 开始「想太多(Overthinking)」并出现性能回落。
+
+::: en
+Inspired by Baba-Is-You, this game requires not only following rules to achieve goals, but also manipulating the rules, even self-referential ones. For example, in the game illustrated in Fig. 5, the agent needs to change self-referential rules from baba is you, to door is you to control the green door on the other side of the wall, form a new win rule ball is win, and navigate to the red ball to achieve the win condition. To achieve a high score on this dataset, the agent needs not only planning, but also metacognitive skills, which is very challenging for LLM agents with frontier models as shown in the Balrog benchmark (Paglieri et al., 2024). In this experiment, we use Gemini-2.5-Flash (Team et al., 2025) for the agent, AutoLibra, and agent prompt optimization, throughout the experiment, which will be referred as the LLM in this section. Gemini-2.5-Flash is ranked as the 3rd place, with a success rate of 50.8% ± 4.6% on the Balrog leaderboard for Baba-is-AI at the time of submission, and the state-of-the-art result is 56.7% ± 4.5%. We chose this model due to the tradeoff between the cost and the performance.
+:::
+
+受《Baba Is You》启发,这个游戏不仅要求遵循规则以达成目标,还要求**操纵规则**、甚至操纵**自指规则(self-referential rule)**。例如在图 5 所示的游戏中,Agent 需要把自指规则从 `baba is you` 改成 `door is you`,以控制墙另一侧的绿门,再形成新的获胜规则 `ball is win`,并走到红球处以达成获胜条件。要在这个数据集上得高分,Agent 不仅需要规划,还需要元认知(metacognitive)技能——如 Balrog 基准(Paglieri et al., 2024)所示,这对使用前沿模型的 LLM Agent 极具挑战。本实验中,我们全程使用 Gemini-2.5-Flash(Team et al., 2025)分别充当 Agent、AutoLibra 与 Agent 提示优化器,本节将其统称为「该 LLM」。提交之时,Gemini-2.5-Flash 在 Balrog 榜单 Baba-Is-AI 上排第三,成功率 50.8% ± 4.6%(当时的最优结果为 56.7% ± 4.5%)。我们选择该模型是出于成本与性能之间的折中。
+
+**[图 5:Figure 5 | Example of Baba-Is-AI game.]**
+
+**中文说明**:图 5 给出 Baba-Is-AI 游戏示例(三个时刻):① 这是「baba」;② 把身份改成门(change identity to door),此后即可控制门;③ 触碰球即获胜(touch the ball to win)——即通过改写规则「door is you」控制门,形成「ball is win」并触碰红球获胜。
+
+::: en
+Fig. 4 illustrated our procedure, and summarized the results. In this experiment, we employ an iterative process by improving the agents in 3 stages through providing human feedback on 6 out of 40 tasks in the Baba-Is-AI (Paglieri et al., 2024) benchmark. In this way, we can study if the feedback provided for training tasks can be generalized to unseen tasks.
+:::
+
+图 4 展示了我们的流程并总结了结果。本实验中,我们通过在 Baba-Is-AI(Paglieri et al., 2024)基准 40 个任务中的 6 个上提供人类反馈,分 3 个阶段迭代改进 Agent。这样,我们就能研究为「训练任务」提供的反馈能否泛化到未见任务。
+
+::: en
+Before each stage we show human annotators 3 trajectories per task for the 6 tasks, gather the feedback, and apply AutoLibra iterative metric induction process (§3.2). This results in 5 metrics for Stage 1 and 2, and another 1 metric for Stage 3. Within each stage, we iteratively feed 1 LLM agent trajectory on each of these 6 tasks, together with evaluation results based on these AutoLibra-induced metrics to the LLM to improve the prompt of the LLM agent. This process results in continuous improvement not only on the running maximum metric scores, the cumulative average metrics, but also game success rate. Fig. 4 shows these statistics on the whole 40 tasks, although we only use 6 out of the 40 tasks in the whole optimization process. Upon examining the agent trajectories, we find the skills learned in the process. In the first stage, the agent learns to find rules to form based on the map boundary, which could be a result of an induced metric map-n-constraint-recognition. Similarly, more advanced skills are learned in Stage 2 and 3, including forming win conditions and self-referential rules, probably as a result of metric rule-manipulation-proficiency.
+:::
+
+每个阶段前,我们向人类标注者展示这 6 个任务、每任务 3 条轨迹,收集反馈,并运行 AutoLibra 迭代指标归纳过程(§3.2)。结果为阶段 1、2 各得到 5 个指标,阶段 3 再得 1 个指标。在每个阶段内,我们迭代地把这 6 个任务上每任务 1 条 LLM Agent 轨迹、连同基于这些 AutoLibra 诱导指标的评测结果,一起喂给 LLM 以改进 LLM Agent 的提示。这一过程带来的持续提升不仅在**运行最大指标得分**与**累计平均指标**上,也在**游戏成功率**上。图 4 展示了整个 40 个任务上的这些统计量——尽管整个优化过程我们只用了 40 个任务中的 6 个。检查 Agent 轨迹后,我们发现了过程中习得的技能:第一阶段,Agent 学会根据地图边界寻找可形成的规则,这可能是诱导指标 map-n-constraint-recognition(地图与约束识别)的结果;类似地,阶段 2、3 习得了更高级的技能,包括形成获胜条件与自指规则,可能源自 rule-manipulation-proficiency(规则操纵熟练度)指标。
+
+::: en
+Our results show that the metrics induced by AutoLibra form effective objectives for improving the agents through prompt optimization. It should note that AutoLibra is a metric induction method, which is orthogonal to learning algorithms, including prompt optimization, fine-tuning or reinforcement learning. We show that this process improves agent success rate by 20% without optimizing for success rate, and in the future, researchers can study the effect of employing other learning algorithm.
+:::
+
+我们的结果表明,AutoLibra 诱导的指标构成了通过提示优化改进 Agent 的**有效目标**。应当注意,AutoLibra 是一种指标归纳方法,与学习算法(包括提示优化、微调或强化学习)**正交**。我们表明,这一过程在**未优化成功率**的情况下把 Agent 成功率提升了 20%;未来研究者可以研究采用其他学习算法的效果。
+
+### 6 相关工作
+
+::: en
+AutoLibra unifies three areas of research: it draws inspiration from thematic analysis to create nautral language-derived evaluation metrics to evaluate and reward AI agents.
+:::
+
+AutoLibra 统一了三个研究领域:它从主题分析中汲取灵感,创建源自自然语言的评测指标,用来评测并奖励 AI Agent。
+
+::: en
+Evaluating AI agents Much of the work in AI agent evaluation focuses around benchmarks which contains both task suites and evaluation metrics. In addition to the datasets we used in this paper, SWE-Bench (Jimenez et al., 2024) uses human-written unit tests as evaluation metrics; Embodied Agent Interface (Li et al., 2024) provides fine-grained evaluation for LLM-based embodied agents; τ-Bench (Yao et al., 2024) compares database states for evaluation; concurrent work AgentReward-Bench (Lù et al., 2025) builds a benchmark for reward models for web agents. Recently, there are observatory tools including Galileo (Galileo, 2025), Vertex AI Gen AI (Cloud, 2025), and Docent (Meng et al., 2025) which provide user interfaces to visualize agent failure modes. Generating intrinsic rewards have also been studied in the reinforcement learning community (Du et al., 2019; Laskin et al., 2022; Pathak et al., 2017) to encourage exploration, sub-task completion, or skill discovery. In contrast to these, AutoLibra is a pure data-driven task-agnostic method without predefined failure taxonomy for generating interpretable metrics for agents.
+:::
+
+**评测 AI Agent(Evaluating AI agents)** AI Agent 评测的大量工作围绕**基准(benchmark)**展开——基准同时包含任务套件与评测指标。除本文使用的数据集之外:SWE-Bench(Jimenez et al., 2024)用人工编写的单元测试作为评测指标;Embodied Agent Interface(Li et al., 2024)为基于 LLM 的具身 Agent 提供细粒度评测;τ-Bench(Yao et al., 2024)通过比较数据库状态来评测;同期工作 AgentReward-Bench(Lù et al., 2025)为 Web Agent 的奖励模型构建了基准。近来还出现了 Galileo(Galileo, 2025)、Vertex AI Gen AI(Cloud, 2025)与 Docent(Meng et al., 2025)等观测工具,提供可视化 Agent 失败模式的用户界面。生成**内在奖励(intrinsic reward)**在强化学习社区亦有研究(Du et al., 2019; Laskin et al., 2022; Pathak et al., 2017),用于鼓励探索、子任务完成或技能发现。与之相比,AutoLibra 是一种纯数据驱动、任务无关的方法:无需预定义的失败分类学(failure taxonomy),即可为 Agent 生成可解释的指标。
+
+::: en
+Learning from natural language and human feedback Researchers have been studying reinforcement learning with language feedback to provide a dense reward to agents (Goyal et al., 2019). Since LLM agents are even harder to train with sparse reward, there is substantial interest in training LLM agents from natural language feedback. Chen et al. (2024) propose an imitation learning method for learning from human feedback; Text2Reward (Xie et al., 2024) uses code generation to generate robot reward functions from open-ended human feedback; our work (Chen et al., 2025) uses feedback to the improvement agent policy with prompting and then align the unprompted agent policy with the prompted one; Shi et al. (2024) propose a new model architecture to incorporate human feedback into policy learning. On the other hand, human non-open-ended feedback is also incorporated in training agents, including rating feedback (Nguyen et al., 2017), preference feedback (Christiano et al., 2017), demonstrative feedback (Shaikh et al., 2025). Unlike these papers, AutoLibra induces metrics from feedback from all annotated instances and generates metrics that are generalizable to different tasks and useful for both evaluation and agent fine-tuning.
+:::
+
+**从自然语言与人类反馈学习(Learning from natural language and human feedback)** 研究者一直在研究带语言反馈的强化学习,为 Agent 提供**稠密奖励(dense reward)**(Goyal et al., 2019)。由于 LLM Agent 在稀疏奖励下更难训练,从自然语言反馈训练 LLM Agent 受到大量关注。Chen et al. (2024) 提出一种从人类反馈学习的模仿学习方法;Text2Reward(Xie et al., 2024)用代码生成把开放式人类反馈转化为机器人奖励函数;我们此前的工作(Chen et al., 2025)用反馈通过提示改进 Agent 策略,再让未加提示的 Agent 策略与加提示的策略对齐;Shi et al. (2024) 提出把人类反馈纳入策略学习的新模型架构。另一方面,人类的非开放式反馈也被用于训练 Agent,包括评分反馈(rating feedback)(Nguyen et al., 2017)、偏好反馈(preference feedback)(Christiano et al., 2017)、示范反馈(demonstrative feedback)(Shaikh et al., 2025)。与这些论文不同,AutoLibra 从**所有**标注实例的反馈中归纳指标,所生成的指标可泛化到不同任务,并同时服务于评测与 Agent 微调。
+
+::: en
+Thematic analysis Thematic analysis is a powerful tool for qualitative study through coding and iterative creation of themes. Gauthier & Wallace (2022) provide computational tools to aid this process; Hong et al. (2022) and Gebreegziabher et al. (2023) explore human-AI collaboration in thematic analysis; LLooM (Lam et al., 2024), an automatic method for concept induction, closly aligns with and informs our approach. This paper completes the loop of concept induction by using the meta-evaluation step to optimize the induced metrics, and apply it to agent evaluation.
+:::
+
+**主题分析(Thematic analysis)** 主题分析是通过编码与迭代创建主题开展质性研究的强大工具。Gauthier & Wallace (2022) 为这一过程提供了计算工具;Hong et al. (2022) 与 Gebreegziabher et al. (2023) 探索了主题分析中的人机协作;LLooM(Lam et al., 2024)是一种自动**概念归纳(concept induction)**方法,与我们的思路最为接近并给了我们启发。本文用元评测步骤优化诱导出的指标,补全了概念归纳的闭环,并将其应用于 Agent 评测。
+
+### 7 结论与未来工作
+
+::: en
+This work introduces AutoLibra, a new paradigm for agent evaluation, one of the first works to explore adaptable trajectory-derived evaluation heuristics, offering substantial advantages in agent training over traditional end-to-end evaluation. We find that this framework is generalizable to a diverse range of agent tasks, provides new insights into agent behaviors, and identifies strong optimization targets for agent improvement. There are a few directions for further extending and applying this framework. (1) Behavior-centric evaluation AutoLibra leads a paradigm shift from end-to-end agent evaluation (analogous to “integration tests” in software development) to evaluation with granular metrics that measure agents’ concrete behaviors (analogous to “unit tests”). Future work can study whether this process can be improved through better human-AI collaboration. (2) Sub-trajectory feedback from humans In AutoLibra, we label each trajectory with one piece of feedback, and ground it into the agents’ concrete behavior which is at the sub-trajectory level. In the future, researchers can let users directly give feedback for one or multiple steps in the trajectory, which should lead to better feedback grounding results. Similarly, user feedback can be collected during the interaction instead of after the agent has completed the tasks, which is a more user-friendly way to gather high quality feedback data. (3) Wider exploration of agent improvement methods In this paper, we only explored non-parametric for agent improvement to show the utility of AutoLibra. Future work can use AutoLibra to provide dense rewards for individual steps, and use reinforcement learning to train agents with these dense rewards.
+:::
+
+本文提出了 AutoLibra——一种新的 Agent 评测范式,也是最早探索「可适配的、从轨迹归纳的评测启发式」的工作之一;相较传统的端到端评测,它在 Agent 训练上具有显著优势。我们发现这一框架可泛化到多种多样的 Agent 任务、为 Agent 行为提供新洞察,并识别出改进 Agent 的强优化目标。进一步扩展与应用这一框架有以下几个方向:(1) **行为中心的评测(Behavior-centric evaluation)**——AutoLibra 引领了一场范式转变:从端到端 Agent 评测(类比软件开发中的「集成测试(integration test)」),转向用度量 Agent 具体行为的细粒度指标做评测(类比「单元测试(unit test)」)。未来工作可以研究能否通过更好的人机协作改进这一过程。(2) **来自人类的子轨迹反馈(Sub-trajectory feedback from humans)**——在 AutoLibra 中,我们为每条轨迹只标注一条反馈,并将其落地到子轨迹级别的 Agent 具体行为上。未来,研究者可以让用户直接针对轨迹中的一个或多个步骤给出反馈,这应能带来更好的反馈落地效果;类似地,用户反馈可以在交互进行中收集,而非等 Agent 完成任务之后——这是收集高质量反馈数据的一种更用户友好的方式。(3) **更广地探索 Agent 改进方法(Wider exploration of agent improvement methods)**——本文为展示 AutoLibra 的效用,只探索了非参数式(non-parametric)的 Agent 改进方法。未来工作可以用 AutoLibra 为单个步骤提供稠密奖励,并用强化学习以这些稠密奖励训练 Agent。
+
+### 8 更大图景
+
+::: en
+Humans learn not only from their own experience, but crucially from collective knowledge transmitted through social interaction (Tomasello et al., 1993). This capacity for social learning and teaching enables knowledge accumulation across generations, allowing us to build upon rather than reinvent skills and artifacts (Humphrey, 1976). At the core of this capability lies a distinctive form of intelligence that sets humans apart from species lacking cumulative culture: social intelligence. A fundamental question emerges: how can we leverage this social intelligence to enable AI agents to learn from humans and potentially teach them in similar ways?
+:::
+
+人类不仅从自身经验中学习,更关键的是从经由社会互动传递的集体知识中学习(Tomasello et al., 1993)。这种社会学习与教学的能力使知识得以跨代积累,让我们能在既有技能与造物之上继续构建,而非重复发明(Humphrey, 1976)。处于这一能力核心的,是一种把人类与其他缺乏**累积文化(cumulative culture)**的物种区分开来的独特智能形式:**社会智能(social intelligence)**。由此引出一个根本问题:我们如何利用这种社会智能,让 AI Agent 向人类学习、甚至以类似的方式反过来教人类?
+
+::: en
+Current training paradigms for language agents predominantly focus on behavior cloning or reinforcement learning from self-generated experience. However, behavior cloning has inherent limitations for skill acquisition. First, it requires teachers or demonstrators to operate in the same environment as the learning agent, constraining the scalability of knowledge transfer. Second, agents learning from one or a few demonstrations may develop misunderstandings about what constitutes appropriate behavior. In such cases, explicit verbal feedback from teachers becomes crucial for establishing the boundaries of acceptable behaviors and clarifying underlying principles that cannot be easily inferred from demonstrations alone.
+:::
+
+当前语言 Agent 的训练范式主要聚焦于**行为克隆(behavior cloning)**或从自生成经验中做强化学习。然而,行为克隆在技能习得上存在固有局限:第一,它要求教师或示范者与学习 Agent 在同一环境中操作,限制了知识迁移的可扩展性;第二,从一条或少数几条示范中学习的 Agent 可能对「何为恰当行为」产生误解。在这些情形下,教师明确的言语反馈就变得至关重要——它能为可接受的行为划定边界,并澄清那些难以仅凭示范推断出来的底层原理。
+
+::: en
+AutoLibra offers a computational approach to address these limitations by incorporating the verbal feedback that humans naturally exchange in daily interactions to systematically improve agent behavior. Looking forward, the broader vision is to deploy AI agents in real-world settings where they can learn from diverse human feedback at scale. This approach could enable agents to acquire skills from the collective experience of all users, forming both general competencies and specialized skill sets at personal and organizational levels, mirroring how human communities accumulate and share knowledge.
+:::
+
+AutoLibra 提供了一条应对这些局限的计算途径:把人类在日常互动中自然交换的言语反馈纳入进来,系统地改进 Agent 行为。展望未来,更宏大的愿景是把 AI Agent 部署到真实场景中,使其能大规模地从多样的人类反馈中学习。这一途径有望让 Agent 从全体用户的集体经验中习得技能,在个人与组织层面同时形成通用能力与专属技能组合——正如人类社群积累与共享知识的方式。
+
+::: en
+Going one step further, such agents could serve as intermediaries for accelerating skill and culture transmission between humans themselves—distilling expertise from proficient users into interpretable metrics and actionable feedback that can guide novices, thereby compressing traditional learning curves and democratizing access to specialized knowledge.
+:::
+
+更进一步,这样的 Agent 还能充当人类之间技能与文化传递的加速中介——把熟练用户的专长蒸馏为可解释的指标与可行动的反馈,用以指导新手,从而压缩传统的学习曲线、让专业知识变得人人可及。
+
+### 致谢
+
+::: en
+This work is supported by ONR grant N000142412532, and NSF grant IIS-2247357, and DARPA grant Friction for Accountability in Conversational Transactions. We thank Google Cloud Platform and Modal Platform for their credits. We thank Yutong Zhang, Hayley Zhang, Yijia Shao, Michelle S Lam, Manling Li, Ryan Louie, Yanzhe Zhang, Xuhui Zhou, Maarten Sap, Sherry Tongshuang Wu, Shikhar Murty, Saujas Vaduguru, Chenghao Yang, Xizhi Xiao, Anant Sinha and all members of Stanford SALT Lab for their help and feedback throughout this project.
+:::
+
+本工作受 ONR 基金 N000142412532、NSF 基金 IIS-2247357 以及 DARPA 基金 Friction for Accountability in Conversational Transactions 支持。感谢 Google Cloud Platform 与 Modal Platform 提供的算力额度。感谢 Yutong Zhang、Hayley Zhang、Yijia Shao、Michelle S Lam、Manling Li、Ryan Louie、Yanzhe Zhang、Xuhui Zhou、Maarten Sap、Sherry Tongshuang Wu、Shikhar Murty、Saujas Vaduguru、Chenghao Yang、Xizhi Xiao、Anant Sinha 以及 Stanford SALT Lab 全体成员在本项目中给予的帮助与反馈。
+
+> **译注(完)**:正文(摘要、第 1-8 节与致谢,原文第 1-14 页)至此译毕。其后的 References(参考文献)与附录 A-P(AutoLibra 方法图解与 Ladder 算法伪代码、Baba-Is-AI 与 MiniHack 的规则/环境细节与实验结果、各迭代指标得分表、诱导指标完整示例、全部提示词、Agent 表现定性观察、WebVoyager/NNetNav-Live 诱导指标)均不予翻译,请查阅原文 PDF;附录要点已浓缩在精读页与下方「要点速览」。
+
+## 要点速览
+
+- 核心主张:任务成功率太粗、专家手工设计成本高、奖励不了中间涌现行为——应从开放式人类反馈(「按钮禁用就别再点」)自动归纳细粒度、可解释的 Agent 评测指标。
+- 方法两步走(源自主题分析):反馈落地(切面 = 行为-反馈-符号三元组,GPT-4o + 受限解码)→ 行为聚类(o3-mini high 把切面聚成带定义、正例、反例的指标;统计聚类会按任务而非行为分簇)。
+- 元评测是灵魂:覆盖度(人类反馈切面被指标命中的比例)+ 冗余度(检出特质中人类未提及的比例),二者搜索最优指标集,让框架自验证;最优指标数 N 收敛在 6-10。
+- 量化结果:Sotopia 最佳覆盖度 60%、WebArena/WebVoyager 达 88%;留出集覆盖度仅差 <5%;去掉正/负行为示例会使覆盖度最多掉 30%;每条轨迹只需 1 条反馈、标注不足 5 分钟。
+- 各步人类验证一致率高:反馈落地 0.95、LLM-as-a-Judge 0.92、元评测 0.90(均 >0.85);评审输出为 +1/−1/N/A 三值,得分按非 N/A 轨迹归一。
+- 「作为透镜」:诱导指标比专家分类更细——CoGym 9 指标对齐 5 类失败且失败率吻合;Sotopia 把「可信度」拆成 3 个子维度并新增 4 个被忽视的维度;WebVoyager 把「导航卡住」细分为错误恢复、步骤效率、导航准确性等,并发现总结质量(18%)等新失败;但捕捉不到视觉接地这类内部表征问题。
+- 「作为阶梯」:Baba-Is-AI 上以 Gemini-2.5-Flash 全流程,3 阶段、每阶段 18 条轨迹反馈、只用 6/40 任务优化提示,成功率提升 20% 以上且未直接优化成功率;阶段 3 出现「想太多」回落;MiniHack 上 0%→12.5%→25%。
+- 设计原则:指标从行为诱导、自验证、任务无关;LLM-as-a-Judge 可替换为实现同一指标的任意评审器;迭代归纳时锁定既有指标定义、只增不改,类似单元测试的累积。
+- 局限与展望:依赖行为观测而非内部表征;反馈粒度目前是整条轨迹一条(可扩展到子轨迹/交互中反馈);改进只探索了非参数的提示优化,未来可做稠密奖励 + RL。
+- 与本周材料的呼应:与 Zheng2023 的 LLM-as-a-Judge(本文直接采用其评审范式)衔接,与 AutoMetrics 同解「评审标准从哪来」——AutoMetrics 用回归合成标量指标,AutoLibra 用聚类归纳行为指标并多了覆盖/冗余的自验证闭环。
+
+
+
+

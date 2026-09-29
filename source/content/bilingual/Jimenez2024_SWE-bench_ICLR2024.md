@@ -1,0 +1,245 @@
+---
+title: "SWE-bench: Can Language Models Resolve Real-World Github Issues?"
+title_zh: "SWE-bench:语言模型能解决真实世界的 GitHub Issue 吗?"
+authors: Carlos E. Jimenez, John Yang, Alexander Wettig, et al.
+venue: "ICLR 2024 · Princeton University"
+kind: paper
+importance: must
+tags: 基准,软件工程,智能体评测,GitHub issue,测试验证
+summary: 从 12 个流行 Python 仓库的 9 万个 PR 中筛出 2294 个"真实 issue + 测试验证"任务;发布时最强模型 Claude 2 仅解决 1.96%——编程智能体时代的标志性基准。
+---
+
+## 导读
+
+第 9 周「编程智能体」的基石论文:定义了后来整个领域论英雄的任务形态——给定真实仓库代码快照与一条 issue,让模型生成补丁,用仓库真实测试(含"修前失败、修后通过"的 fail-to-pass 测试)判定是否解决。三阶段流水线(仓库抓取→属性过滤→执行过滤)从约 9 万个 PR 蒸馏出 2294 个高质量实例;发现当时的模型几乎全线溃败(Claude 2 + BM25 仅 1.96%),困难与上下文长度强相关、与 issue 日期无关;附带 1.9 万实例训练集与微调的 SWE-Llama。与 SWE-agent(为它造出的智能体)、OpenHands(平台化)构成本讲的因果链。本页为**全文中英对照**版本(正文全部,附录略)。
+
+## 全文对照翻译
+
+> **译注**:覆盖论文正文(摘要、第 1-9 节,原文第 1-10 页)。附录 A-J(构建细节、SWE-Llama 训练细节、输入样例、案例研究等)未收录,请查阅原文 PDF;要点已浓缩在文末"要点速览"。
+
+::: en
+**ABSTRACT** — Language models have outpaced our ability to evaluate them effectively, but for their future development it is essential to study the frontier of their capabilities. We find real-world software engineering to be a rich, sustainable, and challenging testbed for evaluating the next generation of language models. To this end, we introduce SWE-bench, an evaluation framework consisting of 2,294 software engineering problems drawn from real GitHub issues and corresponding pull requests across 12 popular Python repositories. Given a codebase along with a description of an issue to be resolved, a language model is tasked with editing the codebase to address the issue. Resolving issues in SWE-bench frequently requires understanding and coordinating changes across multiple functions, classes, and even files simultaneously, calling for models to interact with execution environments, process extremely long contexts and perform complex reasoning that goes far beyond traditional code generation tasks. Our evaluations show that both state-of-the-art proprietary models and our fine-tuned model SWE-Llama can resolve only the simplest issues. The best-performing model, Claude 2, is able to solve a mere 1.96% of the issues. Advances on SWE-bench represent steps towards LMs that are more practical, intelligent, and autonomous.
+:::
+
+**摘要** —— 语言模型的发展已超出我们有效评估它们的能力,但研究其能力前沿对未来发展至关重要。我们发现**真实世界的软件工程**是评估下一代语言模型的丰富、可持续且富有挑战性的试验场。为此我们提出 SWE-bench——一个评测框架,包含从 12 个流行 Python 仓库的真实 GitHub issue 与对应 pull request 中提取的 2,294 个软件工程问题。给定代码库与一条待解决问题的 issue 描述,语言模型的任务是编辑代码库以解决该 issue。解决 SWE-bench 中的 issue 常需同时理解并协调跨多个函数、类甚至文件的改动,要求模型与执行环境交互、处理极长上下文、并进行远超传统代码生成任务的复杂推理。我们的评测显示,最先进的专有模型与我们微调的 SWE-Llama 都只能解决最简单的 issue:表现最好的 Claude 2 也仅解决 **1.96%**。在 SWE-bench 上的进展,是迈向更实用、更智能、更自主的语言模型的一步步阶梯。
+
+### 1 引言
+
+::: en
+Language models (LMs) are rapidly being deployed in commercial products such as chatbots and coding assistants. At the same time, existing benchmarks have become saturated and fail to capture the frontier of what state-of-the-art LMs can and cannot do. There is a need for challenging benchmarks that more accurately reflect real-world applications of LMs to help shape their future development and usage. Building a good benchmark is difficult since tasks must be challenging enough to stump existing models, but model predictions must also be easy to verify. Coding tasks are appealing as they pose challenging problems to LMs yet generated solutions can be easily verified by running unit tests. However, existing coding benchmarks, such as HumanEval, mostly involve self-contained problems that can be solved in a few lines of code. In the real world, software engineering is not as simple. Fixing a bug might involve navigating a large repository, understanding the interplay between functions in different files, or spotting a small error in convoluted code. Inspired by this, we introduce SWE-bench, a benchmark that evaluates LMs in a realistic software engineering setting. As shown in Figure 1, models are tasked to resolve issues (typically a bug report or a feature request) submitted to popular GitHub repositories. Each task requires generating a patch describing changes to apply to the existing codebase. The revised codebase is then evaluated using the repository's testing framework.
+:::
+
+语言模型正被快速部署到聊天机器人、编码助手等商业产品中;与此同时,既有基准已经饱和,无法捕捉最先进 LMs 能力与不能的边界。我们需要更有挑战、更准确反映 LMs 真实应用的基准来塑造其未来发展与使用。**造好基准很难**:任务要足够难以难倒现有模型,但模型的预测又要易于验证。编码任务很有吸引力:它给 LMs 出难题,而生成的解却可以通过运行单元测试轻松验证。然而既有编码基准(如 HumanEval)大多是"几行代码可解的自包含问题"。真实世界的软件工程没那么简单:修一个 bug 可能要在大型仓库中导航、理解不同文件中函数的相互作用、或在繁杂代码中找到一个小错误。受此启发,我们提出 **SWE-bench**——在现实软件工程设定下评测 LMs 的基准。如图 1 所示,模型的任务是解决提交到热门 GitHub 仓库的 issue(通常是 bug 报告或功能请求):每个任务要求生成描述对现有代码库所做改动的**补丁(patch)**,再用该仓库的测试框架评估修改后的代码库。
+
+::: en
+SWE-bench offers several advantages over existing LM programming benchmarks. These include, a realistic setting that utilizes user-submitted issues and solutions, diverse inputs featuring unique code problems from 12 repositories, a robust framework for execution-based evaluation, and the ability to continually update the benchmark with new instances, requiring minimal human intervention. We evaluate multiple state-of-the-art LMs on SWE-bench and find that they fail to solve all except the simplest issues. Using a BM25 retriever, Claude 2 is only able to resolve 1.96% of the issues. In addition to SWE-bench our contributions include the release of a training dataset, SWE-bench-train, which is essential for advancing open model development in this challenging domain. This dataset comprises a collection of 19,000 non-testing task instances derived from 37 repositories. Utilizing SWE-bench-train, we release two fine-tuned models, SWE-Llama 7b and 13b, based on the CodeLlama model. We find that in some settings SWE-Llama 13b is competitive with Claude 2 and is capable of processing contexts exceeding 100,000 tokens.
+:::
+
+相对既有的 LM 编程基准,SWE-bench 有多项优势:使用用户提交的真实 issue 与解决方案的现实设定;来自 12 个仓库、各不相同的代码问题构成的多样输入;基于执行的稳健评测框架;以及以最少人工持续扩充新实例的能力。我们在 SWE-bench 上评测多个最先进 LMs,发现除最简单的 issue 外它们全部失败:使用 BM25 检索器,Claude 2 也只能解决 **1.96%**。除 SWE-bench 外,我们的贡献还包括发布训练集 **SWE-bench-train**(推进这一高难领域开源模型发展所必需)——由 37 个仓库派生的 19,000 个非测试任务实例;利用它我们发布了基于 CodeLlama 微调的两个模型 **SWE-Llama 7b/13b**,发现某些设定下 SWE-Llama 13b 与 Claude 2 相当,且能处理超过 10 万 token 的上下文。
+
+### 2 SWE-bench
+
+::: en
+SWE-bench is a benchmark featuring GitHub issues from popular repositories that report bugs or request new features, and pull requests that make changes to the repository to resolve these issues. The task is to generate a pull request that addresses a given issue and passes tests related to the issue.
+:::
+
+SWE-bench 是一个以热门仓库的 GitHub issue(报告 bug 或请求新功能)与解决这些 issue 的 pull request 为特色的基准。任务是生成一个能解决给定 issue 并通过相关测试的 pull request。
+
+::: en
+**Benchmark Construction** — GitHub is a rich data source for software development, but repositories, issues, and pull requests can be noisy, ad-hoc, or poorly documented or maintained. To find high-quality task instances at scale, we use a 3-stage pipeline as follows. Stage I: Repo selection and data scraping. We start by collecting pull requests (PRs) from 12 popular open-source Python repositories on GitHub, producing about ∼90,000 PRs in total. We focus on popular repositories as they tend be better maintained, have clear contributor guidelines, and have better test coverage. Each PR has an associated codebase specified by it's base commit. Stage II: Attribute-based filtering. We create candidate tasks by selecting the merged PRs that (1) resolve a GitHub issue and (2) make changes to the test files of the repository, which indicates that the user likely contributed tests to check whether the issue has been resolved. Stage III: Execution-based filtering. For each candidate task, we apply the PR's test content, and log the associated test results before and after the PR's other content is applied. We filter out task instances without at least one test where its status changes from a fail to pass (henceforth referred to as fail-to-pass test). We also filter out instances that result in installation or runtime errors.
+:::
+
+**基准构建** —— GitHub 是软件开发富矿,但仓库、issue、PR 可能嘈杂、随意、文档与维护不善。为规模化地找到高质量任务实例,我们用**三阶段流水线**。**阶段一(仓库选择与数据抓取)**:从 GitHub 上 12 个热门开源 Python 仓库收集 pull request,共约 9 万个;聚焦热门仓库是因为它们维护更好、贡献指南更清晰、测试覆盖更好;每个 PR 由其 base commit 指定关联代码库。**阶段二(属性过滤)**:选出同时满足 (1) 关联解决某个 GitHub issue、(2) 修改了仓库测试文件的**已合并** PR 作为候选任务——修改测试文件说明作者很可能贡献了检验 issue 是否解决的测试。**阶段三(执行过滤)**:对每个候选任务,先应用 PR 的测试内容,记录"应用 PR 其余改动前后"的测试结果;**过滤掉没有一个测试从失败变为通过(fail-to-pass 测试)的实例**,也滤掉导致安装或运行错误的实例。
+
+::: en
+Through these stages of filtering, the original 90,000 PRs are filtered down to the 2,294 task instances which comprise SWE-bench. A final breakdown of these task instances across repositories is presented in Figure 3, and Table 1 highlights the key features of SWE-bench task instances. We highlight that the codebases are large with thousands of files, and the reference pull requests often make changes to multiple files at once. Technical details about SWE-bench's construction pipeline are discussed in Appendix A.
+:::
+
+经过这些过滤,最初的 9 万个 PR 被筛至构成 SWE-bench 的 **2,294 个任务实例**。图 3 给出跨仓库分布(django 850、sympy 386、scikit-learn 229、sphinx 187、matplotlib 184、pytest 119、xarray 110、astropy 95、pylint 57、requests 44、seaborn 22、flask 11),表 1 突出任务实例的关键特征:代码库庞大(数千文件),参考 PR 常同时改动多个文件。
+
+::: en
+**Task Formulation** — Model input. A model is given an issue text description and a complete codebase. The model is then tasked to make an edit to the codebase to resolve the issue. In practice, we represent edits as patch files, which specify which lines in the codebase to modify in order to resolve the issue. Evaluation metrics. To evaluate a proposed solution, we apply the generated patch, using unix's patch program, to the codebase and then execute the unit and system tests associated with the task instance. If the patch applies successfully and all of these tests pass we consider the proposed solution to have successfully resolved the issue. The metric for our benchmark is the percentage of task instances that are resolved.
+:::
+
+**任务形式化** —— **模型输入**:issue 文本描述 + 完整代码库;模型的任务是编辑代码库解决 issue。实践中我们把编辑表示为 **patch 文件**(指定修改代码库的哪些行)。**评测指标**:用 unix patch 程序把生成的补丁应用到代码库,再运行与该任务实例关联的单元与系统测试;补丁应用成功且全部测试通过,才算成功解决。基准指标为解决的任务实例百分比。
+
+::: en
+**Features of SWE-bench** — Traditional benchmarks in NLP typically involve only short input and output sequences and consider somewhat "contrived" problems created specifically for the benchmark. In contrast, SWE-bench's realistic construction setting imbues the dataset with unique properties, which we discuss below. Real-world software engineering tasks. Since each task instance in SWE-bench consists of a large and complex codebase and a description of a relevant issue, solving SWE-bench requires demonstrating sophisticated skills and knowledge possessed by experienced software engineers but are not commonly evaluated in traditional code generation benchmarks. Continually updatable. Our collection process can be easily applied to any Python repository on GitHub and requires minimal human intervention. Therefore, we can extend SWE-bench with a continual supply of new task instances and evaluate LMs on issues created after their training date, which ensures that the solution was not included in their training corpus. Diverse long inputs. Issue descriptions are typically long and detailed (195 words on average), and codebases regularly contain many thousands of files. Solving SWE-bench requires identifying the relatively small number of lines that need to be edited to solve an issue amongst a sea of context. Robust evaluation. For each task instance, there is at least one fail-to-pass test which was used to test the reference solution, and 40% of instances have at least two fail-to-pass tests. These tests evaluate whether the model addressed the problem in the issue. In addition, a median of 51 additional tests run to check whether prior functionality is properly maintained. Cross-context code editing. Unlike prior settings that may constrain edit scope to an individual function or class or provide cloze-style fill in blanks, SWE-bench does not provide such explicit guidance. Rather than merely having to produce a short code snippet, our benchmark challenges models to generate revisions in multiple locations of a large codebase. SWE-bench's reference solutions average editing 1.7 files, 3.0 functions, and 32.8 lines (added or removed). Wide scope for possible solutions. The task of repository-scale code editing can serve as a level playing field to compare approaches ranging from retrieval and long-context models to decision-making agents, which could reason and act in code. SWE-bench also allows creative freedom, as models can generate novel solutions that may deviate from the reference PR.
+:::
+
+**SWE-bench 的特性** —— NLP 传统基准通常只有短输入输出序列、且考虑专门为基准编造的"人造"问题;SWE-bench 的现实构建方式赋予数据集独特性质。**真实软件工程任务**:每个实例由庞大复杂的代码库与相关 issue 描述组成,解题需要资深软件工程师的精深技能与知识,而传统代码生成基准不常考察这些。**可持续更新**:收集流程可轻松应用于 GitHub 上任意 Python 仓库、人工干预极少;因此可持续补充新实例,并用"训练日期之后创建的 issue"评测 LMs,确保解法不在训练语料中。**多样的长输入**:issue 描述通常长而详细(平均 195 词),代码库常有数千文件;解题需要在海量上下文中找到需要编辑的相对少量行。**稳健评测**:每个实例至少有一个曾用于检验参考解的 fail-to-pass 测试(40% 实例至少两个),检验模型是否解决了 issue 中的问题;另有中位数 51 个额外测试检查既有功能是否妥善维持。**跨上下文代码编辑**:不像先前设定把编辑范围限定在单个函数/类或提供完形填空式空白,SWE-bench 不提供此类显式指引——不是只产出短代码片段,而是挑战模型在大型代码库的多个位置生成修改;参考解平均编辑 1.7 个文件、3.0 个函数、32.8 行(增删)。**解法空间广阔**:仓库级代码编辑任务可作为公平竞技场,比较从检索、长上下文模型到"能在代码中推理与行动"的决策智能体等各种路线;SWE-bench 也允许创造自由——模型可以生成偏离参考 PR 的新颖解法。
+
+::: en
+**SWE-bench Lite** — Evaluating LMs on SWE-bench can be time-consuming and, depending on the model, require a costly amount of compute or API credits. Given that initial performance returns as presented in Section 5 are quite low, SWE-bench's difficulty makes it useful for gauging LM progress in the long term, but potentially intimidating for initial systems that attempt to make progress in the short term. To encourage adoption of SWE-bench, we create a Lite subset of 300 instances from SWE-bench that have been sampled to be more self-contained, with a focus on evaluating functional bug fixes. SWE-bench Lite covers 11 of the original 12 repositories, with a similar diversity and distribution of task instances across repositories as the original.
+:::
+
+**SWE-bench Lite** —— 在 SWE-bench 上评测 LMs 可能耗时,且视模型而定需要不菲的算力或 API 费用。鉴于第 5 节给出的初期成绩相当低,SWE-bench 的难度适合长期衡量 LM 进展,但对试图短期突破的初期系统可能有劝退之效。为鼓励采用,我们从 SWE-bench 采样出 **300 个实例的 Lite 子集**,采样标准是更自包含、聚焦功能性 bug 修复;Lite 覆盖原 12 个仓库中的 11 个,跨仓库的多样性与分布和原版相似。
+
+### 3 SWE-Llama:为 SWE-bench 微调 CodeLlama
+
+::: en
+It is important to benchmark the performance of open models on SWE-bench alongside proprietary models. At the time of writing, only the CodeLlama models are able to handle the very long contexts necessary. However, we observe that the off-the-shelf CodeLlama variants are not capable of following the detailed instructions to generate repository-wide code edits, and typically output placeholder responses or unrelated code. To better evaluate the capabilities of these models, we perform supervised fine-tuning on the 7 billion- and 13 billion-parameter CodeLlama-Python models. The resulting models are specialized repository editors that can run on consumer hardware and resolve GitHub issues. Training data. We follow our data collection procedure and collect 19,000 issue-PR pairs from an additional 37 popular Python package repositories. In contrast to Section 2.1, we do not require that pull requests contribute test changes. This allows us to create a much larger training set to use for supervised fine-tuning. To eliminate the risk of data contamination, the set of repositories in the training data is disjoint from those included in the evaluation benchmark. Training details. Given the instructions, an issue text from GitHub and the relevant code files as the prompt, we finetune SWE-Llama to generate the patch that solved the given issue (the "gold patch"). For memory efficiency, we fine-tune only the weights of the attention sublayer using LoRA, and exclude training sequences with more than 30,000 tokens, reducing the effective size of the training corpus to 10,000 instances.
+:::
+
+在专有模型之外,基准测试开源模型在 SWE-bench 上的表现同样重要。撰写本文时,只有 CodeLlama 模型能处理所需的超长上下文;但开箱即用的 CodeLlama 变体无法遵循详细指令生成仓库级代码编辑,通常输出占位回复或无关代码。为更好评估这些模型的能力,我们对 7B 与 13B 的 CodeLlama-Python 做监督微调,得到可运行在消费级硬件上、解决 GitHub issue 的**专门化仓库编辑器**。**训练数据**:沿用我们的收集流程,从另外 37 个热门 Python 包仓库收集 19,000 个 issue-PR 对;与 2.1 节不同,不要求 PR 包含测试改动,从而构造大得多的微调训练集;为消除数据污染风险,训练仓库集与评测基准仓库集**不相交**。**训练细节**:以指令、GitHub issue 文本与相关代码文件为提示,微调 SWE-Llama 生成解决该 issue 的补丁("金补丁");为省显存,用 LoRA 只微调注意力子层权重,并剔除超过 30,000 token 的训练序列,使有效训练集约 10,000 实例。
+
+### 4 实验设置
+
+::: en
+SWE-bench instances provide an issue description and a codebase as input to the model. While issues descriptions are usually short (195 words on average as shown in Table 1), codebases consist of many more tokens (438K lines on average) than can typically be fit into an LMs context window. Then the question remains of exactly how to choose the relevant context to provide to the model? To address this issue for our baselines, we simply use a generic retrieval system to select the files to insert as context. In particular, we evaluate models under two relevant context settings: 1) sparse retrieval and 2) an oracle retrieval. Sparse retrieval. Dense retrieval methods are ill-suited to our setting due to very long key and query lengths, and especially the unusual setting of retrieving code documents with natural language queries. Therefore, we choose to use BM25 retrieval to retrieve relevant files to provide as context for each task instance. We experiment with three different maximum context limits, and simply retrieve as many files as fits within the specified limit. We evaluate each model on all limits that fit within its context window and report the best performance. From observation, models perform best on the shortest context window, as shown in Table 2. "Oracle" retrieval. For analysis purposes we also consider a setting where we "retrieve" the files edited by the reference patch that solved the issue on GitHub. This "oracle" setting is less realistic, since an engineer working on addressing an issue may not know a priori which files need to be modified. In addition, this setting is also not necessarily comprehensive since edited files alone may not include all the required context to understand exactly how software will behave when interacting with unseen parts of the code. We compare the BM25 retrieval results with those of the "oracle" retrieval setting, as shown in Table 3. We observe that in approximately 40% of instances, BM25 retrieves a superset of the oracle files for the 27,000-token context limit. However, in almost half of the instances with the 27,000-token limit, it retrieves none of the files from the "oracle" context.
+:::
+
+SWE-bench 实例给模型的输入是 issue 描述与代码库。issue 描述通常不长(平均 195 词),但代码库(平均 43.8 万行)远超 LMs 上下文窗口能容纳的 token 数——问题变成:**到底怎么挑选提供给模型的相关上下文?** 对基线,我们直接用通用检索系统选择插入上下文的文件,评估两种设定:**稀疏检索**与 **oracle 检索**。稀疏检索:稠密检索方法不适配我们的设定(键与查询都很长,尤其是"用自然语言查询检索代码文档"的不寻常场景),故选 **BM25** 检索相关文件;实验 13k/27k/50k 三档最大上下文上限,能塞多少文件就检索多少;对每个模型在其窗口内的所有上限评测并报告最佳——观察发现**模型在最短上下文窗口上表现最好**(表 2)。"Oracle"检索:为分析目的,设定为"检索"出被参考补丁编辑过的文件。该设定较不现实(解决 issue 的工程师未必先验知道要改哪些文件),也未必全面(仅被编辑的文件可能不含理解软件行为的全部上下文)。对比 BM25 与 oracle(表 3):27k token 上限下,约 40% 实例中 BM25 能召回 oracle 文件的超集;但同样上限下,近半数实例**一个 oracle 文件都没召回**。
+
+::: en
+Once the retrieved files are selected using one of the two methods above, we construct the input to the model consisting of task instructions, the issue text, retrieved files and documentation, and finally an example patch file and prompt for generating the patch file. Due to the need to process long sequence lengths, there are only a few models that are currently suitable for SWE-bench. Thus we evaluate ChatGPT-3.5 (gpt-3.5-turbo-16k-0613), GPT-4 (gpt-4-32k-0613), Claude 2, and SWE-Llama with their context limits shown in Table 4.
+:::
+
+选定检索文件后,构造模型输入:任务指令、issue 文本、检索到的文件与文档、以及一个补丁文件示例与生成补丁的提示。由于需要处理长序列,当前适合 SWE-bench 的模型不多:我们评测 ChatGPT-3.5(16k)、GPT-4(32k)、Claude 2(100k)与 SWE-Llama(≥100k)。
+
+### 5 结果
+
+::: en
+We report results for models using different retrieval mechanisms and prompting styles, then provide some analysis and insight into model performance and difficulty. We summarize models' performance using BM25 retrieval in Table 5. Across the board, models struggle significantly to resolve issues. The best performing model, Claude 2, is only able to resolve 1.96% of the issues. To analyze the importance of the retriever to the overall system results, we present the "oracle" retrieval results in Appendix Table 18. There, Claude 2 is able to resolve 4.8% of issues using the "oracle" retriever. We further analyze the importance of context in the discussion below.
+:::
+
+我们报告不同检索机制与提示风格下的结果,并分析模型表现与难度。表 5 汇总 BM25 检索下的表现:**全线溃败**——最好的 Claude 2 也只解决 **1.96%**。为分析检索器的重要性,附录表 18 给出 oracle 检索结果:Claude 2 用 oracle 检索可解决 **4.8%**(检索是重要瓶颈)。下面进一步分析上下文的重要性。
+
+**表 5:BM25 检索下的主结果(% 解决率 / % 应用率)**
+
+| 模型 | SWE-bench 解决 | SWE-bench 应用 | Lite 解决 | Lite 应用 |
+| --- | --- | --- | --- | --- |
+| Claude 3 Opus | 3.79 | 46.56 | 4.33 | 51.67 |
+| Claude 2 | 1.97 | 43.07 | 3.00 | 33.00 |
+| ChatGPT-3.5 | 0.17 | 26.33 | 0.33 | 10.00 |
+| GPT-4-turbo | 1.31 | 26.90 | 2.67 | 29.67 |
+| SWE-Llama 7b | 0.70 | 51.74 | 1.33 | 38.00 |
+| SWE-Llama 13b | 0.70 | 53.62 | 1.00 | 38.00 |
+
+::: en
+Difficulty differs across repositories. When breaking performance down by repository, all models trend similarly across different repositories as show in Figure 4. Despite this, the issues resolved by each model do not necessarily overlap extensively. For example, in the "oracle" setting Claude 2 and SWE-Llama 13b perform comparably, with each model resolving 110 and 91 instances respectively. Yet of these instances, Claude 2 only solves 42% of the instances solved by SWE-Llama. This may also be related to the presence of images in issues, which can be encoded into the issue markdown with embedded image links. Some repositories naturally feature more instances with images; for example 32% of matplotlib and 10% of seaborn instances contain embedded images in their issue text compared to just 2% of all instances. Solving these instances may require multi-modal LMs or some kind of external tool use to process images.
+:::
+
+**难度因仓库而异**。按仓库分解时,各模型趋势相似(图 4);但各模型解决的 issue 未必大量重叠——例如 oracle 设定下 Claude 2 与 SWE-Llama 13b 表现相当(分别解决 110 与 91 个实例),但 Claude 2 只解掉其中 SWE-Llama 所解实例的 **42%**。这可能与 issue 中包含图片有关(图片以嵌入式链接编进 issue markdown):部分仓库天然更多带图实例——matplotlib 32%、seaborn 10% 的 issue 文本含内嵌图,而全部实例平均仅 2%。解决这些实例可能需要多模态 LMs 或某种外部工具来处理图像。
+
+::: en
+Difficulty correlates with context length. Chat models may be pre-trained on long sequences of code but are typically asked to generate shorter coder snippets with limited context provided to frame the question. As shown in Figure 5, we see that as total context length increases, Claude 2's performance drops considerably; behavior that is also observed in other models. In our evaluation settings, models see a lot of code that may not be directly related to solving the issue at hand, and they seem to frequently struggle with localizing problematic code needing to be updated. This result corroborates other studies showing that models become distracted by additional context and may be sensitive to the relative location of target sequences. Even when increasing the maximum context size for BM25 would increase recall with respect to the oracle files, performance drops, as shown in Table 2, as models are simply ineffective at localizing problematic code. Further investigating this, we provide an input ablation on the "oracle" retrieval context, "oracle"-collapsed, where retrieved files are collapsed entirely, except for the lines actually edited by the true pull request (with ±15 lines of buffer) shown in Table 6. In this setting, we see increases in performance, with GPT-4 jumping from 1.3% to 3.4% and Claude 2 from 4.8% to 5.9%.
+:::
+
+**难度与上下文长度强相关**。聊天模型虽可能在长代码序列上预训练,但通常被要求在有限上下文下生成较短代码片段。如图 5,总上下文长度增加时 Claude 2 表现显著下滑(其他模型亦然)。我们的评测设定中,模型看到大量与解题无直接关系的代码,且似乎经常难以**定位**需要更新的问题代码——这印证了其他研究:模型会被额外上下文干扰、对目标序列的相对位置敏感。即便增大 BM25 上限能提升对 oracle 文件的召回,性能反而下降(表 2)——模型就是定位不了问题代码。进一步做输入消融"**oracle-collapsed**":把 oracle 检索的文件整体折叠,只保留真实 PR 实际编辑的行(±15 行缓冲),见表 6——性能提升:GPT-4 从 1.3% 升至 3.4%,Claude 2 从 4.8% 升至 5.9%。
+
+**表 6:oracle-collapsed 设定(折叠非编辑区)结果**
+
+| 模型 | 解决率 | 应用率 |
+| --- | --- | --- |
+| Claude 3 Opus | 9.39 | 48.00 |
+| Claude 2 | 5.93 | 68.18 |
+| GPT-4 | 3.40 | 48.65 |
+| ChatGPT-3.5 | 1.09 | 40.93 |
+
+::: en
+Difficulty does not correlate with issue resolution date. In Table 7 we show model results in the "oracle" retrieval setting, partitioned by date, for PRs created before or after 2023. We find that for most models there's little difference in performance before or after this date, with the exception of GPT-4. We consider this result to be largely promising as it suggests that despite models having been exposed to some version of an repository's codebase, they are unlikely to "cheat" to address issues simply by generating a more recent version of the repository.
+:::
+
+**难度与 issue 解决日期基本无关**。表 7 在 oracle 设定下按 2023 年前后划分 PR:除 GPT-4(25% 抽样子集)外,多数模型前后差异很小。这大体令人鼓舞——说明尽管模型见过某版本仓库代码,也不太可能靠"生成仓库的更新版本"来**作弊**解题。
+
+**表 7:按 PR 创建日期划分的表现(oracle 设定)**
+
+| 模型 | 2023 前 | 2023 后 |
+| --- | --- | --- |
+| Claude 2 | 4.87 | 4.23 |
+| ChatGPT-3.5 | 0.49 | 0.77 |
+| GPT-4* | 1.96 | 0.0 |
+| SWE-Llama 7b | 2.95 | 3.46 |
+| SWE-Llama 13b | 3.98 | 3.85 |
+
+::: en
+Finetuned models are sensitive to context distribution shifts. The finetuned models SWE-Llama 7b and 13b perform surprisingly poorly with BM25 retrieved context. As these models were fine-tuned using the "oracle" retrieval as context, we suspect this shift in context makes it difficult for the model to perform reliably. For instance, SWE-Llama was trained to edit every file included as context whereas in the BM25 setting many files provided in context are not expected to be changed.
+:::
+
+**微调模型对上下文分布漂移敏感**。SWE-Llama 7b/13b 在 BM25 检索上下文下表现意外地差:这些模型是用 oracle 检索上下文微调的,上下文分布的漂移使其难以可靠发挥——例如 SWE-Llama 被训练成"编辑上下文中的每个文件",而 BM25 设定下上下文里的许多文件并不应该被修改。
+
+::: en
+Generating patches is easier than generating whole files. Models are often trained using standard code files and likely rarely see patch files. We generally formulate our task to have models generate patch files as opposed to recreating the entire file with their proposed change, since patch files will usually be a much more efficient representation of a file change. As shown in Table 5, we observe that models still struggle with generating well-formatted patch files. So we experiment with asking models to instead regenerate entire files with their proposed changes to resolve the issue. In this setting, we find that models generally perform worse at this task than when generating patch files; for instance, Claude 2 scores at 2.2% compared to 4.8% in the main table for "oracle" retrieval. Even when controlling for instance length, generating on the shorter half of the task instances by input tokens yields 3.9% compared to 7.8% for generating patches with Claude 2.
+:::
+
+**生成补丁比重写整文件容易**。模型常用标准代码文件训练,很少见过 patch 文件。我们把任务定为生成 patch 文件而非重写整个文件——patch 通常是文件改动的高效表示。如表 5,模型连格式良好的 patch 文件都难以生成;我们实验让模型转而重新生成整个文件,发现普遍更差:Claude 2 在 oracle 检索下从 4.8% 掉到 2.2%;即便按输入长度控制(只取较短的一半实例),重写整文件 3.9% 对生成补丁的 7.8%。
+
+::: en
+Language models tend to generate shorter, simpler edits. Model generated patch files tend to add and remove fewer lines than their respective gold patch. As shown in Table 8, compared to an average gold patch, model generated patch files that apply correctly are less than half the total length (74.5 versus 30.1 lines) of gold edit patch files, and rarely edit more than a single file.
+:::
+
+**语言模型倾向生成更短、更简单的编辑**。模型生成的补丁增删行数往往少于对应金补丁。如表 8:与平均金补丁(全部金补丁平均 74.5 行)相比,能正确应用的模型补丁总长不足其一半,且几乎不改多于一个文件。
+
+**表 8:成功应用的模型补丁 vs 金补丁的平均编辑量**
+
+| 模型 | 总行数 | 增 | 删 | 函数数 | 文件数 |
+| --- | --- | --- | --- | --- | --- |
+| Claude 2 | 19.6 | 4.2 | 1.9 | 1.1 | 1.0 |
+| ChatGPT-3.5 | 30.1 | 3.8 | 2.7 | 1.6 | 1.0 |
+| GPT-4 | 20.9 | 4.4 | 1.5 | 1.0 | 1.0 |
+| SWE-Llama 13b | 17.6 | 1.6 | 1.2 | 1.2 | 1.1 |
+| 全部金补丁 | 74.5 | 22.3 | 10.5 | 3.0 | 1.7 |
+
+::: en
+We select 11 generations from SWE-Llama and Claude 2 to better understand the quality of the task and generated patches under the "oracle" retrieval setting. In the sphinx-doc sphinx-8713 task instance, the issue states that the napoleon extension of Sphinx is not properly formatting the documentation keyword "Other Parameters" when the config setting napoleon.use_param is set to True. The model did not resolve the task, failing to pass some of the tests resolved by the gold solution. The model input provides this issue text along with instructions, the full contents of files edited by the gold patch, and an example of the diff format. When comparing the gold patch and the model's patch, we find an obvious mistake. While the model edits the correct function, it changes the function to behave as if napoleon.use_param were always True instead of checking the config setting first and copying what the _parse_parameters_section does, like the gold patch. In the tests, test_parameters_with_class_reference directly compares the documentation produced using a config where napoleon_use_param is set to False, which catches the model's error immediately. Comparing results across all the examples we consider, we notice a few prominent trends in behavior. Models tend to write primitive Python code and do not leverage existing third-party libraries or the rest of the codebase for their solutions. Models' generations also reflect a "greedy" approach of solving the problem exactly, with little regard for code style or logical constraints that might be reflected by the codebase (i.e. using relative instead of absolute imports). In contrast, we observe that many gold patches will make structural improvements that cover a much larger scope of the codebase; these edits not only resolve the issue, but also anticipate and solve potential future issues.
+:::
+
+我们从 SWE-Llama 与 Claude 2 的生成中选 11 例,更好理解任务与补丁质量(oracle 设定)。以 sphinx-doc sphinx-8713 为例:issue 说 Sphinx 的 napoleon 扩展在配置 napoleon.use_param 为 True 时未正确格式化文档关键字 "Other Parameters"。模型**未解决**任务——未能通过金解所解决的部分测试。对比金补丁与模型的补丁,错误明显:模型虽改对了函数,却把函数行为改成"napoleon.use_param 恒为 True",而不像金补丁那样先检查配置项并仿照 _parse_parameters_section 的做法;测试 test_parameters_with_class_reference 直接比较"napoleon_use_param 设为 False 的配置"产出的文档,立刻抓住模型错误。纵观全部样例,行为趋势显著:**模型倾向写原始的 Python 代码,不利用既有第三方库或代码库其余部分**;生成反映"精确解题"的贪心思路,很少顾及代码库体现的代码风格或逻辑约束(如相对导入 vs 绝对导入);相比之下,许多金补丁会做覆盖更大范围的结构性改进——不仅解决 issue,还预见并解决潜在的未来问题。
+
+### 6 相关工作
+
+::: en
+**Evaluation of LMs** — Several recent works for evaluating LMs have either proposed a collection of mutually distinct tasks spanning across multiple domains or turned to the web as an interactive setting featuring tasks that require multiple steps to solve. There are several drawbacks with such a "potpourri" style setup. First, each task tends to narrowly focus on one or a few skills, resulting in challenges that are typically too simple, pigeonhole the model into a reduced role, and do not provide models with the bandwidth to exercise their versatility or potentially demonstrate new abilities. Consequently, a model's performance on such task conglomerations may not yield actionable, deep insights regarding its capabilities and how to improve them. SWE-bench addresses these shortcomings, as our work demonstrates that it is significantly challenging, presents a wide range of possibilities for improving LMs to solve this task, and is easy to refresh over time with new task instances, each of which introduce novel, nuanced, and practical challenges.
+:::
+
+**LMs 的评测** —— 近期评测 LMs 的工作要么提出跨多领域的互异任务集合,要么转向需要多步求解的交互式 Web 设定。这类"大杂烩"式组装有几个缺点:每个任务往往窄聚焦一两个技能,挑战通常太简单、把模型钉死在缩水的角色上,不给模型施展多面性或展示新能力的空间;因此模型在这类任务集合上的表现未必能产生"关于其能力与改进方向"的可行动深度洞见。SWE-bench 弥补了这些短板:我们的工作证明它足够有挑战、呈现改进 LMs 解题的广阔可能、且易于随时间用新实例刷新——每个新实例都带来新颖、细腻而实际的挑战。
+
+::: en
+**Code Generation Benchmarks** — HumanEval is the current standard in a long-standing pursuit of synthesizing code from natural language descriptions. In the past year, subsequent benchmarks have sought to augment HumanEval with extensions to different languages, variations in edit scope, similar but novel code completion tasks, and more testing. Simultaneously, separate works have sought to introduce new coding paradigms or design library-specific problems. Instead of partitioning problems into siloed datasets and curtailing them for simplicity's sake, SWE-bench's collection procedure transforms the source code with minimal post-processing, preserving a much broader set of challenges grounded in real-world software engineering beyond closed form completion, such as patch generation, reasoning over long contexts, navigating a codebase directory, and capturing dependency-based relationships across modules.
+:::
+
+**代码生成基准** —— HumanEval 是"从自然语言合成代码"这一长期追求的当前标准。过去一年,后续基准纷纷扩充 HumanEval:扩展到不同语言、编辑范围变体、相似但新颖的补全任务、更多测试等;同时也有工作引入新编码范式或设计特定库的问题。与其把问题切分进孤岛数据集、为简单起见削足适履,SWE-bench 的收集流程以最少后处理转换源代码,保留远超封闭式补全的、扎根真实软件工程的广泛挑战:补丁生成、长上下文推理、代码库目录导航、跨模块依赖关系捕捉。
+
+::: en
+**ML for Software Engineering** — To overcome traditional program analysis techniques that may not scale or incorporate natural language, one direction of current software engineering research is to use neural networks, including LMs, to automate real-world software development processes. Use cases include automating commit generation, PR review, bug localization, testing, and program repair. Most relevant to SWE-bench are works that have sought to apply LMs towards automated program repair, guiding code editing with commits. However, none of the existing datasets present code context at the scale of SWE-bench. Moreover, SWE-bench can be easily extended to new programming languages and repositories, and it provides a significantly more realistic and challenging arena to carry out experiments towards augmenting LMs with software engineering tools and practices.
+:::
+
+**面向软件工程的机器学习** —— 为克服可能无法规模化或无法纳入自然语言的传统程序分析技术,当前软件工程研究的一个方向是用包括 LMs 在内的神经网络自动化真实软件开发流程:提交生成、PR 审查、bug 定位、测试、程序修复等。与 SWE-bench 最相关的是把 LMs 用于自动程序修复、用提交引导代码编辑的工作。但既有数据集没有一个呈现 SWE-bench 规模的代码上下文;且 SWE-bench 易于扩展到新语言与新仓库,为"用软件工程工具与实践增强 LMs"的实验提供了显著更真实、更具挑战性的竞技场。
+
+### 7 讨论
+
+::: en
+Limitations and future directions. SWE-bench task instances are all in Python; we hope to apply SWE-bench's task instance collection procedure to expand its coverage to more programming languages and domains. Second, our experiments aim to establish a baseline of the simplest and most straight-forward approaches for this task; we do not intend to constrain future methodologies to the same type of approach and encourage future work to investigate different methods (e.g., agent-based approaches, tool augmented LMs). Lastly, while this work evaluates models using execution-based code testing, relying solely on this method is insufficient to guarantee reliable performance of model generations, as we find automated code generations from LMs can frequently be less comprehensive, efficient, or readable compared to human-written solutions.
+:::
+
+**局限与未来方向**。其一,SWE-bench 任务实例全部是 Python;希望把收集流程扩展到更多编程语言与领域。其二,我们的实验旨在为该任务建立"最简单直接方法"的基线,无意把未来方法限制在同一路线——鼓励后续工作探索不同方法(如智能体式方法、工具增强的 LMs)。其三,虽然本工作用基于执行的代码测试评测模型,但仅靠这一方法不足以保证模型生成的可靠性能:我们发现 LMs 的自动代码生成常不如人写的方案全面、高效、可读。
+
+::: en
+Conclusion. The complexity of real-world software development processes extends far beyond just code completion. By drawing on the open-source collaborative pipeline, SWE-bench creates a faithful mirror of real world coding environments. This more realistic environment encourages creative solutions that can have immediate applicability in open-source software development. We hope that this benchmark and our other contributions can serve as valuable assets in the future development of LMs that are more practical, intelligent, and autonomous.
+:::
+
+**结论**。真实软件开发流程的复杂性远超代码补全。借鉴开源协作流水线,SWE-bench 创造了真实编码环境的忠实镜像;这一更现实的环境鼓励能直接应用于开源软件开发的创造性解法。我们希望本基准及其他贡献,能成为未来发展更实用、更智能、更自主的 LMs 的宝贵资产。
+
+### 8 伦理声明与 9 可复现性声明
+
+::: en
+SWE-bench is collected entirely from public repositories with licenses that permit software usage that our contributions are in accordance with. During the collection or evaluation processes, we do not collect information about GitHub users, and the SWE-bench task instances do not use GitHub data beyond what is offered via the public API and website. Our contributions do not involve any human subject participation; we do not perform crowdsourcing or recruit human task workers for any part of SWE-bench, including its collection and evaluation procedures along with the experiments. SWE-bench's filtering criteria for GitHub repositories based on popularity does not implicitly or explicitly rely on any discriminative or biased heuristics for repository selection. For the dataset release, we plan to open source the SWE-bench task instances, the collection and evaluation infrastructure, the experimental results, the training data used for fine-tuning SWE-Llama models, and the SWE-Llama model weights.
+:::
+
+SWE-bench 完全从许可允许软件使用的公开仓库收集,我们的贡献符合许可。收集与评测过程中不收集 GitHub 用户信息;任务实例不使用公共 API 与网站所提供之外的数据。我们的贡献不涉及人类被试:包括收集、评测与实验在内的任何环节均无众包或招募任务工人。基于热度筛选仓库的标准,未隐式或显式依赖任何歧视性或偏见启发式。数据集发布方面,我们计划开源任务实例、收集与评测基础设施、实验结果、微调 SWE-Llama 所用训练数据及模型权重。
+
+::: en
+For our submission, we have uploaded the entirety of the source code as a zipped file that has been properly anonymized. We have organized the codebase such that separate directories correspond to different contributions within the main paper (i.e. dataset collection, evaluation, open source model inference, SWE-Llama training, etc.). The source code contains inline documentation that details purpose and usage of different parts of the codebase. In addition, we also include the full set of 2294 SWE-bench task instances that contains all the components discussed in the main paper. Beyond the documentation in the source code, we include thorough technical details for the collection pipeline and evaluation procedures that complements the original details in Section 2 of the main paper. Moving forward, as discussed in the ethics statement, we plan to more formally release SWE-bench to the public as an open source repository with thorough details that describes the benchmark, outlines the code, and details its usage. A major component of SWE-bench is the collection framework, which will be part of the open sourced code. Because of its easily maintainable design, as discussed in the main paper, our hope and belief is that SWE-bench should be highly reproducible.
+:::
+
+投稿中我们已上传完整源代码(经匿名化的压缩包)。代码库按主论文不同贡献分目录组织(数据集收集、评测、开源模型推理、SWE-Llama 训练等);源码含内联文档说明各部分用途与用法;并包含全部 2,294 个任务实例及其全部组件。除源码文档外,还提供收集流水线与评测流程的完整技术细节(补充主论文第 2 节)。如伦理声明所述,我们计划把 SWE-bench 以开源仓库形式正式发布,附完整细节描述基准、概述代码与用法。SWE-bench 的核心组件之一是收集框架,将随代码开源;凭借其易维护的设计,我们希望并相信 SWE-bench 具有高度可复现性。
+
+## 要点速览
+
+- 任务形态:**issue 文本 + 代码库快照 → patch → 真实测试验证(fail-to-pass + 回归测试)**;三阶段过滤 9 万 PR → 2,294 实例(django 850/sympy 386/sklearn 229 为主力)。
+- 关键统计:平均改 1.7 文件/3 函数/32.8 行;issue 平均 195 词;代码库平均 43.8 万行——"大海捞针 + 跨文件协调"。
+- 发布时成绩:Claude 2 + BM25 仅 **1.96%**(oracle 检索 4.8%);SWE-Llama(1.9 万实例 SFT 的 CodeLlama)0.70% 但可自托管、支持 >100k 上下文。
+- 五个分析结论:①检索是瓶颈;②**上下文越长越差**(无关代码干扰定位;折叠非编辑区 oracle-collapsed 让 GPT-4 1.3→3.4、Claude 2 4.8→5.9);③与 issue 日期无关(无作弊);④微调模型受上下文分布漂移影响(oracle 训练、BM25 推理即崩);⑤模型补丁"短而贪心"(约 20-30 行 vs 金补丁 74.5 行,几乎不改多文件,不做结构性改进)。
+- 工程遗产:三阶段流水线可用于任意 Python 仓库持续扩充;fail-to-pass 测试作真值是"执行式评测"范例;开源训练集开启开源模型研究;Lite 子集(300 例)成为最常用快速评测集。
+- 后续影响:SWE-agent、AutoCodeRover、Agentless、OpenHands 把成绩一路推高;第 7 周评测讲(Zhu et al. 审计)也以它为对象。

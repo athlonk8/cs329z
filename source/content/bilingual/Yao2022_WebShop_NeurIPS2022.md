@@ -1,0 +1,921 @@
+---
+title: "WebShop: Towards Scalable Real-World Web Interaction with Grounded Language Agents"
+title_zh: "WebShop:面向可扩展真实网页交互的接地语言智能体"
+authors: "Shunyu Yao, Howard Chen, et al."
+venue: "NeurIPS 2022 · Princeton University"
+kind: paper
+importance: recommended
+tags: "网页智能体, 语言接地, 强化学习, 模仿学习, 基准测试, 仿真到现实迁移"
+summary: 构建含 118 万真实商品、1.2 万众包指令的模拟电商环境;IL+RL 智能体成功率 29%,远低于人类专家 59.6%,并可零样本迁移到真实购物网站。
+---
+
+## 导读
+
+本文属于第 11 周"开放问题"专题,是网页智能体(web agent)方向的开山基准之一,作者 Shunyu Yao(也是 ReAct 的第一作者)来自 Princeton NLP 组。放在 2022 年的语境里,它回答的问题与 OSWorld 一脉相承:如何为语言智能体(language agent)构建**可扩展、接地(grounded)、可自动评估**的交互环境?当时的两个极端是:传统 NLP 基准是静态数据集,语言没有接地到语言之外的世界;而 RL 环境(游戏、3D 导航)的语言元素贫瘠、难以规模化。
+
+WebShop 的选择是把"网上购物"做成环境:从 amazon.com 抓取 118 万真实商品,配合 12,087 条众包自然语言指令,让智能体在搜索、结果、商品、详情四类页面间导航,生成查询、选择选项、比较商品并完成购买。奖励由属性/选项/价格/类型的程序化匹配函数自动计算,无需人工评估,使交互式学习可以规模化。论文训练了模仿学习(IL)与强化学习(RL)智能体:最好成绩 62.4 分/28.7% 成功率,显著超过规则基线(45.6/9.6%),但不到人类专家(82.1/59.6%)的一半;最有意思的发现是——给定一个能穷举所有选项的"选择神谕",规则基线成功率可从 9.6% 飙到 85.4%,说明"在真实网页文本上做对选择"才是核心瓶颈。最后,智能体零样本迁移到真实 amazon.com/ebay.com 仍保持类似表现,首次展示了此类基准的 sim-to-real 价值。WebShop 与 ReAct、Mind2Web、OSWorld 一起,构成了"LLM 时代网页/计算机智能体"这条主线 earliest 的几块基石。
+
+## 全文对照翻译
+
+> **译注**:以下覆盖论文全部内容——摘要、第 1-6 节正文、致谢、NeurIPS 清单(以译注概述)、附录 A-E(环境细节、模型细节、实验细节、sim-to-real 细节、社会影响与局限)及"人类轨迹收集任务说明"文档。References(参考文献)不收录。原文图 1-4 保留英文图题并附中文说明;表格全部转为 markdown,数据保留;示例轨迹以代码块保留并附中文注释。术语首现处给出中英对照。
+
+### 题目与作者(Title & Authors)
+
+::: en
+**WebShop: Towards Scalable Real-World Web Interaction with Grounded Language Agents**
+
+Shunyu Yao\* Howard Chen\* John Yang Karthik Narasimhan
+Department of Computer Science, Princeton University
+{shunyuy, howardchen, jy1682, karthikn}@princeton.edu
+
+\*Equal contribution. Project site with code, data, and demos: https://webshop-pnlp.github.io. 36th Conference on Neural Information Processing Systems (NeurIPS 2022).
+:::
+
+**WebShop:面向可扩展真实网页交互的接地语言智能体**
+
+Shunyu Yao\*、Howard Chen\*、John Yang、Karthik Narasimhan
+普林斯顿大学计算机科学系
+
+\*同等贡献。含代码、数据与演示的项目主页:https://webshop-pnlp.github.io。第 36 届神经信息处理系统大会(NeurIPS 2022)。
+
+### 摘要(Abstract)
+
+::: en
+Existing benchmarks for grounding language in interactive environments either lack real-world linguistic elements, or prove difficult to scale up due to substantial human involvement in the collection of data or feedback signals. To bridge this gap, we develop WebShop – a simulated e-commerce website environment with 1.18 million real-world products and 12,087 crowd-sourced text instructions. Given a text instruction specifying a product requirement, an agent needs to navigate multiple types of webpages and issue diverse actions to find, customize, and purchase an item. WebShop provides several challenges for language grounding including understanding compositional instructions, query (re-)formulation, comprehending and acting on noisy text in webpages, and performing strategic exploration. We collect over 1,600 human demonstrations for the task, and train and evaluate a diverse range of agents using reinforcement learning, imitation learning, and pre-trained image and language models. Our best model achieves a task success rate of 29%, which outperforms rule-based heuristics (9.6%) but is far lower than human expert performance (59%). We also analyze agent and human trajectories and ablate various model components to provide insights for developing future agents with stronger language understanding and decision making abilities. Finally, we show that agents trained on WebShop exhibit non-trivial sim-to-real transfer when evaluated on amazon.com and ebay.com, indicating the potential value of WebShop in developing practical web-based agents that can operate in the wild.
+:::
+
+既有的"在交互环境中为语言接地(grounding)"的基准,要么缺乏真实世界的语言元素,要么由于数据或反馈信号的收集需要大量人工参与而难以扩展。为弥合这一缺口,我们开发了 WebShop——一个模拟电商网站环境,含 118 万件真实商品与 12,087 条众包文本指令。给定一条指定商品需求的文本指令,智能体需要导航多种类型的网页并发出多样的动作,以找到、定制并购买一件商品。WebShop 为语言接地提供了若干挑战:理解组合式指令、查询的(重)构造(query (re-)formulation)、理解并依据网页中的噪声文本行动,以及执行策略性探索。我们为该任务收集了 1,600 余条人类演示,并用强化学习、模仿学习以及预训练图像与语言模型训练并评估了多样的智能体。我们最好的模型任务成功率为 29%,超过基于规则的启发式(9.6%),但远低于人类专家表现(59%)。我们还分析了智能体与人类的轨迹,并对各模型组件做了消融,为开发具有更强语言理解与决策能力的未来智能体提供洞见。最后,我们证明在 amazon.com 与 ebay.com 上评估时,WebShop 训练的智能体展现出非平凡的仿真到现实(sim-to-real)迁移,表明 WebShop 在开发能在真实网络(wild)中运行的实用网页智能体方面具有潜在价值。
+
+### 1 引言(Introduction)
+
+::: en
+Recent advances in natural language processing (NLP) and reinforcement learning (RL) have brought about several exciting developments in agents that can perform sequential decision making while making use of linguistic context [30, 50, 58]. On the other hand, large-scale language models like GPT-3 [6] and BERT [11] are excelling at traditional NLP benchmarks such as text classification, information extraction and question answering. While the former set of tasks are limited in their set of linguistic concepts and prove difficult to scale up, the latter tasks usually contain static, non-interactive datasets that lack adequate grounding to extra-linguistic concepts [4]. In order to make further progress in building grounded language models, we believe there is a need for scalable interactive environments that contain: (1) language elements that reflect rich, real-world usage and are collectible at scale, and (2) task feedback that is well-defined and automatically computable to facilitate interactive learning, without the constant need for expensive feedback from humans.
+:::
+
+自然语言处理(NLP)与强化学习(RL)的最新进展,催生了一批能在利用语言上下文的同时进行序贯决策的智能体,带来若干激动人心的进展 [30, 50, 58]。另一方面,GPT-3 [6]、BERT [11] 等大规模语言模型正在文本分类、信息抽取与问答等传统 NLP 基准上表现出色。前一(tasks)类任务的语言概念集合有限、难以扩展;后一类任务通常是静态、非交互的数据集,缺乏对语言之外概念的充分接地 [4]。为了在构建接地语言模型(grounded language model)方面取得进一步进展,我们认为需要可扩展的交互环境,它应包含:(1) 反映真实世界丰富用法、且可大规模收集的语言元素;(2) 定义良好、可自动计算的任务反馈,以支持交互式学习,而无须持续依赖昂贵的人类反馈。
+
+::: en
+The world wide web (WWW) is a massive open-domain interactive environment that inherently satisfies the first aforementioned requirement through its interconnected set of pages with natural text, images and interactive elements. By being simultaneously scalable, semantic, interactive, dynamic and realistic, the web is uniquely different from existing environments for autonomous agents like games or 3D navigation. Moreover, the web also provides a practical environment to deploy trained agents, with great potential for alleviating human efforts in tedious tasks (e.g. buying products, booking appointments). While there has been prior work on building web-based tasks, they either lack depth in the transition and action spaces, or prove difficult to scale up. Some benchmarks only contain either a single classification task [39, 46, 31] or interactions containing only a handful of different pages in each episode [43]. Others propose tasks with longer horizons but are either limited to following hyperlinks for web navigation [36] or require human-in-the-loop feedback due to the lack of an automated reward function [33].
+:::
+
+万维网(WWW)是一个大规模开放域交互环境,凭借其互联的、带自然文本、图像与交互元素的页面集合,天然满足上述第一条要求。网页同时具备可扩展、语义丰富、交互、动态与真实等特性,使网络与游戏、3D 导航等既有自主智能体环境截然不同。此外,网络也是部署已训练智能体的实用环境,在减轻人类繁琐任务(如购买商品、预订预约)方面潜力巨大。尽管已有构建网页任务的前期工作,它们要么在转移与动作空间的深度上不足,要么难以扩展:一些基准只包含单一分类任务 [39, 46, 31],或每轮交互只包含寥寥几种不同页面 [43];另一些提出的任务时间跨度更长,但要么局限于跟随超链接的网页导航 [36],要么因缺乏自动奖励函数而需要人在环(human-in-the-loop)反馈 [33]。
+
+::: en
+In this paper, we introduce WebShop (Figure 1) – a large-scale interactive web-based environment for language understanding and decision making – and train autonomous agents to complete tasks on this benchmark. With the goals of being scalable and containing realistic language and visual elements, WebShop emulates the task of online shopping on an e-commerce website, where the agent's goal is to understand a human-provided text instruction and purchase a product to match the specifications. To do so, the agent needs to query the website's search engine, choose items to explore from search results, open and read their description and details, and select the necessary options (e.g. 32 oz., red color) before clicking the 'Buy' button. In order to pick the optimal product that matches user requirements, the agent may need to view and compare various products (including backtracking between pages), and potentially perform multiple searches. WebShop contains over one million products scraped from amazon.com, over 12 thousand crowdsourced instructions, and a diverse semantic action space of searching text queries and choosing text buttons. It is packaged into a convenient OpenAI Gym [5] environment and can be rendered in two modes (HTML or simple) with parallel observation spaces that are easy for human and model respectively. Rewards are automatically computed using a combination of programmatic matching functions that consider the attributes, type, options and price of the chosen product, alleviating the need for human evaluation and providing a path to scaling up interactive learning.
+:::
+
+本文提出 WebShop(图 1)——一个面向语言理解与决策的大规模交互式网页环境——并训练自主智能体在该基准上完成任务。以"可扩展、含真实语言与视觉元素"为目标,WebShop 模拟在电商网站上在线购物的任务:智能体的目标是理解人类提供的文本指令,购买一件符合规格(specifications)的商品。为此,智能体需要查询网站的搜索引擎、从搜索结果中挑选商品进行探索、打开并阅读其描述与详情、并选择必要的选项(如 32 oz.、红色),然后点击"购买(Buy)"按钮。为了挑出满足用户需求的最优商品,智能体可能需要查看并比较多个商品(包括在页面间回溯),并可能执行多次搜索。WebShop 含 100 余万件从 amazon.com 抓取的商品、1.2 万余条众包指令,以及"搜索文本查询 + 选择文本按钮"的多样语义动作空间。它被打包为便捷的 OpenAI Gym [5] 环境,可用两种模式(HTML 或 simple)渲染,二者的观察空间相互平行、分别对人友好与对模型友好。奖励由一组程序化匹配函数自动计算,它们考虑所选商品的属性、类型、选项与价格,从而免除人工评估的需要,为交互式学习的规模化铺平道路。
+
+::: en
+We develop several agents to perform this task, using both reinforcement learning (RL) and imitation learning (IL). We also leverage the latest pre-trained language models [26, 11] for representing and generating text. Our modular architecture includes a factorized processing of state observations and action choices using ResNets (visual) and Transformers (text), followed by an attention fusion layer that helps the agent contextually score each action. Our best agent achieves an average score of 62.4 (out of 100) and successfully completes the task 28.7% of the time, significantly higher than a heuristic baseline that achieves 45.6 and 9.6%, respectively. While this demonstrates the potential for IL and RL, the agents are still much lower than human experts, who can achieve 82.1 and 59.6% on this task.\* We perform several analyses and ablation studies to identify the cause of this gap and find several avenues for agent improvement in the future including more robust search generation, explicit memory modules, and better handling of noisy web text. Finally, we also demonstrate an instance of sim-to-real transfer by deploying agents trained with WebShop to operate on amazon.com and ebay.com, and find that they can achieve similar performances despite search engine and product differences, and consistently outperform the rule baseline of using the first result returned by the commercial search engines when directly searching the instruction texts. This demonstrates the practical potential of our work towards developing agents that can operate autonomously on the world wide web (WWW).
+
+\*In our analysis (§5.3), we observe that the task requires patience and consistency, which is lacking in some crowdsource workers, leading to lower scores. Even with this caveat, the gap between human performance and the model remains significant.
+:::
+
+我们开发了多个智能体来执行该任务,同时使用强化学习(RL)与模仿学习(imitation learning, IL),并利用最新的预训练语言模型 [26, 11] 来表示与生成文本。我们的模块化架构包括:用 ResNet(视觉)与 Transformer(文本)对状态观察与动作选择做分解(factorized)处理,随后由一个注意力融合层帮助智能体结合上下文为每个动作打分。我们最好的智能体取得平均 62.4 分(满分 100)、28.7% 的时间成功完成任务,显著高于取得 45.6 分与 9.6% 的启发式基线。虽然这展示了 IL 与 RL 的潜力,但智能体仍远低于人类专家——后者在该任务上可达 82.1 分与 59.6%。\* 我们做了多项分析与消融研究以定位这一差距的成因,并发现未来改进智能体的若干方向,包括更鲁棒的搜索生成、显式记忆模块以及对噪声网页文本的更好处理。最后,我们还展示了 sim-to-real 迁移的一个实例:把 WebShop 训练的智能体部署到 amazon.com 与 ebay.com 上运行,发现尽管搜索引擎与商品存在差异,它们仍能取得相近表现;并且当直接以指令全文搜索时,它们稳定超过"买商业搜索引擎返回的第一条结果"这一规则基线。这展示了本工作在开发能自主运行于万维网(WWW)的智能体方面的实用潜力。
+
+注 \*:我们在分析(§5.3)中观察到,该任务需要耐心与一致性,而部分众包工人缺乏这些素质,导致分数偏低。即便考虑这一点,人类表现与模型之间的差距依然显著。
+
+**[图 1: The WebShop environment. A: An example task trajectory in HTML mode, where a user can (1) search a query in a search page, (2) click a product item in a results page, (3) choose a color option in a item page, (4) check item-detail pages and go back to the item page, and (5) finally buy the product to end the episode and receive a reward r ∈ [0, 1] (§3.2). B: the results page in simple mode for agent training and evaluation. The blue text indicates clickable actions and bold text indicates an action selected by the agent. C: The product notation used in §3 with corresponding examples from the product in A. The attributes Yatt are hidden from the task performer.]**
+
+图 1 中文说明:WebShop 环境总览。**A**:HTML 模式下的一个示例任务轨迹——用户可以 (1) 在搜索页输入查询;(2) 在结果页点击一件商品;(3) 在商品页选择颜色选项;(4) 查看商品详情页并返回商品页;(5) 最终购买商品、结束该轮并获得奖励 r ∈ [0, 1](§3.2)。**B**:用于智能体训练与评估的 simple(简化)模式结果页:蓝色文本表示可点击动作,加粗文本表示智能体选中的动作(示例中商品为 "MENHG Folding Breakfast Tray…",价格 $109.0,颜色选项 black/khaki/white,指令为 "I'm looking for a small portable folding desk that is already fully assembled [...]",该轮奖励 1.0)。**C**:§3 使用的商品记号及 A 中商品对应的例子——ȳ(描述)= 标题+描述等文本聚合,$109.0 为价格 y^price,选项 Y^opt = {black, khaki, white},属性 Y^att = {steel pipe, no assembly, portable}(对任务执行者隐藏),指令 u 即自然语言目标。
+
+### 2 相关工作(Related Work)
+
+::: en
+Reinforcement learning on the web. Nogueira and Cho [36] introduced WikiNav as a benchmark for RL agents navigating pages, but the task is purely navigational with the actions restricted to either choosing a hyperlink to follow or deciding to stop. The World of Bits (WoB) benchmark [43] enables training of RL agents to complete tasks on webpages using pixel and Document Object Model (DOM) observations. Several follow-up papers have tackled MiniWoB using techniques like workflow-guided exploration [29], curriculum and meta-learning [15], DOM tree representation [21], adversarial environment generation [16] and large-scale behavioral cloning [20]. However, MiniWoB lacks long-range decision making across multiple different pages and does not scale easily in terms of difficulty or size due to its use of low-level mouse clicks and keystrokes as actions. In contrast, WebShop requires navigating longer paths with context-based action selection and backtracking, and it uses high-level search and choose actions that are more scalable and transferable to real settings. While not directly operating on web pages, AndroidEnv [48] and MoTIF [8] provide environments to train agents for interacting with apps and services on mobile platforms.
+:::
+
+**网页上的强化学习**。Nogueira 与 Cho [36] 提出了 WikiNav 作为 RL 智能体页面导航的基准,但该任务是纯导航性的,动作仅限于选择一条要跟随的超链接或决定停止。World of Bits(WoB)基准 [43] 支持用像素与文档对象模型(DOM)观察在网页上训练 RL 智能体完成任务。若干后续论文用工作流引导探索 [29]、课程与元学习 [15]、DOM 树表示 [21]、对抗环境生成 [16] 与大规模行为克隆 [20] 等技术攻克 MiniWoB。然而 MiniWoB 缺乏跨多个不同页面的长程决策,且由于使用低层鼠标点击与键击作为动作,在难度与规模上都难以扩展。相比之下,WebShop 要求带上下文动作选择与回溯的更长导航路径,并使用更可扩展、更可迁移到真实环境的高层 search 与 choose 动作。AndroidEnv [48] 与 MoTIF [8] 虽提供在移动平台上训练智能体与应用/服务交互的环境,但并不直接操作网页。
+
+::: en
+Non-interactive web-based tasks. Various supervised classification tasks on webpages have been proposed, including predicting web elements [39], generating API calls [46, 47, 54] and semantic parsing into concept-level navigation actions [31]. Perhaps most similar content-wise to our work is the Klarna product page dataset [19] which contains over 50,000 product pages labeled with different element categories for supervised classification. All these works only consider supervised settings with a single decision, and may require the definition of web APIs or command templates for each domain. Our benchmark, WebShop, combines webpages with realistic text and image content with a rich and diverse interaction space for long-range sequential decision making.
+:::
+
+**非交互式网页任务**。已有多种网页上的监督分类任务被提出,包括预测网页元素 [39]、生成 API 调用 [46, 47, 54] 与语义解析为概念级导航动作 [31]。内容上与本工作最接近的或许是 Klarna 商品页数据集 [19],它包含 5 万余个商品页,标注了不同的元素类别,用于监督分类。这些工作都只考虑单次决策的监督设置,且可能需要为每个领域定义网页 API 或命令模板。我们的基准 WebShop 把具有真实文本与图像内容的网页,与用于长程序贯决策的丰富多样交互空间结合起来。
+
+::: en
+Leveraging the web for traditional NLP tasks. Several papers have explored the use of the web for information extraction [34] and retrieval [1], question answering [57, 25], dialog [45], and training language models on webtext [2]. These approaches primarily use web search engines as a knowledge retriever for gathering additional evidence for the task at hand. Perhaps most similar to our work is WebGPT [33], which uses a web interface integrated with a search engine to train RL agents to navigate the web and answer questions. However, our environment has a more diverse action and observation space (including images) and does not require human-in-the-loop evaluation.
+:::
+
+**利用网页做传统 NLP 任务**。若干论文探索了用网页做信息抽取 [34] 与检索 [1]、问答 [57, 25]、对话 [45],以及在网页文本上训练语言模型 [2]。这些方法主要把网页搜索引擎当作知识检索器,为手头任务收集额外证据。与本工作最接近的或许是 WebGPT [33],它用集成搜索引擎的网页界面训练 RL 智能体在网络上导航并回答问题。但我们的环境动作与观察空间更多样(含图像),且不需要人在环评估。
+
+### 3 WebShop 环境(The WebShop Environment)
+
+::: en
+We create WebShop as a large-scale web-based interactive environment with over 1.1 million real-world products scraped from amazon.com. In this environment, an agent needs to find and purchase a product according to specifications provided in a natural language instruction. WebShop is designed in a modular fashion which disentangles the website transitions from the task-specific aspects like instructions and reward, allowing for easy extension to new tasks and domains.
+:::
+
+我们把 WebShop 构建为一个大规模网页交互环境,含 110 余万件从 amazon.com 抓取的真实商品。在该环境中,智能体需要按照自然语言指令给出的规格找到并购买一件商品。WebShop 采用模块化方式设计,将网站转移逻辑与指令、奖励等任务特定方面解耦,便于轻松扩展到新任务与新领域。
+
+#### 3.1 任务形式化(Task Formulation)
+
+::: en
+WebShop can be formulated as a partially observable Markov decision process (POMDP) (S, A, T, R, U, O) with state space S, action space A, deterministic transition function T : S × A → S, reward function R : S × A → [0, 1], instruction space U, and a state observation space O.
+
+State and action. A state s ∈ S represents a web page, which falls into one of the four types – the search page that contains a search bar, the results page that lists a set of products returned by a search engine, the item page that describes a product, or the item-detail page that shows further information about the product (Figure 1A(1-4) respectively). We define the following notations for a product y. We denote ȳ to be the aggregation of the various text fields including product title, description, and overview. We denote yprice to be the price, Yopt to be a set of buying options, and I to be a set of images, each corresponding to a specific option. Finally, each product is associated with Yatt, a set of attributes hidden from the agent which is extracted from the title and the item-detail pages (§3.2). The attributes are used for the automatic reward calculation.
+:::
+
+WebShop 可形式化为部分可观测马尔可夫决策过程(POMDP)(S, A, T, R, U, O):状态空间 S、动作空间 A、确定性转移函数 T: S×A→S、奖励函数 R: S×A→[0,1]、指令空间 U 与状态观察空间 O。
+
+**状态与动作**。状态 s ∈ S 表示一张网页,属于四种类型之一——含搜索框的**搜索页**(search)、列出搜索引擎返回的一组商品的**结果页**(results)、描述某件商品的**商品页**(item),以及展示商品更多信息的**详情页**(item-detail)(分别对应图 1A(1-4))。我们对商品 y 定义如下记号:**ȳ** 表示商品标题、描述与概览等各文本字段的聚合;**y^price** 表示价格;**Y^opt** 表示购买选项的集合;**I** 表示图像集合,每张对应一个具体选项。最后,每件商品还关联 **Y^att**——一个对智能体隐藏的属性(attributes)集合,从标题与详情页中抽取(§3.2),用于自动奖励计算。
+
+::: en
+An action a ∈ A(s) can either be searching a text query (e.g. search[Red shoes]) or choosing a text button (e.g. choose[Size 9]) as shown in Table 1. These two action types are not available simultaneously – search is only allowed when the agent is at the search page; on all other pages, click is the only action choice. The chosen action argument (button) will be clicked as a web link as opposed to the low-level mouse-click actions in previous environments such as World of Bits [43]. The transitions initiated by clicks deterministically redirect the web page to one of the four page types (Table 1). The transition initiated by search is based on a deterministic search engine (§3.2).
+:::
+
+动作 a ∈ A(s) 可以是搜索一条文本查询(如 search[Red shoes]),也可以是选择一个文本按钮(如 choose[Size 9]),如表 1 所示。这两种动作类型不同时可用——只有当智能体位于搜索页时才允许 search;在所有其他页面上,click 是唯一的动作选择。所选动作参数(按钮)将作为网页链接被点击,而非 World of Bits [43] 等既有环境中的低层鼠标点击。点击(click)引发的转移确定性地把网页重定向到四种页面类型之一(表 1);search 引发的转移则基于确定性的搜索引擎(§3.2)。
+
+**表 1:WebShop 中的动作(Table 1: Actions in WebShop)**
+
+| 动作类型(Type) | 参数(Argument) | 状态转移(State → Next State) |
+|---|---|---|
+| search(搜索) | [Query](查询) | Search → Results |
+| choose(选择) | Back to search(返回搜索) | ∗ → Search |
+| choose | Prev/Next page(上一页/下一页) | Results → Results |
+| choose | [Product title](商品标题) | Results → Item |
+| choose | [Option](选项) | Item → Item |
+| choose | Desc/Overview(描述/概览) | Item → Item-Detail |
+| choose | Previous(上一页) | Item-Detail → Item |
+| choose | Buy(购买) | Item → 轮次结束(Episode End) |
+
+::: en
+Observation. Using Flask [41] and OpenAI Gym [5], we provide two parallel observation modes to render the state and instruction S × I → O : (1) HTML mode that contains the HTML of the web page, allowing for interaction in a web browser (Figure 1A), and (2) simple mode which strips away extraneous meta-data from raw HTML into a simpler format (Figure 1B). The human performance scores in §4.2 are collected in the HTML mode, while all models are trained and evaluated in the simple mode. Note that while the environment allows for training reinforcement learning agents on raw pixels in HTML mode (like in Shi et al. [43]), we believe that it provides a very low-level non-semantic action space. Moreover, it is straightforward to write a translator that converts any new HTML page into simple format for use with trained agents, which enables sim-to-real transfer.
+:::
+
+**观察(Observation)**。我们使用 Flask [41] 与 OpenAI Gym [5] 提供两种并行的观察模式来渲染状态与指令 S×I→O:(1) **HTML 模式**,包含网页的 HTML,允许在网页浏览器中交互(图 1A);(2) **simple(简化)模式**,把原始 HTML 中多余的元数据剥去、化为更简单的格式(图 1B)。§4.2 中的人类表现分数在 HTML 模式收集,所有模型在 simple 模式训练与评估。注意,虽然该环境允许在 HTML 模式上基于原始像素训练强化学习智能体(如 Shi et al. [43] 那样),我们认为那提供了一个非常低层的非语义动作空间。此外,写一个把任意新 HTML 页转换为 simple 格式的翻译器是直截了当的,这使训练好的智能体可用于 sim-to-real 迁移。
+
+::: en
+Instruction and reward. Each natural language instruction u ∈ U contains the following information: a non-empty set of attributes Uatt, a set of options Uopt, and a price uprice. The instruction is generated based on a target product y∗ by human annotators. The instruction collection process is lightweight and scalable (§3.2). Concretely, Uatt ⊆ Y∗att is a subset of the product attributes, Uopt ⊆ Y∗opt is a subset of the product option field-value pairs, uprice > y∗price is a price set to be higher than the target product price. For example, the instruction "Can you find me a pair of black-and-blue sneaker that is good in rain weather? I want it to have puffy soles, and price less than 90 dollars." contains the aforementioned attributes Uatt = {"waterproof", "soft sole"} and option Uopt = {"color": "black and blue"}. In each episode, the agent receives a reward r = R(sT , a) in the end at timestep T, where a = choose[buy], y is the product chosen by the agent in the final state sT , and Yatt and Yopt are its corresponding attributes and options. The reward is defined as:
+
+r = ( rtype · |Uatt ∩ Yatt| + |Uopt ∩ Yopt| + 1[yprice ≤ uprice] ) / ( |Uatt| + |Uopt| + 1 )    (1)
+
+where the type reward rtype = TextMatch(ȳ, ȳ∗) is based on text matching heuristics to assign low reward when y and y∗ have similar attributes and options but are obviously different types of products. For example, "butter" and "plant-based meat" differ in types but may both contain attributes "cruelty-free", "non-GMO", and an option "size: pack of 2". The exact formula for TextMatch(·) is in the Appendix §A.5.
+:::
+
+**指令与奖励**。每条自然语言指令 u ∈ U 包含以下信息:非空的属性集合 U_att、选项集合 U_opt,以及价格 u^price。指令由人类标注者基于目标商品 y\* 生成,收集过程轻量且可扩展(§3.2)。具体地,U_att ⊆ Y\*\_att 是商品属性的子集;U_opt ⊆ Y\*\_opt 是商品选项"字段-取值"对的子集;u^price > y\*\_price 是设为高于目标商品价格的价格。例如,指令 "Can you find me a pair of black-and-blue sneaker that is good in rain weather? I want it to have puffy soles, and price less than 90 dollars."(能帮我找一双蓝黑配色、适合雨天穿的运动鞋吗?我想要蓬松的鞋底,价格低于 90 美元。)包含上述属性 U_att = {"waterproof"(防水), "soft sole"(软底)} 与选项 U_opt = {"color": "black and blue"}。在每轮(episode)中,智能体在终止时刻 T 得到奖励 r = R(s_T, a),其中 a = choose[buy],y 是智能体在最终状态 s_T 所选的商品,Y_att 与 Y_opt 是其对应的属性与选项。奖励定义为:
+
+r = ( r_type·|U_att ∩ Y_att| + |U_opt ∩ Y_opt| + 1[y^price ≤ u^price] ) / ( |U_att| + |U_opt| + 1 )    (1)
+
+其中类型奖励(type reward)r_type = TextMatch(ȳ, ȳ\*) 基于文本匹配启发式:当 y 与 y\* 属性、选项相近但商品类型明显不同时给低奖励。例如,"黄油(butter)"与"植物基肉(plant-based meat)"类型不同,却可能都含属性 "cruelty-free"(零残忍)、"non-GMO"(非转基因)与选项 "size: pack of 2"(两件装)。TextMatch(·) 的精确公式见附录 §A.5。
+
+::: en
+Evaluation metrics. We use two evaluation metrics: (1) Task Score: defined as (100 × avg. reward), which captures the average reward obtained across episodes; and (2) Success Rate (SR) defined as the portion of instructions where r = 1. Note that it is possible to obtain r = 1 for an episode even if the final product is not y∗ — for example, there could be many items that satisfy the goal "I want a red shirt", even if the goal is generated from a specific red shirt item.
+:::
+
+**评估指标**。我们使用两个评估指标:(1) **任务得分(Task Score)**,定义为 (100 × 平均奖励),刻画跨轮次获得的平均奖励;(2) **成功率(Success Rate, SR)**,定义为 r = 1 的指令占比。注意,即使最终商品不是 y\*,一轮也可能得到 r = 1——例如,即便目标是由某件具体的红衬衫生成的,满足"我想要一件红衬衫"这一目标的商品可能有很多件。
+
+#### 3.2 环境实现(Environment Implementation)
+
+::: en
+Data scraping. We use ScraperAPI [35] to scrape 1,181,436 products from amazon.com across 5 categories (fashion, makeup, electronics, furniture, and food) using 113 sub-category names as queries. The product texts (title and item details) have an average length of 262.9 and a vocabulary size 224,041 (word frequency higher than 10). In addition, the products have a total of 842,849 unique options, reflecting the scale and complexity of the data. More details about product scraping is in the Appendix §A.1.
+:::
+
+**数据抓取**。我们使用 ScraperAPI [35] 从 amazon.com 抓取 1,181,436 件商品,横跨 5 个类别(服饰 fashion、美妆 makeup、电子 electronics、家具 furniture、食品 food),以 113 个子类名作为查询。商品文本(标题与详情)平均长度 262.9,词表大小 224,041(词频高于 10)。此外,商品共有 842,849 个唯一选项,反映了数据的规模与复杂度。更多商品抓取细节见附录 §A.1。
+
+::: en
+Search engine. We use Pyserini [28] for the search engine, where indices are built offline using a BM25 sparse retriever with text for each product concatenated from the title, description, overview, and customization options. The search engine is deterministic, which eases imitation learning and result reproducibility. More details in A.3.
+:::
+
+**搜索引擎**。搜索引擎使用 Pyserini [28]:索引离线构建,采用 BM25 稀疏检索器,每件商品的文本由标题、描述、概览与定制选项拼接而成。搜索引擎是确定性的,便于模仿学习与结果复现。详见 A.3。
+
+::: en
+Attribute mining and annotation. Each product is annotated with a set of hidden attributes, which are used to represent its latent characteristics as well as to calculate the reward as detailed in §3. An attribute is a short natural language phrase that describes the property of the product (see examples in Figure 1). We mine the attributes by calculating TF-IDF scores for all bi-grams in the concatenated titles and descriptions based on each product category. We review the top 200 bi-grams for each category, remove the noisy ones by inspection (decide based on whether the bi-gram is human understandable), and assign them to the products. We consolidate a pool of 670 attributes. See more details in the Appendix §A.2.
+:::
+
+**属性挖掘与标注**。每件商品都标注一组隐藏属性,用于表示其潜在特性,并按 §3 所述计算奖励。属性是描述商品性质的短自然语言短语(示例见图 1)。我们按商品类别对拼接的标题与描述中所有 bi-gram(二元词组)计算 TF-IDF 分数来挖掘属性;人工审查每个类别的 top 200 个 bi-gram,凭检视去掉噪声项(依据该 bi-gram 是否人类可理解来判断),再把它们分配给商品。我们最终整理出 670 个属性的池。更多细节见附录 §A.2。
+
+::: en
+Natural language instructions. We use Amazon Mechanical Turk (AMT) to collect natural language instructions that specify goal products with appropriate options. Specifically, an AMT worker is presented with a sampled goal product, including the product title, category, attributes, and the buying options, and asked to write a command to instruct an automatic shopping agent to find the target. Workers are instructed to avoid being too specific such as including the entire title in the instruction, but stay faithful to describing the target product. We collect a total of 12,087 linguistically diverse instructions with an overall vocabulary size of 9,036 words and an average length of 15.9 words. We provide the detailed annotation process and interface in the Appendix §A.4.
+:::
+
+**自然语言指令**。我们使用 Amazon Mechanical Turk(AMT)收集指定目标商品及适当选项的自然语言指令。具体而言,向 AMT 工人展示一个采样的目标商品(含商品标题、类别、属性与购买选项),要求其编写一条命令来指挥一个自动购物智能体找到目标。要求工人避免过于具体(如把整个标题写进指令),但要忠实描述目标商品。我们共收集 12,087 条语言多样的指令,总词表 9,036 词,平均长度 15.9 词。详细标注过程与界面见附录 §A.4。
+
+::: en
+Human demonstrations. We collect trajectories from humans performing the task in the HTML mode of WebShop to understand the task difficulty for humans and to analyze how humans would solve the task. We use qualification tests to train and select motivated workers to perform the task. We recruit and train a total of 13 workers for data collection, and among them we select the top 7 performing workers to be "experts" (see Appendix §A.6 for examples). We also leverage this data to perform imitation learning (described in §4.2).
+:::
+
+**人类演示**。我们在 WebShop 的 HTML 模式下收集人类执行任务的轨迹,以理解任务对人类的难度,并分析人类会如何求解该任务。我们用资格测试来训练并筛选有动机的工人:共招募并训练 13 名工人收集数据,其中选出表现最好的 7 名作为"专家"(示例见附录 §A.6)。该数据也用于模仿学习(见 §4.2)。
+
+#### 3.3 研究挑战(Research Challenges)
+
+::: en
+WebShop brings together several research challenges for autonomous systems from various subfields in NLP and RL into a single benchmark. These include: 1) generation of good search queries [22, 59] and reformulation [37, 51], 2) strategic exploration for navigating through the website [55, 56, 29], 3) robust language understanding for textual state and action spaces [3, 7, 17, 44], and 4) long-term memory for comparing items or backtracking [53, 13, 23] (Figure 1). While we believe individual advances in each of these will improve agent performance, WebShop also provides an ideal testbed for the development of interdisciplinary techniques that tackle more than one of the above mentioned challenges simultaneously. For example, external memory modules may be very effective if combined with strategic exploration, or exploration could be helpful in information query reformulation. Further analysis based on human and model trajectories is in §5.3.
+:::
+
+WebShop 把来自 NLP 与 RL 各个子领域的、面向自主系统的研究挑战汇聚到单一基准:(1) 生成好的搜索查询 [22, 59] 与查询重构(reformulation)[37, 51];(2) 在网站中导航的策略性探索 [55, 56, 29];(3) 对文本状态与动作空间的鲁棒语言理解 [3, 7, 17, 44];(4) 比较商品或回溯所需的长期记忆 [53, 13, 23](图 1)。我们相信每一项的单独进展都会提升智能体表现,而 WebShop 也为开发能同时应对上述不止一个挑战的跨学科技术提供了理想试验台。例如,外部记忆模块与策略性探索结合可能非常有效,或探索可辅助信息查询重构。基于人类与模型轨迹的进一步分析见 §5.3。
+
+**[图 2: Item rank in search results when the instruction is directly used as search query.]**
+
+图 2 中文说明:当直接把指令文本当作搜索查询时,目标商品在搜索结果中的排名分布(直方图)。目标商品约 1/3 的时间出现在第一页结果(排名 1-10),但超过一半的时间完全找不到(排名 50+),说明仅靠词典匹配的搜索引擎不足以解决任务,好的查询(重)构造很重要(详见附录 A.3)。
+
+### 4 方法(Methods)
+
+::: en
+We propose various models that combine language and image pre-training with imitation learning (IL) and reinforcement learning (RL). More details are provided in the Appendix §B.
+:::
+
+我们提出多个把语言与图像预训练同模仿学习(IL)与强化学习(RL)相结合的模型。更多细节见附录 §B。
+
+#### 4.1 规则基线(Rule Baseline)
+
+::: en
+A simple rule baseline is to search the exact instruction text, then choose and buy the first item in the results page without choosing any options. The heavy lifting of the lexical search engine makes it also a simple non-learnable information retrieval (IR) baseline, and would lead to a non-trivial attribute reward. However, simple heuristic rules cannot resolve noisy natural language options, strategically explore, or learn to generate what to search, so the total reward and task success rate should be low.
+:::
+
+一个简单的规则基线是:搜索指令原文,然后在不选择任何选项的情况下购买结果页的第一件商品。词典式(lexical)搜索引擎承担了大部分工作,使它同时成为一个简单的不可学习信息检索(IR)基线,并能得到非平凡的属性奖励。但简单的启发式规则无法解决噪声自然语言选项、无法策略性探索、也学不会生成该搜索什么,因此总奖励与任务成功率应当很低。
+
+#### 4.2 模仿学习(Imitation Learning, IL)
+
+::: en
+For the text generation and choice problems presented in WebShop, we propose using two pre-trained language models to separately learn how to search and choose from human demonstrations.
+
+Imitating human search generation. We frame searching as a sequence-to-sequence text-generation problem: the agent generates a search action a = search[...] given an instruction u without considering any other context (e.g. past searches, visited items). We use M = 1,421 instruction-search pairs from 1,012 training human trajectories to construct a dataset D = {(u, a)}^M_i=1 and fine-tune a BART model [26] parameterized by φ to perform conditional language modeling:
+
+Lsearch = E_u,a∼D[− log πφ(a|u)]    (2)
+:::
+
+针对 WebShop 提出的"文本生成"与"选择"两类问题,我们提出用两个预训练语言模型分别从人类演示中学习如何搜索与如何选择。
+
+**模仿人类搜索生成**。我们把搜索框定为序列到序列(seq2seq)文本生成问题:给定指令 u 生成搜索动作 a = search[...],不考虑任何其他上下文(如过往搜索、看过的商品)。我们用 1,012 条训练人类轨迹中的 M = 1,421 个"指令-搜索"对构建数据集 D = {(u, a)}_{i=1}^M,并微调由 φ 参数化的 BART 模型 [26] 做条件语言建模:
+
+L_search = E_{u,a∼D}[− log π_φ(a|u)]    (2)
+
+::: en
+Imitating human choice. The choice-based imitation model (Figure 3) predicts a probability distribution over all the available click actions A(o) in observation o and maximizes the likelihood of the human clicked button a∗ ∈ A(o). We construct a dataset D′ = {(o, A(o), a∗)}^M′_i=1 of M′ = 9,558 samples from the training human trajectories. We use a 12-layer pre-trained BERT model [10] parameterized by θ to encode the o into an observation representation of contextualized token embeddings, and we similarly encode each action. Each action representation is passed into a cross-attention layer with the observation representation, then mean pooled into a single vector and multiplied with a matrix W to obtain a scalar score S(o, a). The policy πθ(a|o, A(o)) is the softmax distribution over action scores S(o, a):
+
+Lchoose = E_o,A(o),a∗∼D′ [− log πθ(a∗|o, A(o))]    (3)
+
+πθ(a|o, A(o)) ∼ exp( W⊤ mean[ cross-attn( BERT(o; θ), BERT(a; θ) ) ] )    (4)
+:::
+
+**模仿人类选择**。基于选择的(choice-based)模仿模型(图 3)预测观察 o 中所有可用点击动作 A(o) 上的概率分布,并最大化人类所点按钮 a\* ∈ A(o) 的似然。我们从训练人类轨迹构建 M′ = 9,558 个样本的数据集 D′ = {(o, A(o), a\*)}_{i=1}^{M′}。我们用由 θ 参数化的 12 层预训练 BERT 模型 [10] 把 o 编码为上下文化 token 嵌入构成的观察表示,同样地编码每个动作。每个动作表示经过与观察表示的交叉注意力(cross-attention)层,再均值池化为单个向量,乘以矩阵 W 得到标量分数 S(o, a)。策略 π_θ(a|o, A(o)) 是动作分数 S(o, a) 上的 softmax 分布:
+
+L_choose = E_{o,A(o),a\*∼D′}[− log π_θ(a\*|o, A(o))]    (3)
+
+π_θ(a|o, A(o)) ∼ exp( W^⊤·mean[ cross-attn( BERT(o; θ), BERT(a; θ) ) ] )    (4)
+
+**[图 3: Architecture of our choice-based imitation learning (IL) model. The image I is passed to a ResNet to obtain the image representation. The instruction text u is passed to a transformer (initialized with BERT) to obtain the text representations. The concatenated bi-modal representations are fused with the action representations using the Attention Fusion Layer. The resulting fused-action representations are mean-pooled and reduced by an MLP layer to a scalar value S(o, a) denoting the logit value of the action choose[khaki].]**
+
+图 3 中文说明:基于选择的 IL 模型架构。图像 I 经 ResNet 得到图像表示;指令文本 u 经(以 BERT 初始化的)Transformer 得到文本表示;两种模态的表示拼接后,经**注意力融合层(Attention Fusion Layer)**与各动作(如 choose[Features]、choose[black]、choose[khaki]、choose[Buy Now])的 Transformer(权重共享)表示融合;融合后的动作表示经均值池化与 MLP 层降为标量 S(o, a),即动作 choose[khaki] 的 logit 值。
+
+::: en
+Handling Images. We use a pre-trained ResNet-50 [18] to pre-process images across different products and options into a 512 dimensional feature vector, which is then transformed into 768 dimensions with a learned linear layer and concatenated to BERT(o) as the observation representation.
+:::
+
+**图像处理**。我们用预训练 ResNet-50 [18] 把不同商品与选项的图像预处理为 512 维特征向量,再经一个学习的线性层变换为 768 维,拼接到 BERT(o) 上作为观察表示。
+
+::: en
+Full pipeline. Combining the above during environment interaction, we use the BART model in the search page to generate the top-5 search queries via beam search and choose a random one. For other pages, we sample one action from πθ(a|o, A(o)) using the BERT model. We find these methods useful to encourage diverse actions. In contrast, an ineffective strategy that uses only the top generated search query or the button with the highest probability might lead to limited product candidates or being stuck (e.g. bouncing back and forth between pages).
+:::
+
+**完整流水线**。在环境交互中把上述组合起来:在搜索页用 BART 模型经束搜索(beam search)生成 top-5 搜索查询并随机选择一个;在其他页面,用 BERT 模型从 π_θ(a|o, A(o)) 采样一个动作。我们发现这些方法有助于鼓励动作多样性。相反,只使用最优生成查询或最高概率按钮的低效策略,可能导致商品候选有限或卡死(如在页面之间来回弹跳)。
+
+#### 4.3 强化学习(Reinforcement Learning, RL)
+
+::: en
+We also fine-tune the choice-based IL model with online RL (i.e. IL+RL). Prior work suggests that directly fine-tuning text generation via RL might lead to language drifting [24] and deteriorated performance. Therefore, we freeze the BART model to provide the top-10 search generations as a refined action space for the choice-based IL model to learn to pick – an inspiration borrowed from previous work in text games [55] and referential games [24]. We use the policy gradient method [32] with return-to-go Rt = Eπ[rt + γRt+1] and a learned value baseline V (o) = W⊤v BERT(o; θ) parameterized by {Wv, θ} (the BERT weights are tied with the policy):
+
+LPG = Eπ [− (Rt − V (ot)) log π (at|ot, A(ot))]    (5)
+
+The value V (o) is learned with an L2 loss Lvalue = (Rt − V (ot))2. We also add an entropy loss Lentropy = Σ_a∈A(ot) πθ(at|ot, A(ot)) log πθ(at|ot, A(ot)) to prevent premature convergence. Our full RL model minimizes the total loss LRL = LPG + Lvalue + Lentropy.
+:::
+
+我们还用在线 RL 微调基于选择的 IL 模型(即 IL+RL)。前期工作表明,直接用 RL 微调文本生成可能导致语言漂移(language drifting)[24] 与性能退化。因此,我们**冻结 BART 模型**,让它提供 top-10 搜索生成作为精炼动作空间(refined action space),供基于选择的 IL 模型学习挑选——灵感借自文字游戏 [55] 与指代游戏(referential games)[24] 的前期工作。我们使用策略梯度方法 [32],return-to-go 为 R_t = E_π[r_t + γR_{t+1}],以及学得的价值基线 V(o) = W_v^⊤ BERT(o; θ),由 {W_v, θ} 参数化(BERT 权重与策略共享/绑定):
+
+L_PG = E_π[−(R_t − V(o_t)) log π(a_t|o_t, A(o_t))]    (5)
+
+价值 V(o) 用 L2 损失 L_value = (R_t − V(o_t))² 学习。我们还加入熵损失 L_entropy = Σ_{a∈A(o_t)} π_θ(a_t|o_t, A(o_t)) log π_θ(a_t|o_t, A(o_t)) 以防止过早收敛。完整 RL 模型最小化总损失 L_RL = L_PG + L_value + L_entropy。
+
+### 5 实验(Experiments)
+
+#### 5.1 设置与任务验证(Setup and task verification)
+
+::: en
+We split a total of 12,087 instructions into an i.i.d. distributed train / development / test split of 10,587 / 1,000 / 500 instances for all models. While future work can investigate splits with more generalization gaps (e.g. split by product category), we will show the i.i.d. split is already challenging for current models. We randomly sample a subset of the 10,587 training instructions, then collect 1,012 human demonstrations for task verification and imitation learning (IL) and a further 54 demonstrations from instances in the development set for IL hyperparameter tuning and checkpoint selection. We also collect human trajectories for all 500 test instructions and report human and model performances averaged across these 500 instructions. More setup details are in the Appendix §C.
+:::
+
+我们把 12,087 条指令按独立同分布(i.i.d.)切分为 10,587 / 1,000 / 500 的训练/开发/测试集,用于所有模型。虽然未来工作可以研究泛化差距更大的划分(如按商品类别切分),我们将证明 i.i.d. 划分对当前模型已具挑战性。我们从 10,587 条训练指令中随机采样子集,收集 1,012 条人类演示用于任务验证与模仿学习(IL),另从开发集实例收集 54 条演示用于 IL 超参数调优与检查点选择。我们还为全部 500 条测试指令收集了人类轨迹,并报告在这 500 条指令上平均的人类与模型表现。更多设置细节见附录 §C。
+
+#### 5.2 结果(Results)
+
+::: en
+Task performance. From Figure 4, we observe that the rule baseline obtains a low score of 45.6 and a very low success rate of 10% since it cannot resolve options specified in language or explore more products, empirically demonstrating the non-trivial nature of the task. The IL model significantly outperforms the rule baseline on both metrics, achieving a score of 59.9. Further RL finetuning improves the score to 62.4 while slightly hurting the success rate (29.1% → 28.7%) (analyzed further in §5.3). We also observe a significant gap between models and humans – our best model's success rate (29.1%) is less than half of expert humans (59.6%) and only 60% of the average human (50%). This indicates a great room for model improvement by tackling reseach challenges in WebShop.
+:::
+
+**任务表现**。从图 4 观察,规则基线只得 45.6 的低分与 10% 的极低成功率,因为它无法解决语言指定的选项、也无法探索更多商品——经验性地证明了任务的非平凡性。IL 模型在两项指标上都显著超过规则基线,得 59.9 分;进一步的 RL 微调把分数提升到 62.4,但成功率略降(29.1% → 28.7%)(在 §5.3 分析)。我们还观察到模型与人类之间的显著差距——我们最好模型的成功率(29.1%)不到人类专家(59.6%)的一半,只有平均人类(50%)的六成。这说明在攻克 WebShop 中的研究挑战方面,模型还有巨大改进空间。
+
+**[图 4: Task scores and Success Rate (%) for our models on the test split of WebShop over 3 trials. LP Search uses a pre-trained BART model to generate the search query and IL w/o LP Search uses the rule-based heuristic. LP Choice uses pre-trained BERT weights to initialize the choice action model and IL w/o LP Choice trains a Transformer from scratch.]**
+
+图 4 中文说明(数据转为表格;3 次试验均值;LP = language pretraining,语言预训练):LP Search 表示用预训练 BART 生成搜索查询,IL w/o LP Search 用基于规则的启发式;LP Choice 表示用预训练 BERT 权重初始化选择动作模型,IL w/o LP Choice 从头训练一个 Transformer。
+
+**图 4 数据:WebShop 测试集上的任务得分与成功率**
+
+| 模型 | Score | SR(%) |
+|---|---|---|
+| Rule(规则基线) | 45.6 | 9.6 |
+| IL w/o LP Choice(IL 去掉选择模型语言预训练) | 45.8 | 10.6 |
+| IL w/o LP Search(IL 去掉搜索模型语言预训练) | 56.0 | 26.3 |
+| IL(模仿学习) | 59.9 | 29.1 |
+| RL(纯强化学习) | 52.5 | 11.2 |
+| RL (RNN)(RNN 编码器强化学习) | 55.2 | 17.6 |
+| IL+RL(模仿 + 强化学习) | 62.4 | 28.7 |
+
+::: en
+IL ablations. Figure 4 also contains several ablations that confirm important design choices for models. When the choice action model for the IL agent is randomly initialized (IL (w/o LP Choice); LP = language-pretraining), the success rate drops by nearly two-thirds, indicating the importance of language pre-training for our task. When the search query generator in the IL agent is replaced by a simple rule, which always uses the instruction text (IL (w/o LP Search)), both reward and success rate drop by around 3 points. This suggests the importance to explore by expanding the search space for exploration, but it is not as critical as learning to choose the right options. We experiment with incorporating history of one past observation and the last five actions into the model and find a slight degradation in the score from 59.9 to 57.3, suggesting more advanced techniques are needed to leverage past information. More ablations in §C.
+:::
+
+**IL 消融**。图 4 还包含若干消融,证实了模型的重要设计选择。当 IL 智能体的选择动作模型被随机初始化时(IL (w/o LP Choice);LP = language-pretraining,语言预训练),成功率下降近三分之二,表明语言预训练对本任务的重要性。当 IL 智能体中的搜索查询生成器被换成一条简单规则(总是使用指令文本)时(IL (w/o LP Search)),奖励与成功率都下降约 3 分。这提示通过扩展搜索空间来探索的重要性,但它不像"学会选择正确选项"那样关键。我们实验把一条过往观察与最近五个动作的历史纳入模型,发现分数从 59.9 轻微退化到 57.3,提示需要更先进的技术来利用过往信息。更多消融见 §C。
+
+::: en
+RL ablations. When we directly train an RL agent (RL) from pre-trained BERT parameters, the performance is even worse than the rule baseline. This suggests that IL warm-starting is critical, possibly because of the significant domain shift from traditional language tasks. We also consider a simple RL model with RNN text encoders instead of the Transformer (RL (RNN)), which has a success rate more than 10% worse than the IL+RL model with a much larger variance. We hypothesize that RL with a more powerful architecture could help boost and stabilize the performance if the model is initialized with better language and task priors.
+:::
+
+**RL 消融**。当我们直接从预训练 BERT 参数训练 RL 智能体(RL)时,表现甚至比规则基线还差。这提示 IL 热启动(warm-starting)至关重要,可能是因为相对传统语言任务存在显著的领域漂移。我们还考虑一个用 RNN 文本编码器取代 Transformer 的简单 RL 模型(RL (RNN)),其成功率比 IL+RL 模型差 10% 以上,且方差大得多。我们假设,如果模型用更好的语言与任务先验初始化,带更强架构的 RL 能帮助提升并稳定表现。
+
+**表 2:左:得分细分;右:一条轨迹中访问状态数、查看商品数与搜索次数的平均值、最大值和最小值(Table 2: Left: Score breakdown. Right: average, maximum, and minimum number of states visited, items checks, and searches in a trajectory.)**
+
+| | Score | Att(属性) | Opt(选项) | Type(类型) | Price(价格) | State(状态数) | Item(商品数) | Search(搜索数) |
+|---|---|---|---|---|---|---|---|---|
+| Rule(规则) | 45.6 | 66.6 | 0.0 | 80.5 | 86.0 | 3.0 (3 / 3) | 1.0 (1 / 1) | 1.0 (1 / 1) |
+| IL | 59.9 | 69.3 | 45.2 | 86.4 | 84.0 | 9.4 (90 / 3) | 1.6 (11 / 1) | 1.3 (17 / 1) |
+| IL+RL | 62.4 | 74.0 | 38.9 | 89.7 | 88.7 | 4.5 (5 / 1) | 1.0 (1 / 1) | 1.0 (1 / 1) |
+| Human Expert(人类专家) | 82.1 | 81.8 | 73.9 | 94.4 | 97.7 | 11.3 (114 / 4) | 1.9 (16 / 1) | 1.4 (16 / 1) |
+
+(括号内为 最大 / 最小 值。)
+
+#### 5.3 分析(Analysis)
+
+::: en
+To better understand the differences between the agents and human experts, we perform several fine-grained analyses. We first break down the overall score into its four sub-parts according to Eq. (1): 1) attribute score (|Uatt ∩ Yatt|/|Uatt|), 2) option score (|Uopt ∩ Yopt|/|Uopt|), 3) price score (1[yprice ≤ uprice]), and 4) type score (rtype). We report trajectory statistics such as the average number of states, unique items visited, and number of searches per episode in Table 2 and provide qualitative examples of the trajectories in Table 3.
+:::
+
+为更好理解智能体与人类专家的差异,我们做了若干细粒度分析。我们首先按公式 (1) 把总分拆成四个子分:1) 属性分(|U_att ∩ Y_att| / |U_att|);2) 选项分(|U_opt ∩ Y_opt| / |U_opt|);3) 价格分(1[y^price ≤ u^price]);4) 类型分(r_type)。我们在表 2 报告轨迹统计(每轮平均状态数、访问的唯一商品数与搜索次数),并在表 3 给出轨迹的定性示例。
+
+::: en
+Human expert vs. agents. Human experts outperform the agents on all score sub-parts (Table 2), but the most significant boost comes from the option score (a 28% gap), revealing that agents have trouble selecting the correct product options. Humans also have longer trajectories, explore more items and perform more searches than the agents, with a higher variance, demonstrating their flexibility. Table 3 provides some samples trajectories. In the first example, the human decides to search again after removing 'inches', 'width', 'height', and 'white' from the query since product texts often contain abbreviated symbols for these terms like '"', 'w', and 'h'. Thus, search generation is challenging for models since it involves reasoning and adapting to grounded environments, and ideas from query reformulation [37, 1] could help alleviate this. Agents also struggle to perform robust semantic matching, which is important in choosing options that contain noisy paraphrases of instruction spans. In the second example, the human explores several products first, and decides to return to the first explored product, demonstrating long-term memory that is lacking in the IL+RL model.
+:::
+
+**人类专家 vs. 智能体**。人类专家在所有分数子项上都胜过智能体(表 2),但最显著的提升来自选项分(约 28 分的差距),揭示智能体难以选出正确的商品选项。人类的轨迹也更长、探索更多商品、执行更多搜索,方差也更高,展示了其灵活性。表 3 给出一些轨迹样本。第一个例子中,人类决定从查询中删去 'inches'(英寸)、'width'(宽)、'height'(高)与 'white'(白色)后重新搜索,因为商品文本常含这些词的缩写符号,如 '"'、'w' 与 'h'。因此,搜索生成对模型是困难的,因为它涉及对接地环境的推理与适应,查询重构 [37, 1] 的思想有助于缓解这一点。智能体也难以做鲁棒的语义匹配——这在选择含有指令片段噪声改写(noisy paraphrases)的选项时很重要。第二个例子中,人类先探索若干商品,再决定回到第一件探索过的商品,展示了 IL+RL 模型所缺乏的长期记忆。
+
+**表 3:人类与 IL+RL 模型的两条示例轨迹(仅展示动作;指令 2 的部分人类动作因篇幅省略,商品名为可读性截断;红色表示选项,蓝色表示属性)**
+
+```text
+指令 1:I want to find white blackout shades that are 66 inches in width and 66
+inches in height. They need to be easy to install [...]
+(我想找白色遮光帘,宽 66 英寸、高 66 英寸,需要易于安装……)
+
+人类动作(r = 1.0,长度 = 8)
+search[ 66 inches in width and 66 inches in height white shades ]  # 按指令原文搜索
+choose[ item : CALYX... ]                                          # 查看商品 CALYX…
+choose[ Back to Search ]                                           # 返回搜索
+search[ 66 x 66 blackout shades ]                                  # 去掉 inches/white 后改写查询再搜
+choose[ item : Milin... ]                                          # 查看商品 Milin…
+choose[ opt : 66"w x 66"h ]                                        # 选中选项 66"w x 66"h(尺寸)
+choose[ opt : cordless bottom up-blackout-white ]                  # 选中选项:无绳下升-遮光-白
+choose[ Buy ]                                                      # 购买,得满分
+
+IL+RL 动作(r = 0.2,长度 = 3)
+search[ white blackout shades 65 inches in width and 66 inches in height ]  # 搜索(65 为生成错误)
+choose[ item : Window... ]                                         # 点开第一件商品
+choose[ Buy ]                                                      # 未选任何选项直接购买
+
+指令 2:I need a gingko light and 20"x20" pillow cover that is hand painted [...]
+(我需要一个银杏灯光和 20"x20" 手绘枕套……)
+
+人类动作(r = 1.0,长度 = 17)
+search[ gingko light 20"x20" pillow cover hand painted ]  # 搜索
+choose[ item : Maison... ] [...]                          # 查看商品 Maison…(部分动作省略)
+choose[ Description ]                                     # 打开描述页
+choose[ < Previous ]                                      # 返回商品页
+choose[ Overview ]                                        # 打开概览页
+choose[ < Previous ] [...]                                # 返回商品页(部分动作省略)
+choose[ item : Maison... ]                                # 回到先前探索过的商品(长期记忆)
+choose[ opt : 20"x20" ]                                   # 选中尺寸选项
+choose[ opt : nudes (gingko light) ]                      # 选中颜色/款式选项
+choose[ Buy ]                                             # 购买,得满分
+
+IL+RL 动作(r = 0.25,长度 = 3)
+search[ gingko light and 20x20 pillow cover hand painted ]  # 搜索
+choose[ item : UPOOS... ]                                    # 点开第一件商品
+choose[ Buy ]                                                # 未选任何选项直接购买
+```
+
+::: en
+Effect of RL fine-tuning after IL. Table 2 also shows that RL fine-tuning adapts the IL model to become more 'greedy' and less 'exploratory', as the average trajectory length drops from 9.4 to 4.8, and the model explores fewer items and search queries. As a result, the attribute, type, and price scores all increase, but option score drops from 45.2 to 38.9. This points to the need for a better balance exploration with exploitation during RL, e.g. by using intrinsic bonuses.
+:::
+
+**IL 之后再做 RL 微调的效应**。表 2 还显示,RL 微调使 IL 模型变得更"贪婪"、更少"探索"——平均轨迹长度从 9.4 降到 4.8(译注:表 2 中该值为 4.5,原文如此),模型探索的商品与搜索查询更少。结果是属性、类型与价格分全部上升,但选项分从 45.2 掉到 38.9。这指出 RL 期间需要在探索与利用之间取得更好平衡,例如使用内在奖励(intrinsic bonus)。
+
+::: en
+Results with a Choice oracle. To disentangle the effects of learning to search from choosing the right actions, we construct a Choice oracle that has access to the hidden reward function as well as hidden attributes and options underlying each product and instruction.† Given a search query, the Choice oracle will perform an exhaustive search over every result item, try out all combinations of options and finally choose the best item with options that maximize the reward — meaning each episode will take hundreds or thousands of steps, as opposed to 4.5 and 11.3 steps on average for the IL+RL model and human experts (Table 2). We use 500 test instructions and consider four types of search queries: the instruction text (used by rule baseline), top IL BART generated query (used by all learning models), and the first and last queries from human experts in each test trajectory.‡ Choice oracle improves the success rate of rule heuristics from 9.6% to 85.4%, and even the human expert success rate from 59.6% to 87.8% (Table 4), confirming that choosing the right actions is indeed a major bottleneck for current models with great room for improvement. However, using a better search query is still important even with such a strong Choice oracle, as the last human search query still outperforms other search queries. This also suggests human experts improve search query qualities over reformulations.
+
+†A similar search oracle is also possible but harder to design since the search space is infinite. One possible oracle is to search for the underlying product name for each instruction, but that makes choice trivial as the underlying product is then almost always the first search result.
+‡74.8% of the time there is only one query in the trajectory.
+:::
+
+**Choice oracle(选择神谕)的结果**。为把"学会搜索"与"选择正确动作"的效应分离,我们构造一个 Choice oracle,它能访问隐藏的奖励函数以及每件商品与指令背后的隐藏属性和选项。† 给定一条搜索查询,Choice oracle 会对每件结果商品做穷举搜索、尝试所有选项组合,最终选出奖励最大化的最优商品与选项——意味着每轮要走数百乃至数千步,而 IL+RL 模型与人类专家平均只要 4.5 与 11.3 步(表 2)。我们使用 500 条测试指令,考虑四种搜索查询:指令文本(规则基线所用)、IL BART 生成的最优查询(所有学习模型所用),以及人类专家在每条测试轨迹中的第一条与最后一条查询。‡ Choice oracle 把规则启发式的成功率从 9.6% 提高到 85.4%,甚至把人类专家成功率从 59.6% 提高到 87.8%(表 4),确认"选择正确动作"确实是当前模型的主要瓶颈,有巨大改进空间。不过,即便有这么强的 Choice oracle,使用更好的搜索查询仍然重要——人类的最后一条搜索查询仍优于其他查询。这也表明人类专家会通过重构不断改进搜索查询的质量。
+
+注 †:类似的搜索神谕也可构造,但更难设计,因为搜索空间是无限的。一种可能的 oracle 是对每条指令搜索其背后的商品名,但那样"选择"就变得平凡,因为目标商品几乎总是第一条搜索结果。
+注 ‡:74.8% 的时间里轨迹中只有一条查询。
+
+**表 4:使用 Choice oracle 的任务表现。first 与 last 分别指人类演示中找到的第一条与最后一条搜索查询(Table 4: Task performance with the Choice oracle. first and last refer to the first and last search queries found in human demonstrations, respectively.)**
+
+| | Instr. text(指令原文) | IL BART | Human expert (first)(人类首条) | Human expert (last)(人类末条) |
+|---|---|---|---|---|
+| Score(得分) | 94.9 | 94.5 | 94.5 | 95.5 |
+| Success Rate(成功率) | 85.4% | 84.2% | 85.6% | 87.8% |
+
+#### 5.4 零样本 Sim-to-Real 迁移(Zero-shot Sim-to-real Transfer)
+
+::: en
+Finally, we conduct a 'sim-to-real' transfer experiment where our models trained on WebShop are tested on the real-world Amazon (amazon.com) and eBay (ebay.com) shopping websites without any fine-tuning. We sample 100 test instructions and deploy 3 WebShop models (rule, IL, IL+RL) to interact with Amazon and eBay, and manually score each episode based on Eq. (1). As shown in Table 5, model performances on the two website are similar to WebShop performances in Figure 4, except for the rule baseline, likely due to the better search engine of Amazon than WebShop.
+:::
+
+最后,我们做一个"sim-to-real"迁移实验:把 WebShop 训练的模型不经任何微调,在真实世界 Amazon(amazon.com)与 eBay(ebay.com)购物网站上测试。我们采样 100 条测试指令,部署 3 个 WebShop 模型(rule、IL、IL+RL)与 Amazon、eBay 交互,并按公式 (1) 人工为每轮打分。如表 5 所示,两个网站上的模型表现与图 4 中 WebShop 的表现相近——规则基线除外,可能因为 Amazon 的搜索引擎优于 WebShop。
+
+**表 5:在 100 条测试指令上向 Amazon 与 eBay 的零样本 sim-to-real 迁移。Score/SR(成功率)列表示总体表现,其余为得分细分(Table 5: Zero-shot sim-to-real transfer to Amazon and eBay over 100 test instructions. The Score / SR (Success Rate) column indicates the overall performance. The remaining breakdown are in Score.)**
+
+| | Score / SR | Att | Opt | Type | Price |
+|---|---|---|---|---|---|
+| **Amazon** | | | | | |
+| Rule(规则) | 45.8 / 19% | 45.6 | 38.0 | 66.2 | 90.0 |
+| IL | 61.5 / 27% | 60.7 | 53.7 | 85.6 | 96.0 |
+| IL+RL | 65.9 / 25% | 71.6 | 47.0 | 87.8 | 100.0 |
+| Human(人类) | 88.2 / 65% | 86.2 | 76.3 | 99.0 | 100.0 |
+| **eBay** | | | | | |
+| Rule(规则) | 31.7 / 7% | 62.3 | 25.9 | 49.0 | 67.0 |
+| IL | 58.2 / 21% | 60.2 | 52.3 | 85.1 | 96.9 |
+| IL+RL | 62.3 / 21% | 69.1 | 39.5 | 91.7 | 97.0 |
+| Human(人类) | 79.7 / 40% | 80.3 | 70.1 | 99.5 | 100.0 |
+
+::: en
+On amazon.com, IL+RL achieves a Score of 65.9 and SR of 25%, outperforming the Rule baseline's Score of 45.8 and SR of 19% by large margin. Similarly, on ebay.com, IL+RL achieves a Score of 62.3 and SR of 21%, widely outperforming the Rule baseline's Score of 31.7 and SR of 7%. These results confirm positive sim-to-real values of trained agents for real-world web tasks despite domain shifts in data (products) and dynamics (search engine). We also obtain a human average score of 88.0 / 79.7 and success rate of 65% / 40% by asking turkers (§3.2) to find the instructed product on the Amazon and eBay websites respectively. While humans perform much better than agents, their web interactions are much slower — taking on average 815 seconds per episode as opposed to < 8 seconds per episode for our IL and IL+RL models on Amazon. This sim-to-real transfer only requires two minor coding additions, suggesting that environments like WebShop are suitable for developing practical grounded agents to reduce human effort on real-world web tasks. We provide additional performance and in-depth analysis in Appendix §D.
+:::
+
+在 amazon.com 上,IL+RL 取得 65.9 的 Score 与 25% 的 SR,大幅超过规则基线的 45.8 分与 19% SR。类似地,在 ebay.com 上,IL+RL 取得 62.3 分与 21% SR,大幅超过规则基线的 31.7 分与 7% SR。这些结果确认了训练智能体在真实世界网页任务上的正向 sim-to-real 价值——尽管数据(商品)与动态(搜索引擎)都存在领域漂移。我们还请 turker(§3.2)分别在 Amazon 与 eBay 网站上寻找指令指定的商品,得到人类平均分 88.0 / 79.7、成功率 65% / 40%。虽然人类比智能体好得多,其网页交互却慢得多——平均每轮 815 秒,而我们的 IL 与 IL+RL 模型在 Amazon 上每轮不足 8 秒。这种 sim-to-real 迁移只需要两处小的代码改动,表明 WebShop 这类环境适合用来开发实用接地智能体,以减少人类在真实世界网页任务上的精力投入。我们在附录 §D 提供额外表现与深入分析。
+
+### 6 讨论(Discussion)
+
+::: en
+We have developed WebShop, a new web-based benchmark for sequential decision making and language grounding, modeled on interaction with an e-commerce website. We performed an empirical evaluation of autonomous agents trained using imitation and reinforcement learning, and demonstrated promising results on sim-to-real transfer to real-world shopping websites. Our qualitative and quantitative analysis of model and human trajectories (§5.3) identified several research challenges in WebShop and provided insights for future model development by incorporating multidisciplinary techniques. For example, pre-training with multi-modal data [27, 52], web hypertext [2], or web instruction-action mapping [38] could help agents better understand and leverage rich semantics of webpage content, actions, and instructions. Ideas from query (re)formulation [22, 59, 37, 51] may help agents expand the range of search exploration, and improved action exploration [40, 12, 49] and memory [53, 13, 23] mechanisms could help agents make better decisions over the long horizon and large action space. The modular design of WebShop also allows for new web tasks and domains to be easily incorporated, which we hope will help shape future research into grounded language agents with stronger capabilities for real-world web interaction.
+:::
+
+我们开发了 WebShop——一个以电商网站交互为模型的、面向序贯决策与语言接地的新网页基准。我们对用模仿学习与强化学习训练的自主智能体做了实证评估,并展示了向真实购物网站 sim-to-real 迁移的可观结果。我们对模型与人类轨迹(§5.3)的定性定量分析识别出 WebShop 中的若干研究挑战,并借助多学科技术为未来模型开发提供洞见。例如,用多模态数据 [27, 52]、网页超文本 [2] 或网页"指令-动作"映射 [38] 做预训练,能帮助智能体更好地理解并利用网页内容、动作与指令的丰富语义;查询(重)构造 [22, 59, 37, 51] 的思想可帮助智能体扩展搜索探索范围;改进的动作探索 [40, 12, 49] 与记忆 [53, 13, 23] 机制能帮助智能体在长时间跨度(long horizon)与巨大动作空间上做出更好决策。WebShop 的模块化设计也便于轻松纳入新的网页任务与领域,我们希望这有助于塑造未来的接地语言智能体研究,使其具备更强的真实世界网页交互能力。
+
+### 致谢(Acknowledgements)
+
+::: en
+We thank Alexander Wettig, Ameet Deshpande, Austin Wang, Jens Tuyls, Jimmy Yang, Mengzhou Xia, Tianyu Gao, and Vishvak Murahari from the Princeton NLP Group for proofreading and providing comments. This material is based upon work supported by the National Science Foundation under Grant No. 2107048. Any opinions, findings, and conclusions or recommendations expressed in this material are those of the author(s) and do not necessarily reflect the views of the National Science Foundation.
+:::
+
+我们感谢 Princeton NLP 组的 Alexander Wettig、Ameet Deshpande、Austin Wang、Jens Tuyls、Jimmy Yang、Mengzhou Xia、Tianyu Gao 与 Vishvak Murahari 通读全文并提出意见。本材料基于美国国家科学基金会(National Science Foundation)第 2107048 号资助支持的工作。本材料中表达的观点、发现、结论或建议均属作者本人,不一定反映美国国家科学基金会的观点。
+
+> **译注(NeurIPS 论文清单,Checklist)**:原文随后附 NeurIPS 可复现性与伦理清单共 5 组逐项问答,此处概述其要点——(1) 主要主张与贡献一致 [是];描述了工作局限与潜在负面社会影响 [是],见第 6 节讨论与附录;(2) 无理论结果 [N/A];(3) 实验:提供了复现主要结果所需的代码、数据与说明(见补充材料)[是];说明了训练细节(数据划分、超参数,见第 5 节首段与附录)[是];报告了误差棒(图 4 含 3 次试验误差棒、表 2 含最大/最小统计)[是];报告了计算资源类型与总量(附录训练细节)[是];(4) 资产:引用了所用资产创建者(ScraperAPI、Flask、OpenAI Gym、BERT、BART、A2C 等)[是] 及其许可(附录讨论)[是];新资产随补充材料发布 [是];数据均为互联网公开抓取,讨论了知情同意与个人信息/冒犯内容问题(附录)[是];(5) 众包:提供了给参与者的完整说明文本与截图(附录)[是];讨论了参与者潜在风险(附录)[是];报告了支付给参与者的时薪估计与总报酬(附录)[是]。
+
+### 附录 A 环境细节(Appendix A Environment Details)
+
+#### A.1 商品抓取(Product Scraping)
+
+::: en
+We use ScraperAPI [35] to extract publicly available product information from amazon.com. We use five categories (beauty, food, fashion, furniture, electronics) and 313 associated sub-category names appeared in amazon.com (e.g. "Women's Loafers & Slip-Ons" in fashion, "Pendants and Chandeliers" in furniture) to scrape 1,181,436 products. We filter products with duplicate titles or product IDs, but do not perform extra filtering in order to avoid selection bias. Specifically, as amazon.com has its own content screening process, we did not find any personally identifiable information or offensive content during random sampling checks.
+:::
+
+我们使用 ScraperAPI [35] 从 amazon.com 抽取公开可得的商品信息。我们使用 5 个类别(美妆、食品、服饰、家具、电子)与 amazon.com 上出现的 313 个关联子类名(如服饰类的 "Women's Loafers & Slip-Ons"(女式乐福鞋与一脚蹬)、家具类的 "Pendants and Chandeliers"(吊灯与枝形吊灯))抓取了 1,181,436 件商品(译注:正文 §3.2 作"113 个子类名",此处作 313,原稿如此)。我们过滤掉标题或商品 ID 重复的商品,但为避免选择偏差不做额外过滤。具体来说,由于 amazon.com 有自己的内容审查流程,我们在随机抽样检查中未发现任何个人身份信息或冒犯性内容。
+
+**表 6:商品统计(Table 6: Product item statistics)**
+
+| 商品数(Products) | 唯一属性数(Unique Attributes) | 平均属性数(Avg Attributes) | 唯一选项数(Unique Options) | 平均选项数(Avg Options) |
+|---|---|---|---|---|
+| 1,181,436 | 670 | 3.1 | 842,849 | 0.67 |
+
+#### A.2 商品属性挖掘(Product Attribute Mining)
+
+::: en
+We use TfidfVectorizer from scikit-learn to extract probable bi-grams as attributes from product title and descriptions for further annotation. We manually inspect these attributes to keep only the specific and human-readable ones and filter out the rest. An attribute should be suitable in at least one of the following use: 1) IsGoodFor, 2) HasA (contains), 3) WhichIs, and 4) IsA. For example, attributes such as "oz ml" and "men women" will be filtered out since it's unparsable. On the other hand, "hair color" will also be filtered since it is not specific enough to fit in the above 4 categories. Attributes such as "dry skin" can fit the IsGoodFor in the context of a make-up product being good for dry skin.
+:::
+
+我们使用 scikit-learn 的 TfidfVectorizer 从商品标题与描述中抽取可能的 bi-gram 作为属性,供进一步标注。我们人工检视这些属性,只保留具体且人类可读的,过滤掉其余。一个属性应至少适合以下一种用法:1) IsGoodFor(适合于);2) HasA(含有);3) WhichIs(是哪个);4) IsA(是一个)。例如,"oz ml" 与 "men women" 这类属性会因无法解析而被过滤掉;"hair color"(发色)也会因不够具体、无法归入上述 4 类而被过滤。而 "dry skin"(干性皮肤)这类属性,在"某美妆产品适合干性皮肤"的语境下可归入 IsGoodFor。
+
+#### A.3 搜索引擎(Search Engine)
+
+::: en
+Each time the agent performs a search, the top 50 items are retrieved and displayed across five search result pages, where each page contains 10 items and the agent can use actions choose[Prev/Next page] to navigate across result pages. Figure 2 shows that when searching directly with the instruction text, the corresponding item appears in the first search page (rank 1-10) nearly 1/3 of the time, but it cannot be found in any search pages (rank 50+) more than half of the time. This indicates that while the search engine can decently retrieve items based on lexical matching, directly searching the instruction is not enough for solving the task, and good query (re)formulation based on the instruction is important.
+:::
+
+智能体每次执行搜索时,检索 top-50 商品并显示在 5 个搜索结果页上,每页 10 件,智能体可用动作 choose[Prev/Next page] 在结果页之间导航。图 2 表明:直接用指令文本搜索时,目标商品约 1/3 的时间出现在第一页(排名 1-10),但超过一半的时间无法在任何搜索页中找到(排名 50+)。这说明搜索引擎虽能基于词典匹配较好地检索商品,但直接搜索指令并不足以解决任务,基于指令做好查询(重)构造很重要。
+
+#### A.4 指令收集(Instruction Collection)
+
+::: en
+We collect human written instructions by providing the workers a product including the title, product category, and its set of attributes and options (Figure 5, 6). We conduct qualification task by having each participating workers to work on 2−5 examples. We inspect and assign qualification to 213 workers to perform the instruction writing task. We pay for each example 0.15 dollars. We do not anticipate any potential participant risk.
+:::
+
+我们通过向工人提供一件商品(含标题、商品类别及其属性与选项集合)来收集人类撰写的指令(图 5、6)。我们让每位参与的工人完成 2-5 个例子来执行资格任务;经检视,我们向 213 名工人授予执行指令撰写任务的资格。每个例子支付 0.15 美元。我们预计不存在任何潜在的参与者风险。
+
+**[图 5: The Amazon Mechanical Turk interface for the instruction writing task. The green box shows the general instruction for the task and the grey box shows an concrete example.]**
+**[图 6: The Amazon Mechanical Turk interface for the instruction writing task. The blue box shows the actual annotation interface. The worker is required to check the boxes and write the instructions in the text field before submission.]**
+
+图 5、6 中文说明:均为指令撰写任务的 Amazon Mechanical Turk 界面。图 5 中,绿框为任务总说明,灰框为具体示例;图 6 中,蓝框为实际标注界面——工人须勾选复选框并在文本框中写好指令后方可提交。
+
+#### A.5 奖励计算(Reward Calculation)
+
+::: en
+The type reward rtype consists of 3 elements: 1) course-grain product category match (c = 1 if matched), 2) fine-grain category match (f = 1 if matched), and 3) product title match. Course-grain product category refers to the 5 categories described in §3.2. Fine-grain category is the chain of categories that the product is under on the Amazon website. For example, and eye mask sheet would be under the Beauty & Personal Care > Skin Care > Eyes > Wrinkle Pads & Patches fine-grain category. The product title refers to ȳ described in §3.
+
+rtype = 0, if TextMatch(ȳ, ȳ∗) = 0;  0.1, if TextMatch(ȳ, ȳ∗) < 0.1;  0.5, if TextMatch(ȳ, ȳ∗) > 0.2 and c = 1 and f = 1;  1, otherwise.    (6)
+
+Here, TextMatch(ȳ, ȳ∗) is a simple string match between the selected product title text and the goal product title text. We use only the words tagged with PNOUN, NOUN, and PROPN tags parsed by the SpaCy parser in the title text.
+:::
+
+类型奖励 r_type 由 3 个元素组成:1) 粗粒度(course-grain)商品类别匹配(匹配则 c = 1);2) 细粒度类别匹配(匹配则 f = 1);3) 商品标题匹配。粗粒度商品类别指 §3.2 所述 5 个类别;细粒度类别是商品在 Amazon 网站所处的类别链。例如,一款眼贴膜属于 Beauty & Personal Care > Skin Care > Eyes > Wrinkle Pads & Patches(美容与个人护理 > 护肤 > 眼部 > 抗皱贴片)这一细粒度类别。商品标题指 §3 中的 ȳ。
+
+r_type = 0,若 TextMatch(ȳ, ȳ\*) = 0;0.1,若 TextMatch(ȳ, ȳ\*) < 0.1;0.5,若 TextMatch(ȳ, ȳ\*) > 0.2 且 c = 1 且 f = 1;1,其他。    (6)
+
+此处 TextMatch(ȳ, ȳ\*) 是所选商品标题文本与目标商品标题文本之间的简单字符串匹配。我们只使用标题文本中经 SpaCy 解析器标注为 PNOUN、NOUN 与 PROPN 的词。
+
+#### A.6 人类轨迹收集(Human Trajectory Collection)
+
+::: en
+We use the HTML environment in Figure 1 to collect human trajectories. We select a pool of 13 workers using qualification tasks where each workers complete 5 examples. The workers that achieve an average reward more than 0.75 are qualified. The task instruction is shown at the end of Appendix. We observe a pronounced performance gap between the very high performing workers and average workers. We use the top 50% of these qualified workers as experts (7 workers in total). We pay for each completed trajectory 0.7 dollars. In human evaluation, 8 out of the 13 workers participated and 5 among them are in the aformentioned expert pool. The 8 participants achieve an overall score of 75.5 and a success rate of 50.0% We observe non-negligible variance even within the experts—the best performer achieves a score of 87.4 and success rate of 69.5%, while the lowest performing worker achieves a score of 45.8 and success rate of 10%. The best performing worker also shows better consistency—drawing at a standard deviation of 2.3 in score, contrasting the lowest performing counterpart at 3.1. We provide examples of common human failure cases such as not matching the option/attribute due to impatience (Table 7), cautioning some caveats of the task with human workers.
+:::
+
+我们用图 1 的 HTML 环境收集人类轨迹。我们通过资格任务选出 13 名工人的池(每人完成 5 个例子),平均奖励高于 0.75 者获得资格。任务说明见附录末尾。我们观察到表现极好的工人与平均工人之间存在显著差距。我们取合格工人中前 50% 作为专家(共 7 名)。每条完成的轨迹支付 0.7 美元。在人类评估中,13 名工人中有 8 名参加,其中 5 名属于上述专家池。这 8 名参与者总体得分 75.5、成功率 50.0%。即便在专家内部我们也观察到不可忽略的方差——最好者得分 87.4、成功率 69.5%,最差者得分 45.8、成功率 10%。表现最好的工人也更稳定——得分标准差为 2.3,而最差者为 3.1。我们给出常见人类失败案例的示例,如因不耐烦而未匹配选项/属性(表 7),提醒该任务在人类工人方面的一些注意事项。
+
+**表 7:两条失败的人类轨迹示例。一个常见模式是不耐烦:仅一次搜索后(即使属性正确,如右例),表现较差的工人就认定第一件选中的商品;通常该商品并不含所需选项,尽管其标题文本看似相关。专家工人会意识到需要选择正确选项并回头精炼搜索,而较差工人则直接买下当前选中商品。**
+
+```text
+指令 1:I would like a stained glass wall lamp with a bronze finish, and price
+lower than 190 dollars.
+(我想要一盏青铜饰面的彩绘玻璃壁灯,价格低于 190 美元。)
+
+人类动作(r = 0.33,长度 = 4)
+search[stained glass wall lamp]                       # 搜索:彩绘玻璃壁灯(未含 bronze 等要求)
+click[item-QCLUT Tiffany Style Lamp Sunflower...]     # 点击第一件相关商品
+click[wall lamp 3 - 12 inch]                          # 选择选项(尺寸),未核对其他要求
+click[buy]                                            # 直接购买,只得 0.33 分
+
+指令 2:I would like a lead free bracelet birthday cake jar candle, and price
+lower than 50.00 dollars.
+(我想要无铅手链生日蛋糕罐装蜡烛,价格低于 50 美元。)
+
+人类动作(r = 0.03,长度 = 4)
+search[lead free bracelet birthday cake jar candle]   # 按指令原文整串搜索
+click[item-Happy Birthday Candle...]                  # 点击第一件结果
+click[8 ounce round tin]                              # 选择的选项与要求不符
+click[buy]                                            # 购买,几乎不得分(r = 0.03)
+```
+
+#### A.7 奖励验证(Reward Verification)
+
+::: en
+We randomly select 100 samples each from the pools of trajectories generated by average and expert MTurk workers. Each trajectory is then manually re-scored against a human criteria; the purpose of this is to determine how representative the reward function is of a human's judgment towards whether the chosen product satisfies the given instructions. The human score calculation procedure exactly follows the formula laid out in Section A.5 – the attribute, option, price, and type scores are individually determined, then aggregated to calculate the overall score – except for one main modification. Instead of the exact matching approach, points are awarded if (1) the picked product's attributes, options, or type are lexically similar or synonymous with the goal's product information and (2) the desired value is not found verbatim anywhere in the picked product's descriptions. For instance, if the value lightweight is specified as a desired attribute for an instruction, but the value easy carry is found instead in the picked product's description, then the attribute score for the picked product is increased to reflect that the lightweight value was found. On the other hand, if cyan is desired as an option for a goal product, but the user picks blue even though cyan is available as a choice, then no points are awarded. To ensure the score is calculated without bias, the original rewards for each trajectory were not compared with the human evaluation scores until the human evaluation scoring was completed.
+:::
+
+我们分别从平均与专家 MTurk 工人生成的轨迹池中各随机抽取 100 个样本,对每条轨迹按人类标准人工重新打分;目的在于确定奖励函数在多大程度上代表了人类对"所选商品是否满足给定指令"的判断。人类评分流程严格遵循 A.5 节的公式——属性、选项、价格与类型分逐项确定后聚合为总分——只做一处主要修改:不用精确匹配,而是当 (1) 所选商品的属性、选项或类型与目标商品信息在词面上相近或同义,且 (2) 期望取值未能在所选商品描述中的任何地方逐字找到时,也给予分数。例如,若指令指定了期望属性 lightweight(轻便),但所选商品描述中找到的是 easy carry(易携带),则该商品的属性分相应上调,以体现 lightweight 已被"找到"。反过来,若目标商品期望选项是 cyan(青色),而用户在有青色可选的情况下选了 blue(蓝色),则不得分。为确保打分无偏,在人类评分完成之前,各轨迹的原始奖励不与人工评分对比。
+
+::: en
+For the average trajectories, the automatic task score was 74.9 and our manual score was 76.3 with a Pearson correlation of 0.856. For expert trajectories, the respective scores were 81.5 and 89.9 with a Pearson correlation of 0.773. Therefore, the automatic reward seems to provide a reasonably close lower bound to the actual task performance. We find that for average workers, 87.0% of automatic scores are within a 10% of the manual score, with the main source of error being synonyms or lexically similar words that don't get matched correctly in the automatic reward function.
+:::
+
+对平均工人的轨迹,自动任务得分为 74.9,人工评分为 76.3,Pearson 相关系数 0.856。对专家轨迹,两项得分分别为 81.5 与 89.9,Pearson 相关系数 0.773。因此,自动奖励似乎为实际任务表现提供了一个相当接近的下界。我们发现对平均工人,87.0% 的自动分数在人工分数的 10% 以内,主要误差来源是同义词或词面相近的词未能在自动奖励函数中被正确匹配。
+
+::: en
+Table 8 reflects our observation that our reward function is similar to a human's score, with a consistent tendency to over-penalize the picked product. For every trajectory's product, the human score across all categories (e.g. attributes, options) is always greater than or equal to the original score. This under-scoring is a result of our reward function's exact matching criterion. In future work, we hope to improve our matching functionality such that, within the context of a single product with respect to the goal instructions, it can identify synonyms and decide whether to award additional points.
+:::
+
+表 8 反映了我们的观察:奖励函数与人类评分相近,但有一致的"过度惩罚所选商品"倾向。对每条轨迹的商品,人类在所有类别(如属性、选项)上的评分总是大于或等于原始分。这种低估源于奖励函数的精确匹配标准。未来工作中,我们希望改进匹配功能,使其在"单件商品相对目标指令"的语境下识别同义词,并决定是否给予加分。
+
+**表 8:奖励验证统计(Table 8: Reward Verification Statistics)**
+
+| MTurk 工人 | 评分函数(Reward Function) | Price | Type | Attribute | Result | Overall |
+|---|---|---|---|---|---|---|
+| Average(平均) | WebShop(自动) | 95.0 | 92.9 | 71.7 | 50.5 | 74.9 |
+| Average(平均) | Human(人工) | 95.0 | 93.8 | 75.3 | 57.0 | 76.3 |
+| Expert(专家) | WebShop(自动) | 100.0 | 100.0 | 78.1 | 56.1 | 81.5 |
+| Expert(专家) | Human(人工) | 100.0 | 100.0 | 88.2 | 66.8 | 89.9 |
+
+### 附录 B 模型细节(Appendix B Model Details)
+
+#### B.1 交叉注意力层(Cross Attention Layer)
+
+::: en
+Our cross attention layer follows Seo et al. [42]. Denote the i-th contextualized token embedding from the observation and action to be oi and ai respectively. The attention between oi and aj is defined as
+
+αij = w1 · oi + w2 · aj + w3 · (oi ⊗ aj)    (7)
+
+where ⊗ denotes element-wise product and w1, w2, w3 are learnable vectors. The observation-contextualized vector for j-th action token is then
+
+caj = w5 · leakyRELU(w4 · [aj, cj, aj ⊗ cj, q ⊗ cj])    (8)
+
+cj = Σ_i exp(αij) · oi / Σ_i exp(αij),  q = Σ_j′ exp(max_i αij′) aj′ / Σ_j′ exp(max_i αij′)    (9)
+
+We then average pool all caj to derive the action score S(o, a):
+
+S(o, a) = w6 · (1/na) Σ_{j≤na} caj ∈ R    (10)
+
+where na is the number of tokens for action a.
+:::
+
+我们的交叉注意力层遵循 Seo et al. [42]。把来自观察与动作的第 i 个上下文化 token 嵌入分别记为 o_i 与 a_i。o_i 与 a_j 之间的注意力定义为
+
+α_ij = w1·o_i + w2·a_j + w3·(o_i ⊗ a_j)    (7)
+
+其中 ⊗ 表示逐元素积,w1、w2、w3 是可学习向量。第 j 个动作 token 的"观察上下文化"向量则为
+
+ca_j = w5·leakyRELU(w4·[a_j, c_j, a_j ⊗ c_j, q ⊗ c_j])    (8)
+
+c_j = Σ_i exp(α_ij)·o_i / Σ_i exp(α_ij),q = Σ_j′ exp(max_i α_ij′) a_j′ / Σ_j′ exp(max_i α_ij′)    (9)
+
+然后我们对所有 ca_j 取平均池化得到动作分数 S(o, a):
+
+S(o, a) = w6·(1/n_a)·Σ_{j≤n_a} ca_j ∈ R    (10)
+
+其中 n_a 是动作 a 的 token 数。
+
+#### B.2 RNN 基线(RNN Baseline)
+
+::: en
+Our RNN baseline is inspired by Guo et al. [14], where we use the same attention layer as described above, but replace the Transformer text encoder with one-layer bi-directional Gated Recurrent Units (GRU) [9] of hidden dimension 512. Another difference is that we also add an cross attention between the instruction and action input word embeddings, as we hypothesize it might help option text matching.
+:::
+
+我们的 RNN 基线受 Guo et al. [14] 启发:使用与上述相同的注意力层,但把 Transformer 文本编码器替换为隐藏维 512 的单层双向门控循环单元(GRU)[9]。另一个区别是,我们还在指令与动作的输入词嵌入之间加入一个交叉注意力,因为我们猜想这可能有助于选项文本匹配。
+
+### 附录 C WebShop 实验细节(Appendix C WebShop Experiment Details)
+
+#### C.1 IL 训练细节(IL Training Details)
+
+::: en
+The training code for our IL models is adapted from Huggingface glue training example, whose repository is licensed under Apache License 2.0. We use a training batch size of 1 with 32 gradient accumulation steps, a learning rate of 2 × 10−5, and 10 training epochs. The training takes around 2 hours on one RTX 2080 GPU with a GPU memory of around 10GB.
+:::
+
+我们 IL 模型的训练代码改编自 Huggingface 的 GLUE 训练示例,该仓库以 Apache License 2.0 许可发布。我们使用训练 batch size 为 1、32 步梯度累积、学习率 2×10⁻⁵、10 个训练 epoch。训练在一张 RTX 2080 GPU 上约需 2 小时,GPU 显存约 10GB。
+
+#### C.2 RL 训练细节(RL Training Details)
+
+::: en
+We train the RL models using 4 parallel environments for 100,000 training steps. The backprogation through time (BPTT) is taken at every 8 steps. We use an Adam optimizer with a learning rate of 10−5 (for Transformer models) or 5 × 10−4 (for RNN models). For RL models with the Transformer (BERT) architecture, it takes around 27 hours on one RTX 3090 GPU with a GPU memory of around 20GB. For RL models with the GRU architecture, it takes around 20 hours on one RTX 2080 GPU with a GPU memory of around 10GB.
+
+To disentangle the effects of learning to search from choosing the right actions, we construct a Choice oracle that has access to the hidden reward function as well as hidden attributes and options underlying each product and instruction.§ Given a search query, the
+:::
+
+我们用 4 个并行环境训练 RL 模型 100,000 步,每 8 步做一次随时间反传(BPTT)。使用 Adam 优化器,学习率 10⁻⁵(Transformer 模型)或 5×10⁻⁴(RNN 模型)。Transformer(BERT)架构的 RL 模型在一张 RTX 3090 GPU 上约需 27 小时,显存约 20GB;GRU 架构的 RL 模型在一张 RTX 2080 GPU 上约需 20 小时,显存约 10GB。
+
+(译注:此处原稿重复了 §5.3 中"构造 Choice oracle……"一段的开头并中断,脚注 § 亦为 §5.3 脚注 † 的重复,故不再重译。)
+
+#### C.3 采样 vs. Top-1(Sampling vs. Top-1)
+
+::: en
+We show comparisons between using beam search vs. top-1 for both the search model and the choice model in Table 9. During testing, the search model uses beam search to generate top-5 search queries. We randomly and uniformly sample from the top-5 queries to increase search diversity in case of multiple searches. We conduct experiments to instead always use the top-1 search, which shows slight performance improvement (see table below), and we will include the result in the paper. The choice model has a fixed set of action candidates at each step (e.g. all available buttons), and we sample from the choice policy what action to take, as always taking the top action will lead to significantly detorior performances.
+:::
+
+表 9 展示搜索模型与选择模型分别用"束搜索+采样"与"总取 top-1"的对比。测试时,搜索模型用束搜索生成 top-5 查询;我们从中随机均匀采样,以便在多次搜索时增加搜索多样性。我们做了改为"总用 top-1 搜索"的实验,表现略有提升(见下表),我们会把该结果纳入论文。选择模型每步有固定的动作候选集合(如所有可用按钮),我们从选择策略中采样要执行的动作,因为总取 top 动作会显著恶化表现。
+
+**表 9:采样 vs. top-1(Table 9: Sampling vs. Top-1,括号内为标准差)**
+
+| | Score | SR |
+|---|---|---|
+| IL(采样) | 60.56 (1.94) | 29.00 (2.42) |
+| IL(top-1 search,总用最优搜索) | 61.96 (0.47) | 30.80 (0.72) |
+| IL(top-1 choice,总用最优选择) | 45.10 (3.50) | 24.93 (3.14) |
+
+#### C.4 图像消融(Image Ablation)
+
+::: en
+We train 3 trials with different random seeds for both the IL model and the ablated IL model without images, with performances over 500 test cases (10). Removing image only slightly hurts the overall performance, but significantly reduces the variance. This is reasonable as our current instruction and reward setups only use textual information, and we believe future efforts to incorporate visual information into the task setup will better challenge models' visual understanding, and make pre-trained vision-language models such as CLIP more useful.
+:::
+
+我们对 IL 模型与去掉图像的消融 IL 模型各用不同随机种子训练 3 次,在 500 个测试用例上评估(表 10)。去掉图像只是轻微损害总体表现,但显著降低了方差。这很合理,因为当前的指令与奖励设置只使用文本信息;我们相信未来把视觉信息纳入任务设置的努力,将更好地挑战模型的视觉理解,并使 CLIP 等预训练视觉-语言模型更有用武之地。
+
+**表 10:图像消融(Table 10: Image ablations,括号内为标准差)**
+
+| | Score | SR |
+|---|---|---|
+| IL | 60.6 (1.94) | 29.0 (2.42) |
+| IL(w/o image,去掉图像) | 60.3 (0.47) | 28.4 (0.87) |
+
+### 附录 D Sim-to-Real 细节(Appendix D Sim-to-real Details)
+
+#### D.1 Sim-to-Real 迁移细节(Sim-to-real Transfer Details)
+
+::: en
+To test how well our IL agent trained in WebShop performs on amazon.com (ebay.com similarly), we wrote a series of scripts that generally achieve two steps - translate a real Amazon URL into our IL model's input (text observation, set of valid actions) and map the model's output back to a real Amazon URL. The following procedure is repeated until the IL model generates a "buy now" action:
+
+• Amazon URL → Amazon HTML → Amazon Page Information: Using ScraperAPI [35], we first get the HTML source code for a given Amazon page, then extract information relevant to rendering the equivalent page in the WebShop environment (e.g. title, price, options).
+• Amazon Page Information → WebShop HTML → Text Observation: Given the scraped information, we generate the corresponding WebShop page in HTML mode, then transform it into a simple mode text observation.
+• Amazon Page Information → Valid Action Set: From the scraped information, we determine what valid actions the model can take (i.e. search[Red shoes], choose[Size 9]). This logic is captured as a mapping of page type to permissible actions.
+• Text Observation, Valid Action Set → IL Model → Amazon URL: Given the text observation and allowed of valid actions, the IL model produces an action. This action is then used to construct a corresponding Amazon URL via a set of mapping rules, and the loop is repeated.
+
+This continues until the model generates a "buy now" action, terminating the loop.
+:::
+
+为测试我们在 WebShop 中训练的 IL 智能体在 amazon.com(ebay.com 类似)上的表现,我们编写了一系列脚本,总体上完成两步——把真实 Amazon URL 翻译成 IL 模型的输入(文本观察、有效动作集合),并把模型输出映射回真实 Amazon URL。以下流程反复执行,直到 IL 模型生成 "buy now" 动作:
+
+- **Amazon URL → Amazon HTML → Amazon 页面信息**:用 ScraperAPI [35],先获取给定 Amazon 页面的 HTML 源码,再抽取与在 WebShop 环境中渲染等价页面相关的信息(如标题、价格、选项)。
+- **Amazon 页面信息 → WebShop HTML → 文本观察**:给定抓取的信息,我们以 HTML 模式生成对应的 WebShop 页面,再转换为 simple 模式文本观察。
+- **Amazon 页面信息 → 有效动作集**:从抓取的信息中确定模型可采取的有效动作(即 search[Red shoes]、choose[Size 9]);这一逻辑表示为"页面类型到允许动作"的映射。
+- **文本观察、有效动作集 → IL 模型 → Amazon URL**:给定文本观察与有效动作集合,IL 模型产生一个动作;该动作经一组映射规则构造相应的 Amazon URL,循环往复。
+
+这一过程持续到模型生成 "buy now" 动作、终止循环为止。
+
+#### D.2 Sim-to-Real 迁移结果(Sim-to-real Transfer Results)
+
+::: en
+The resulting numbers in Table 5 closely cohere to the reported numbers of WebShop found in Figure 4, suggesting that the WebShop has promise for developing grounded agents that can operate on real web environments. Between the two websites, transfer to Amazon is better than eBay as we note that (i) eBay has a larger product gap from WebShop, e.g. some item categories like food are disallowed in eBay. (ii) the eBay search engine seems weaker, and would sometimes display no results for lengthy instructions. The following Table 11 is an example of a trajectory generated by the IL agent searching on the real Amazon website.
+:::
+
+表 5 的数字与图 4 报告的 WebShop 数字高度吻合,表明 WebShop 在开发能运行于真实网页环境的接地智能体方面前景可期。两个网站之间,向 Amazon 的迁移优于 eBay,原因有二:(i) eBay 与 WebShop 的商品差距更大,例如某些商品类别(如食品)在 eBay 上不允许售卖;(ii) eBay 搜索引擎似乎更弱,有时对长指令不显示任何结果。下面的表 11 是 IL 智能体在真实 Amazon 网站上搜索生成的轨迹示例。
+
+**表 11:IL 智能体在真实 Amazon 网站上的示例轨迹(仅展示动作;商品名为可读性截断;红色表示选项,蓝色表示属性)**
+
+```text
+指令:I want to find white blackout shades that are 66 inches in width and 66 inches
+in height. They need to be easy to install..
+(我想找白色遮光帘,宽 66 英寸、高 66 英寸,需要易于安装。)
+
+search[white blackout shades 66 inches in width and 66 inches height, easy to install]
+  # 按指令生成查询搜索
+click[item - Easy Up & Down 100% Blackout Pleated Window Shades Temporary Window
+Blinds 36in x 64in (Fits Window Width 18"-36") 2pcs-Pack Operating with Pull Cord
+Easy Trimming & Installing]                                     # 点开一件商品
+click[features]                                                  # 查看特性页
+click[back to search]                                            # 返回搜索
+search[white blackout shades that are 66 inches in width and 66 inches height]
+  # 精简查询后再次搜索
+click[item - Redi Shade Inc 1617201 Original Blackout Pleated Paper Shade Black
+36" x 72" 6-Pack]                                                # 点开另一件商品
+click[< prev]                                                    # 返回
+click[Shade + Strips, White]                                     # 选中选项(白色)
+click[buy]                                                       # 购买
+```
+
+::: en
+It is evident that the exploratory behavior and patterns learned and exhibited by the agent within the WebShop environment is not lost in this transfer. These results point to the opportunity for sim-to-real trained agents to transfer to other real-world web tasks despite the domain shift in both data (products) and dynamics (search engine) With that said, the gap between human and model performance also encourage us to look into expanding on the current limitations in our work regarding both the model and the WebShop environment.
+:::
+
+显然,智能体在 WebShop 环境中学到并展现的探索行为与模式,在这次迁移中并未丢失。这些结果表明,sim-to-real 训练的智能体有机会迁移到其他真实世界网页任务上——尽管数据(商品)与动态(搜索引擎)都存在领域漂移。话虽如此,人类与模型表现的差距也促使我们继续研究本工作在模型与 WebShop 环境两方面的当前局限。
+
+### 附录 E 潜在社会影响与局限(Appendix E Potential Societal Impacts and Limitations)
+
+::: en
+WebShop is designed to minimize human efforts in data collection and processing, but there are still potential concerns regarding diversity, fairness, and representation. Developing RL agents that interact with the web also bear safety concerns, especially when transferring from simulation to real-world websites. We also discuss other limitations regarding the semantics of current task (instruction/reward).
+
+Diversity and representation in data collection. We chose five common categories from amazon.com and scrape all products using all subcategories to minimize bias. However, our data is still biased toward the website country (USA) and website language (English), and may only represent a subset of all possible products that users potentially want to buy. Having this limitation in mind, the design of WebShop allows the product data to be easily updated for different representations of real-world usage.
+:::
+
+WebShop 旨在把数据收集与处理中的人力降到最低,但在多样性、公平性与代表性方面仍存在潜在顾虑。开发与网络交互的 RL 智能体也有安全顾虑,尤其是从仿真迁移到真实网站时。我们还讨论当前任务(指令/奖励)语义方面的其他局限。
+
+**数据收集的多样性与代表性**。我们从 amazon.com 挑选了 5 个常见类别,并用全部子类别抓取所有商品,以尽量减少偏差。但我们的数据仍偏向网站所在国家(美国)与网站语言(英语),可能只代表用户潜在想购买的所有商品的一个子集。考虑到这一局限,WebShop 的设计允许商品数据被轻松更新,以呈现不同的真实世界使用情况。
+
+::: en
+Bias in data processing. Currently our attribute labeling is manually done and may be biased by the labeller's own experience (e.g. more knowledge toward product attributes like sports rather than makeup). An more automatic alternative would be to employ trained NLP models (e.g. relation extraction) to extract product attributes, which might be less biased than one labeller. Our reward design is general and could be updated to weight more toward attributes, options, price, etc.
+:::
+
+**数据处理中的偏差**。目前我们的属性标注由人工完成,可能受标注者自身经验影响(例如对运动类商品属性比对美妆类更了解)。一种更自动的替代方案是使用训练好的 NLP 模型(如关系抽取)来抽取商品属性,可能比单个标注者偏差更小。我们的奖励设计是通用的,可更新为更偏重属性、选项、价格等。
+
+::: en
+Safety for developing web agents. Unlike recent work [33] that directly employs agents on the World Wide Web (WWW), WebShop aims to provide a realistic simulation environment to train agents in a controllable and safe manner. In our preliminary sim-to-real experiments, the agent could only update the current webpage's url in two fixed and safe ways (i.e. search for results, open an item), and any form sending action (e.g. click options or buy) is held within the sim-to-real interface for later reward calculation. As a result, only navigation is done on the real-world website. For future deployment to real-world websites with more advanced functions, we believe a good specification of possible model behaviors is key to avoid harmful actions.
+:::
+
+**开发网页智能体的安全性**。与近期直接把智能体部署到万维网(WWW)上的工作 [33] 不同,WebShop 旨在提供一个现实的仿真环境,以可控且安全的方式训练智能体。在我们的初步 sim-to-real 实验中,智能体只能以两种固定且安全的方式更新当前网页的 URL(即搜索结果、打开商品),而任何表单提交动作(如点击选项或购买)都被留在 sim-to-real 界面内、用于后续奖励计算,因此在真实网站上只执行导航。未来向具有更高级功能的真实网站部署时,我们相信对模型可能行为的良好规约是避免有害行为的关键。
+
+::: en
+Limitations in the current task. Our current instructions are still limited by the attributes and options used. While attributes are simple and sometimes too generic (e.g. "easy to use"), the options might get too specific (e.g. "d17(dedicated right, back)"). Therefore, an agent might sometimes use a special option as cues to find the product, while ignoring other parts of the instruction. To better leverage images and texts (including reviews written by human users, which are not used in current work) of products for more semantic and challenging instructions is an important future direction from WebShop.
+:::
+
+**当前任务的局限**。我们当前的指令仍受所用属性与选项的限制:属性有时简单且过于笼统(如 "easy to use" 易用),选项有时又过于具体(如 "d17(dedicated right, back)" d17(专属右侧、背面))。因此,智能体有时可能用某个特殊选项作为线索找到商品,而忽略指令的其他部分。更好利用商品的图像与文本(包括人类用户撰写的评论,当前工作未使用)来构造更具语义、更有挑战性的指令,是 WebShop 重要的未来方向。
+
+### 附录:人类轨迹收集任务说明(Instruction for Human Trajectory Collection)
+
+> 译注:以下为 §A.6 提到的工人任务说明文档全文翻译(原文含多张界面截图,此处略去截图、保留文字)。
+
+::: en
+The WebShop Task
+
+Thank you for taking part in this project! In this task, you need to buy a designated product given an instruction on our Amazon Shopping Game site. You will get a score in the end indicating how close you are. Please try to score as high as you can. If you find in some cases the scoring seems weird/unfair, please reach out. We will look into the cases. Please read the following instructions carefully before you start.
+
+Instructions
+
+1) Go to the home page. The instruction will immediately show up on the landing page.
+2) Given this instruction, please write a search query that would produce search results matching the description. Please do not copy-paste the entire instruction. We encourage you come up with more targeted queries, see the result, and search again if needed.
+Example:
+- Instruction: I need a 9.5 rubber soled hiking shoe made of lightweight vinyl acetate.
+- Bad query: (copy pasting) 9.5 rubber soled hiking shoe made of lightweight vinyl acetate
+- Ideal query: (1st attempt) rubber soled hiking shoe vinyl acetate (say the results are not great)
+- Ideal query: (2nd attempt) hiking shoe lightweight vinyl acetate (the results are better)
+- Ideal query: (3nd attempt) lightweight climbing shoe vinyl (gives promising results)
+Essentially, you need to hack the search engine a little bit. Note that our search engine is limited. Tricks that work on Google Search such as adding quotation marks around the query won't work.
+Click Search after filling out the search bar like below.
+3) Upon clicking Search, you will be sent to a page of results. The below screenshot is an example of the results displayed from the example query in Step 2. Each page shows up to 10 results. Click the Next button to see more results.
+4) Click on any of the blue product title text (i.e. "B092F97B24" in above screenshot) to see a product detail page, like the below.
+Guidelines for searching for matching products:
+● Some pages have Options (i.e. Size, Color in above screenshot). If the instructions contain such information, please select the corresponding options (even if the title / features / desc. / reviews may already contain such info). In most cases, if you find the options verbatim as in the instruction, you've likely found the right product.
+● Do not use the product image to determine whether the instruction's information matches the product.
+An example:
+● Given instruction: "Find me a pair of ankle socks that are blue and size 11"
+Between this product… And this product…
+TITLE: Ankle socks for casual wear, sports, and leisure. Pack of 4, 8, or 12 / TITLE: Kirkland athletic socks with rubber soles and heels. Easy slip on
+DESC: 100% made in the USA. These socks are good for any occasion. / DESC: Costco wholesale socks, limited stock.
+FEATURES: Made with cotton, breathable fabric. Machine washable okay. / FEATURES: Polyester and Rayon fabric. Guaranteed long lasting or your money back.
+OPTIONS: / OPTIONS: None
+● Sizes: 8, 9, 10, 11, 12 ● Color: red, green, black, white, blue
+The left hand is a better match because the product's title, features, description, and options reflect the instruction's information. While the right hand product appears to be a pair of blue ankle socks, because this information is not reflected in the text, we do not consider this a match.
+Therefore, feel free to use the product image as a reference when looking for matches, but keep in mind that the experiment we're running accounts for a text's
+5) Decide whether the product is a match
+A match should
+● Contain all of the instruction's information in the product detail page's text (i.e. title, description, feature, options)
+● Have options (if they exist), which correspond to the product info, be selected.
+A match does not account for
+● The product image
+● You think it is a match!
+→ Click the Buy Now button on the product detail page
+● You think it is not a match OR another product might be a better match…
+○ Click on the Back button to go to the original list of search results (page 3). From here, repeat steps 3-4 until you find a product that matches best.
+○ Click on the Back to Search button. This will take you back to the search bar page (page 2). If you feel none of the results are good matches, try another search query.
+6) Once you clicked Buy Now, you will see your score (won't be used to decide the pay), and a code you need to paste in the MTurk interface. And you're done!
+
+Tips
+Patterns that often result in HIGH scores:
+● Refine search queries until promising products show up
+● Explore different product pages (go to next page if needed) to see if options and different aspects are covered
+● Make sure all aspects in the instructions are covered by either the title, description page, or the feature page.
+● Make sure all options are found almost verbatim in the product page
+Patterns that often result in LOW scores:
+● Low effort copy-paste the entire instructions as the search query
+● Always click the first item without checking if the aspects in the instructions are covered
+● Click items that obviously don't have any option matches
+:::
+
+**WebShop 任务**
+
+感谢你参与本项目!在此任务中,你需要在我们 Amazon 购物游戏网站上根据一条指令购买指定商品,最后会得到一个分数,表明你的结果有多接近目标,请尽量得高分。如果你在某些情况下觉得评分奇怪/不公平,请联系我们,我们会调查这些情况。开始前请仔细阅读以下说明。
+
+**操作说明**
+
+1) 进入主页,指令会立即出现在落地页上。
+2) 给定这条指令,请写一条搜索查询,使其产生的搜索结果与描述相符。**请不要复制粘贴整条指令**。我们鼓励你构思更有针对性的查询,查看结果,需要时再次搜索。
+   示例:
+   - 指令:I need a 9.5 rubber soled hiking shoe made of lightweight vinyl acetate.(我需要一双 9.5 码、橡胶底、轻质醋酸乙烯酯制成的徒步鞋。)
+   - 差的查询:(复制粘贴)9.5 rubber soled hiking shoe made of lightweight vinyl acetate
+   - 理想查询(第 1 次):rubber soled hiking shoe vinyl acetate(假设结果不理想)
+   - 理想查询(第 2 次):hiking shoe lightweight vinyl acetate(结果更好)
+   - 理想查询(第 3 次):lightweight climbing shoe vinyl(结果有希望)
+   本质上,你需要稍微"攻破(hack)"一下这个搜索引擎。注意我们的搜索引擎能力有限,在 Google 搜索里有效的技巧(如给查询加引号)在这里无效。
+   像下面截图那样填好搜索栏后,点击 Search(搜索)。
+3) 点击 Search 后,你会进入一个结果页。下方截图是第 2 步示例查询所展示结果的示例。每页最多显示 10 条结果;点击 Next(下一页)按钮查看更多结果。
+4) 点击任意蓝色的商品标题文本(即上图中截图的 "B092F97B24"),查看如下所示的商品详情页。
+   搜索匹配商品的指南:
+   ● 有些页面有**选项**(Options,即上图截图中的尺寸 Size、颜色 Color)。若指令含此类信息,请选择相应选项(**即使**标题/特性/描述/评论可能已含此信息)。多数情况下,若你在商品页中逐字找到指令里的选项,你很可能已找到正确的商品。
+   ● **不要**用商品图片判断指令信息是否与商品匹配。
+   一个例子:
+   ● 给定指令:"Find me a pair of ankle socks that are blue and size 11"(帮我找一双蓝色、11 码的短袜)
+   左侧商品……与右侧商品……对比:
+   左侧——标题:Ankle socks for casual wear, sports, and leisure. Pack of 4, 8, or 12(休闲、运动皆宜的短袜,4/8/12 双装);描述:100% 美国制造,适合任何场合;特性:棉质、透气面料、可机洗;选项:尺码 8、9、10、**11**、12;颜色:红、绿、黑、白、**蓝**。
+   右侧——标题:Kirkland athletic socks with rubber soles and heels. Easy slip on(Kirkland 运动袜,橡胶底与后跟,易穿脱);描述:Costco 批发袜,库存有限;特性:聚酯与人造丝面料,保证耐穿否则退款;选项:无。
+   左边是**更好**的匹配,因为商品的标题、特性、描述与选项都反映了指令的信息。右边的商品看起来虽然像一双蓝色短袜,但由于该信息未反映在文本中,我们**不**视其为匹配。
+   因此,寻找匹配时可随意把商品图片当参考,但请记住,我们这个实验只考虑**文本**(此处原稿句子在截图处中断)。
+5) 判断商品是否匹配。
+   **匹配(match)**应当:
+   ● 在商品详情页的文本(即标题、描述、特性、选项)中包含指令的**全部**信息;
+   ● 若存在选项,选中与商品信息对应的选项。
+   **匹配**不考虑:
+   ● 商品图片;
+   ● 你自己觉得匹配!
+   → 若认为是匹配:点击商品详情页上的 **Buy Now(立即购买)**按钮。
+   ● 若认为不是匹配、或有更好的选择……
+   ○ 点击 **Back(返回)**按钮回到第 3) 步的原始搜索结果列表,从这里重复 3-4 步,直到找到最匹配的商品;
+   ○ 点击 **Back to Search(返回搜索)**按钮,回到第 2) 步的搜索栏页。若你觉得所有结果都不匹配,换一条搜索查询。
+6) 点击 Buy Now 后,你会看到你的分数(不用于决定报酬)以及一个需要粘贴到 MTurk 界面的代码。完成!
+
+**小贴士**
+
+常得**高分**的模式:
+● 不断完善搜索查询,直到出现有希望的商品;
+● 探索不同商品页(需要时翻下一页),检查选项与各方面是否覆盖;
+● 确保指令的所有方面都被标题、描述页或特性页之一覆盖;
+● 确保所有选项在商品页中**几乎逐字**出现。
+
+常得**低分**的模式:
+● 低投入地复制整条指令作为搜索查询;
+● 不检查指令各方面是否被覆盖,总是点第一件商品;
+● 点击明显没有任何选项匹配的商品。
+
+## 要点速览
+
+- **动机**:静态 NLP 数据集缺乏接地、游戏/导航环境语言贫瘠;需要一个语言真实、可大规模收集、且奖励可自动计算的可扩展交互环境——WWW 天然满足,电商购物是理想切口。
+- **环境规模**:1,181,436 件真实商品(amazon.com,5 大类、113 个子类查询),842,849 个唯一选项,商品文本平均 262.9 词;Pyserini BM25 确定性搜索引擎;TF-IDF bi-gram 挖掘出 670 个隐藏属性用于奖励计算。
+- **指令与人类数据**:12,087 条 AMT 众包指令(平均 15.9 词),i.i.d. 切分 10,587/1,000/500;13 名工人中选 7 名专家,共 1,600+ 人类演示(1,012 训练 + 54 调参 + 500 测试全量人类轨迹)。
+- **任务设计**:POMDP;四类页面(搜索/结果/商品/详情);动作只有 search[Query] 与 choose[Button](高层语义动作,刻意避开低层鼠标点击);奖励 = 类型×属性匹配 + 选项匹配 + 价格满足,归一化到 [0,1];指标为 Task Score(100×平均奖励)与 SR(r=1 占比,r=1 不要求恰好买到原目标商品)。
+- **方法**:搜索用 BART 微调(1,421 个指令-搜索对,束搜索 top-5 随机选);选择用 12 层 BERT + 交叉注意力 + 均值池化打分 softmax(9,558 个样本),图像经 ResNet-50 融合;RL 冻结 BART 提供 top-10 查询作精炼动作空间,策略梯度 + 价值基线 + 熵正则。
+- **主结果**:规则 45.6/9.6% < IL 59.9/29.1% < IL+RL 62.4/28.7% ≪ 人类专家 82.1/59.6%(平均人类 SR 50%)——最好模型成功率不到专家一半。
+- **消融**:去掉选择模型的语言预训练,成功率 29.1%→10.6%(跌近 2/3);搜索生成换规则各降约 3 点;无 IL 热启动的纯 RL 仅 52.5/11.2%,RNN 编码器 RL 55.2/17.6% 且方差大;简单拼接历史反而降至 57.3。
+- **关键洞察——选项选择是瓶颈**:人类对智能体的最大领先在选项分(73.9 vs 45.2);穷举式 Choice oracle 把规则基线 SR 从 9.6% 拉到 85.4%、人类从 59.6% 到 87.8%,证明"在噪声网页文本上选对动作"是核心难点;人类的查询重构(如删去 inches/width 改用 66"w 缩写)与长期记忆(回头买第一件)是智能体缺失的能力。
+- **RL 的双刃剑**:RL 微调让模型更贪婪(轨迹长度 9.4→约 4.5),属性/类型/价格分全升但选项分 45.2→38.9——探索与利用需要更好的平衡。
+- **Sim-to-Real**:零样本迁移 amazon.com(IL+RL 65.9/25%)与 ebay.com(62.3/21%)均大幅超过规则基线,接近模拟环境内成绩;人类 815 秒/轮 vs 模型 <8 秒/轮——证明此类仿真环境训练的智能体有真实网页实用价值。
+- **课程定位**:WebShop(2022)→ ReAct/Mind2Web(2023)→ WebArena/VisualWebArena(2023-24)→ OSWorld(2024)构成网页到通用计算机智能体基准的演进线;它与本讲 OSWorld 对照阅读,可以看到"高层语义动作 + 自动奖励"与"真实环境 + 执行式评估"两种设计取舍如何互补。
+
+
+
+
+
+

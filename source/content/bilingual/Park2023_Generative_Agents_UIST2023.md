@@ -1,0 +1,1361 @@
+---
+title: "Generative Agents: Interactive Simulacra of Human Behavior"
+title_zh: "生成式 Agent：人类行为的交互式拟真"
+authors: "Joon Sung Park et al."
+venue: "UIST 2023 · Stanford & Google"
+kind: paper
+importance: recommended
+tags: Agent 记忆, 记忆流, 反思机制, 规划, 社会模拟
+summary: 斯坦福小镇论文：以记忆流、检索、反思与规划架构驱动 25 个 LLM Agent 模拟可信人类行为，并涌现信息扩散与协作等社会动态。
+---
+
+## 导读
+
+本文是第 4 周「Agent 记忆」专题中最出圈的一篇（importance: recommended）——俗称"斯坦福小镇 / AI 小镇"论文（Joon Sung Park 等，UIST 2023）。它把 25 个由 ChatGPT（gpt-3.5-turbo）驱动的 Agent 放进一个类似《模拟人生》的沙盒小镇 Smallville：Agent 会起床、做早餐、去上班、互相打招呼、传播八卦、组织情人节派对。用户只需给一个 Agent 设定"想办派对"的初始意图，两天后派对真的办成了——邀请扩散、装饰布置、邀约赴会全部由架构自发涌现。
+
+对课程而言，这篇论文的价值在于它给出了 Agent 记忆的经典**认知架构**：记忆流（memory stream）以自然语言记录全部经历；检索按**时近性（recency）、重要性（importance）、相关性（relevance）**三要素打分；**反思（reflection）**机制周期性把观察合成为更高层的推论（形成反思树）；**规划（planning）**自顶向下递归分解为分钟级行动。消融实验证明观察、反思、规划每个组件都对"可信度"有因果性贡献。它是 Generative Agents / 社会模拟方向的奠基工作，也直接启发了后来的 Agent 记忆研究。
+
+## 全文对照翻译
+
+> **译注**：以下为论文全文中英对照，覆盖摘要与第 1–9 节全部正文（含讨论、伦理与致谢），并收录附录 A（架构优化，含提示词示例）与附录 B（访谈问题全表及 Agent 回答样例）。References（参考文献列表）按本站惯例不收录。论文无数据表格；图 1–9 均以「[图 N: 英文图题]」转录并附中文说明；Agent 对话与提示词原文以代码块逐字保留、块下附中文译文。英文原段仅去除了 PDF 提取产生的断行连字符，内容一字未改；术语首现处给出中英对照。3.1.1 节两处 emoji 图标在文本提取中丢失，7.2 节一处脚注（编号 11）的脚注正文未被提取，均已在相应位置注明。
+
+### 摘要（Abstract）
+
+[图 1: Generative agents are believable simulacra of human behavior for interactive applications. In this work, we demonstrate generative agents by populating a sandbox environment, reminiscent of The Sims, with twenty-five agents. Users can observe and intervene as agents plan their days, share news, form relationships, and coordinate group activities.]
+
+图 1：生成式 Agent 是面向交互式应用的人类行为的可信拟真。本工作中，我们用一个令人联想到《模拟人生》（The Sims）的沙盒环境、并以 25 个 Agent 加以填充来演示生成式 Agent。当 Agent 规划各自的一天、分享新闻、形成人际关系并协调群体活动时，用户可以观察并干预。
+
+::: en
+Believable proxies of human behavior can empower interactive applications ranging from immersive environments to rehearsal spaces for interpersonal communication to prototyping tools. In this paper, we introduce generative agents: computational software agents that simulate believable human behavior. Generative agents wake up, cook breakfast, and head to work; artists paint, while authors write; they form opinions, notice each other, and initiate conversations; they remember and reflect on days past as they plan the next day. To enable generative agents, we describe an architecture that extends a large language model to store a complete record of the agent’s experiences using natural language, synthesize those memories over time into higher-level reflections, and retrieve them dynamically to plan behavior. We instantiate generative agents to populate an interactive sandbox environment inspired by The Sims, where end users can interact with a small town of twenty-five agents using natural language. In an evaluation, these generative agents produce believable individual and emergent social behaviors. For example, starting with only a single user-specified notion that one agent wants to throw a Valentine’s Day party, the agents autonomously spread invitations to the party over the next two days, make new acquaintances, ask each other out on dates to the party, and coordinate to show up for the party together at the right time. We demonstrate through ablation that the components of our agent architecture—observation, planning, and reflection—each contribute critically to the believability of agent behavior. By fusing large language models with computational interactive agents, this work introduces architectural and interaction patterns for enabling believable simulations of human behavior.
+:::
+
+可信的人类行为代理（believable proxies of human behavior）可以为交互式应用赋能，其范围从沉浸式环境、到人际沟通的排练空间、再到原型工具。本文提出**生成式 Agent（generative agents）**：模拟可信人类行为的计算软件 Agent。生成式 Agent 会醒来、做早餐、出门上班；艺术家画画，作家写作；他们形成观点、注意到彼此、发起对话；他们在计划第二天时回忆并反思过去的时日。为支撑生成式 Agent，我们描述了一个扩展大语言模型的架构：用自然语言存储 Agent 经历的完整记录，随时间把这些记忆合成为更高层的**反思（reflections）**，并动态检索它们以规划行为。我们将生成式 Agent 实例化为一个受《模拟人生》启发的交互式沙盒环境，终端用户可以用自然语言与一个由 25 个 Agent 组成的小镇互动。在评估中，这些生成式 Agent 产生了可信的个体行为与涌现的社会行为。例如，仅从"一个 Agent 想办情人节派对"这一条用户指定的种子信息出发，Agent 们在随后两天里自主扩散邀请、结识新朋友、互相邀约赴会，并协调好在正确时间一起出现在派对上。我们通过消融实验证明，Agent 架构的各组件——观察（observation）、规划（planning）与反思（reflection）——各自都对 Agent 行为的可信度（believability）有至关重要的贡献。通过把大语言模型与计算式交互 Agent 融合，本工作为可信的人类行为模拟引入了架构与交互模式。
+
+::: en
+CCS CONCEPTS
+• Human-centered computing→ Interactive systems and tools; • Computing methodologies→ Natural language processing.
+
+KEYWORDS
+Human-AI interaction, agents, generative AI, large language models
+:::
+
+CCS 分类：以人为中心的计算 → 交互系统与工具；计算方法 → 自然语言处理。
+
+关键词：人机交互（Human-AI interaction）、Agent、生成式 AI、大语言模型。
+
+### 1 引言（Introduction）
+
+::: en
+How might we craft an interactive artificial society that reflects believable human behavior? From sandbox games such as The Sims to applications such as cognitive models [23] and virtual environments [10, 59], for over four decades, researchers and practitioners have envisioned computational agents that can serve as believable proxies of human behavior. In these visions, computationally-powered agents act consistently with their past experiences and react believably to their environments. Such simulations of human behavior could populate virtual spaces and communities with realistic social phenomena [27, 80], train people on how to handle rare yet difficult interpersonal situations [44, 52, 94], test social science theories [12, 46], craft model human processors for theory and usability testing [23, 39, 51], power ubiquitous computing applications [31] and social robots [10, 14], and underpin non-playable game characters [59, 85] that can navigate complex human relationships in an open world.
+:::
+
+我们如何打造一个能反映可信人类行为的交互式人工社会？四十多年来，从《模拟人生》（The Sims）这样的沙盒游戏，到认知模型 [23] 与虚拟环境 [10, 59] 这样的应用，研究者与实践者一直设想能充当人类行为可信代理（believable proxies）的计算 Agent。在这些设想中，由计算驱动的 Agent 行为与其过往经历保持一致，并对环境做出可信的反应。此类人类行为模拟可以让虚拟空间与社区充满真实的社会现象 [27, 80]，训练人们如何应对罕见而困难的人际情境 [44, 52, 94]，检验社会科学理论 [12, 46]，为理论检验与可用性测试构建模型人类处理器（model human processors）[23, 39, 51]，驱动普适计算应用 [31] 与社交机器人 [10, 14]，并为能在开放世界中驾驭复杂人际关系的非玩家游戏角色（NPC）[59, 85] 提供支撑。
+
+::: en
+However, the space of human behavior is vast and complex [85, 108]. Despite striking progress in large language models [18] that can simulate human behavior at a single time point [39, 80], fully general agents that ensure long-term coherence would be better suited by architectures that manage constantly-growing memories as new interactions, conflicts, and events arise and fade over time while handling cascading social dynamics that unfold between multiple agents. Success requires an approach that can retrieve relevant events and interactions over a long period, reflect on those memories to generalize and draw higher-level inferences, and apply that reasoning to create plans and reactions that make sense in the moment and in the longer-term arc of the agent’s behavior.
+:::
+
+然而，人类行为的空间过于广阔而复杂 [85, 108]。尽管大语言模型 [18] 已取得惊人进展、能够模拟单一时间点上的人类行为 [39, 80]，但要确保长期连贯性，完全通用的 Agent 更需要合适的架构：随着新的交互、冲突与事件随时间涌现与消退，架构要能管理不断增长的记忆，同时处理多个 Agent 之间级联展开的社会动态。成功需要一个能长期检索相关事件与交互、对这些记忆进行反思以泛化并得出更高层推论、并把该推理应用于创建"既在当下合理、也在 Agent 行为更长时间弧线上合理"的计划与反应的方法。
+
+::: en
+In this paper, we introduce generative agents—agents that draw on generative models to simulate believable human behavior—and demonstrate that they produce believable simulacra of both individual and emergent group behavior. Generative agents draw a wide variety of inferences about themselves, other agents, and their environment; they create daily plans that reflect their characteristics and experiences, act out those plans, react, and re-plan when appropriate; they respond when the end user changes their environment or commands them in natural language. For instance, generative agents turn off the stove when they see that their breakfast is burning, wait outside the bathroom if it is occupied, and stop to chat when they meet another agent they want to talk to.1 A society full of generative agents is marked by emergent social dynamics where new relationships are formed, information diffuses, and coordination arises across agents.
+:::
+
+本文提出**生成式 Agent**——借助生成式模型来模拟可信人类行为的 Agent——并证明它们能产生可信的个体行为与涌现的群体行为拟真。生成式 Agent 对自身、其他 Agent 及环境做出多种多样的推断；他们创建反映自身特征与经历的每日计划，执行这些计划，做出反应，并在适当时重新规划；当终端用户改变其环境或用自然语言下达命令时，他们会做出响应。例如，生成式 Agent 看到早餐烧糊时会关掉炉子，卫生间有人时会在外等待，遇到想交谈的其他 Agent 时会停下来聊天。[^fn1] 一个充满生成式 Agent 的社会呈现出涌现的社会动态：新的关系得以形成、信息得以扩散、跨 Agent 的协调得以出现。
+
+[^fn1]: 脚注 1 原文：When referring to generative agents engaging in actions or going to places, this is a shorthand for readability and not a suggestion that they are engaging in human-like agency. The behaviors of our agents, akin to animated Disney characters, aim to create a sense of believability, but they do not imply genuine agency.（当我们说生成式 Agent 从事动作或前往某地时，这只是便于阅读的简写，并非暗示它们拥有类人的能动性。我们的 Agent 的行为如同迪士尼动画角色，旨在营造可信感，但并不意味着真正的能动性。）
+
+::: en
+To enable generative agents, we describe an agent architecture that stores, synthesizes, and applies relevant memories to generate believable behavior using a large language model. Our architecture comprises three main components. The first is the memory stream, a long-term memory module that records, in natural language, a comprehensive list of the agent’s experiences. A memory retrieval model combines relevance, recency, and importance to surface the records needed to inform the agent’s moment-to-moment behavior. The second is reflection, which synthesizes memories into higher-level inferences over time, enabling the agent to draw conclusions about itself and others to better guide its behavior. The third is planning, which translates those conclusions and the current environment into high-level action plans and then recursively into detailed behaviors for action and reaction. These reflections and plans are fed back into the memory stream to influence the agent’s future behavior.
+:::
+
+为支撑生成式 Agent，我们描述了一个 Agent 架构，它使用大语言模型来存储、合成并应用相关记忆以生成可信行为。架构包含三个主要组件。第一是**记忆流（memory stream）**，一个以自然语言记录 Agent 全部经历清单的长期记忆模块。一个记忆检索模型综合相关性（relevance）、时近性（recency）与重要性（importance），把需要用来指导 Agent 每时每刻行为的记录呈现出来。第二是**反思（reflection）**，它随时间把记忆合成为更高层的推论，使 Agent 能对自身与他人得出结论以更好地指导其行为。第三是**规划（planning）**，它把这些结论与当前环境转化为高层的行动计划，再递归地转化为行动与反应所需的细节行为。这些反思与计划会被写回记忆流，进而影响 Agent 未来的行为。
+
+::: en
+This architecture suggests applications in multiple domains, from role-play and social prototyping to virtual worlds and games. In social role-play scenarios (e.g., interview preparation), a user could safely rehearse difficult, conflict-laden conversations. When prototyping social platforms, a designer could go beyond temporary personas to prototype dynamic, complex interactions that unfold over time. For this paper, we focus on the ability to create a small, interactive society of agents inspired by games such as The Sims.2
+:::
+
+这一架构暗示了多个领域的应用，从角色扮演与社会原型（social prototyping）到虚拟世界与游戏。在社会角色扮演场景（如面试准备）中，用户可以安全地排练困难而充满冲突的对话。在对社交平台做原型时，设计师可以超越临时的人物设定（personas），对随时间展开的动态复杂交互进行原型设计。就本文而言，我们聚焦于创建一个受《模拟人生》等游戏启发的小型交互式 Agent 社会的能力。[^fn2]
+
+[^fn2]: 脚注 2 原文：A demonstration of an actual simulation of the generative agent society can be viewed at the following link: https://reverie.herokuapp.com/UIST_Demo/. A public repository for the simulation code is located here: https://github.com/joonspk-research/generative_agents（生成式 Agent 社会的一次真实模拟演示可在此链接查看：https://reverie.herokuapp.com/UIST_Demo/ ；模拟代码的公开仓库位于：https://github.com/joonspk-research/generative_agents 。）
+
+::: en
+By connecting our architecture to the ChatGPT large language model [77], we manifest a society of twenty-five agents in a game environment. End users can observe and interact with these agents. If an end user or developer wanted the town to host an in-game Valentine’s Day party, for example, traditional game environments would require scripting tens of characters’ behavior manually. We demonstrate that, with generative agents, it is sufficient to simply tell one agent that she wants to throw a party. Despite many potential points of failure—the party planner must remember to invite other agents to the party, attendees must remember the invitation, those who remember must decide to actually show up, and more—our agents succeed. They spread the word about the party and then show up, with one agent even asking another on a date to the party, all from a single user-generated seed suggestion.
+:::
+
+通过把架构接入 ChatGPT 大语言模型 [77]，我们在一个游戏环境中呈现出一个由 25 个 Agent 构成的社会。终端用户可以观察这些 Agent 并与之互动。例如，若终端用户或开发者想让小镇举办一场游戏内的情人节派对，传统游戏环境需要手工编写几十个角色的行为脚本。我们证明，有了生成式 Agent，只需告诉一个 Agent"她想办一场派对"就足够了。尽管存在许多潜在失败点——派对组织者必须记得邀请其他 Agent，受邀者必须记得邀请，记得的人还必须决定真的到场，等等——我们的 Agent 成功了。他们扩散了派对的消息，然后如约到场，甚至还有一个 Agent 邀请另一个 Agent 同赴派对，而这一切都源于一条用户生成的种子建议。
+
+::: en
+We conducted two evaluations of generative agents: a controlled evaluation to test whether the agents produce believable individual behaviors in isolation, and an end-to-end evaluation where the agents interacted with each other in open-ended ways over two days of game time to understand their stability and emergent social behaviors. In the technical evaluation, we leverage a methodological opportunity to evaluate an agent’s knowledge and behavior by “interviewing” it in natural language to probe the agents’ ability to stay in character, remember, plan, react, and reflect accurately. We compared several ablations that limit agents’ access to memory, reflection, and planning. We observe that each of these components is critical to strong performance across these interview tasks. Across the technical and end-to-end evaluation, the most common errors arose when the agent failed to retrieve relevant memories, fabricated embellishments to the agent’s memory, or inherited overly formal speech or behavior from the language model.
+:::
+
+我们对生成式 Agent 进行了两项评估：一项**受控评估（controlled evaluation）**，检验 Agent 在孤立状态下是否产生可信的个体行为；另一项**端到端评估（end-to-end evaluation）**，让 Agent 在两个游戏日里以开放方式彼此交互，以理解其稳定性与涌现的社会行为。在技术评估中，我们利用一个方法论上的机会，用自然语言"访谈（interviewing）"Agent 以评估其知识与行为，探测 Agent 保持角色、记忆、规划、反应与准确反思的能力。我们比较了限制 Agent 访问记忆、反思与规划的若干消融（ablation）版本。我们观察到，在各项访谈任务上，这些组件对强劲表现都至关重要。在技术评估与端到端评估中，最常见的错误出现在：Agent 未能检索到相关记忆、为 Agent 的记忆编造了"装饰性"内容、或从语言模型继承了过于正式的言语或行为。
+
+::: en
+In sum, this paper makes the following contributions:
+
+• Generative agents, believable simulacra of human behavior that are dynamically conditioned on agents’ changing experiences and environment.
+
+• A novel architecture that makes it possible for generative agents to remember, retrieve, reflect, interact with other agents, and plan through dynamically evolving circumstances. The architecture leverages the powerful prompting capabilities of large language models and supplements those capabilities to support longer-term agent coherence, the ability to manage dynamically evolving memory, and recursively produce higher-level reflections.
+
+• Two evaluations, a controlled evaluation and an end-to-end evaluation, that establish causal effects of the importance of components of the architecture, as well as identify breakdowns arising from, e.g., improper memory retrieval.
+
+• Discussion of the opportunities and ethical and societal risks of generative agents in interactive systems. We argue that these agents should be tuned to mitigate the risk of users forming parasocial relationships, logged to mitigate risks stemming from deepfakes and tailored persuasion, and applied in ways that complement rather than replace human stakeholders in design processes.
+:::
+
+总而言之，本文做出以下贡献：
+
+- **生成式 Agent**：以 Agent 不断变化的经历与环境为动态条件的人类行为可信拟真。
+- **一个全新架构**：使生成式 Agent 能够在动态演化的情境中记忆、检索、反思、与其他 Agent 交互并规划。该架构利用大语言模型强大的提示（prompting）能力并对其加以补充，以支持更长期的 Agent 连贯性、管理动态演化记忆的能力，以及递归产生更高层反思的能力。
+- **两项评估**——一项受控评估与一项端到端评估——确立了架构各组件重要性的因果效应，并识别出（例如由不当记忆检索导致的）失效。
+- **对生成式 Agent 在交互式系统中的机会与伦理社会风险的讨论**。我们主张：应对这类 Agent 进行调优以缓解用户形成拟社会关系的风险；应记录日志以缓解源于深度伪造与定向说服的风险；应以补充而非取代设计流程中人类利益相关者的方式加以应用。
+
+### 2 相关工作（Related Work）
+
+::: en
+In this section, we reflect on the prior literature in human-AI interaction and situate, within its canon, the agenda of building believable proxies of human behavior. This agenda, once hailed as a north star in the interaction, game, and artificial intelligence communities [10, 59, 85, 86], has remained challenging due to the complexity of human behavior [17, 108]. We synthesize this research to suggest that large language models, though not sufficient by themselves, open up a new angle for creating believable agents when leveraged using the appropriate architecture.
+:::
+
+本节回顾人机交互（human-AI interaction）的先行文献，并把"构建人类行为的可信代理"这一议程置于其经典脉络之中。这一议程曾在交互、游戏与人工智能社区被誉为北极星 [10, 59, 85, 86]，但由于人类行为的复杂性 [17, 108] 而始终充满挑战。我们综合这些研究并提出：大语言模型虽自身并不足够，但若以恰当的架构加以运用，便为创建可信 Agent（believable agents）开辟了新角度。
+
+#### 2.1 人机交互（Human-AI Interaction）
+
+::: en
+Interactive artificial intelligence systems aim to combine human insights and capabilities in computational artifacts that can augment their users [4, 30]. A long line of work has explored ways to enable users to interactively specify model behavior. For instance, Crayons demonstrated an early vision of interactive machine learning, allowing non-expert users to train classifiers [30]. Further work helped to articulate how end users might describe their classification goals to the system through examples [34] or demonstration [32]. Recent advancements have extended these explorations to deep learning [63] and prompt-based authoring [50, 67, 106].
+:::
+
+交互式人工智能系统旨在把人类的洞见与能力结合起来，融入能够增强用户的计算制品 [4, 30]。一系列工作探索了让用户交互式地规约模型行为的方式。例如，Crayons 展示了交互式机器学习的早期愿景，允许非专家用户训练分类器 [30]。后续工作进一步阐明了终端用户如何通过示例 [34] 或演示 [32] 向系统描述其分类目标。最近的进展把这些探索扩展到了深度学习 [63] 与基于提示的创作 [50, 67, 106]。
+
+::: en
+Meanwhile, a persistent thread of research has advanced the case for language- and agent-based interaction in human-computer interaction. Formative work such as SHRDLU [103] and ELIZA [102] demonstrated the opportunities and the risks associated with natural language interaction with computing systems. As research progressed, it became evident that autonomous agents could offer new metaphors for delegation and interaction [68], but the boundaries of delegation between humans and agents have remained the subject of ongoing debate and refinement [47, 89, 90]. Recently, this technology has reached a level of stability that enables agents to interact via natural language in large and complex online social environments (e.g., [55]). Natural language interaction provides a novel modality that can enhance user abilities in domains such as photo editing [3, 35, 65] and code editing [88].
+:::
+
+与此同时，一条持续的研究脉络一直在推动人机交互中基于语言与 Agent 的交互。SHRDLU [103] 与 ELIZA [102] 等奠基性工作展示了与计算系统进行自然语言交互的机遇与风险。随着研究推进，自主 Agent 可以为委托与交互提供新隐喻这一点日渐清晰 [68]，但人类与 Agent 之间委托的边界仍是持续争论与打磨的主题 [47, 89, 90]。近来，该技术已达到让 Agent 能在大型复杂在线社交环境（如 [55]）中以自然语言交互的稳定程度。自然语言交互提供了一种新颖的模态，可以增强用户在照片编辑 [3, 35, 65] 与代码编辑 [88] 等领域的能力。
+
+::: en
+We convene these threads of work to show that we can now create agents that proxy human behavior for interactive systems, and interact with them using natural language. In doing so, this work reopens the door to examining foundational human-computer interaction questions around cognitive models such as GOMS and Keystroke-Level Model (KLM) [22, 23], around prototyping tools [80], and around ubiquitous computing applications [26, 31, 101].
+:::
+
+我们把这几条研究脉络汇聚起来，表明如今我们已经能够创建在交互式系统中代理人类行为的 Agent，并用自然语言与之交互。由此，本工作重新打开了考察人机交互基础问题的大门：围绕 GOMS 与键击层模型（Keystroke-Level Model, KLM）等认知模型的问题 [22, 23]、围绕原型工具的问题 [80]、以及围绕普适计算应用的问题 [26, 31, 101]。
+
+#### 2.2 人类行为的可信代理（Believable Proxies of Human Behavior）
+
+::: en
+Prior literature has described believability, or believable agents, as a central design and engineering goal. Believable agents are designed to provide an illusion of life and present a facade of realism in the way they appear to make decisions and act on their own volition, similar to the characters in Disney movies [10, 96]. These agents can populate and perceive an open world environment like the one we inhabit [10, 59], and strive to behave in ways that exhibit emergent behaviors grounded in social interactions with users or other agents with the aim of becoming believable proxies of our behavior in hypothetical simulations of individuals and communities [20, 36, 71]. Historically, these agents were developed in the context of intelligent game non-player characters (NPCs) [59, 85]. Creating NPCs with believable behavior, if possible, could enhance player experiences in games and interactive fictions by enabling emergent narratives [8, 16, 49, 93] and social interactions with the agents [109]. However, more importantly, game worlds provide increasingly realistic representations of real-world affordances, and as observed by Laird and van Lent in 2001, these simulated worlds offer accessible testbeds for developers of believable agents to finesse the agents’ cognitive capabilities without worrying about implementing robotics in the real world or creating simulation environments from scratch [59, 85].
+:::
+
+既有文献把可信度（believability），即可信 Agent，描述为一个核心的设计与工程目标。可信 Agent 被设计用来提供"生命的幻象（illusion of life）"，在其看似凭自主意志决策与行动的方式上呈现一层真实的表象，类似迪士尼电影中的角色 [10, 96]。这类 Agent 可以栖居并感知一个像我们所处世界那样的开放世界环境 [10, 59]，并力求以在与用户或其他 Agent 的社会互动中涌现出的方式行动，目标是成为在个体与社区的假想模拟中我们行为的可信代理 [20, 36, 71]。历史上，这类 Agent 是在智能游戏非玩家角色（NPC）的语境下发展起来的 [59, 85]。如果能造出行为可信的 NPC，将通过催生涌现叙事 [8, 16, 49, 93] 与和 Agent 的社会互动 [109] 来增强玩家在游戏与交互式小说中的体验。然而更重要的是，游戏世界对现实世界可供性（affordances）的呈现日益真实，正如 Laird 与 van Lent 在 2001 年观察到的：这些模拟世界为可信 Agent 的开发者提供了易于获得的试验台，让他们得以打磨 Agent 的认知能力，而不必担心在现实世界实现机器人技术、或从零构建模拟环境 [59, 85]。
+
+::: en
+A diverse set of approaches to creating believable agents emerged over the past four decades. In implementation, however, these approaches often simplified the environment or dimensions of agent behavior to make the effort more manageable [17, 73]. Rule-based approaches, such as finite-state machines [91, 97] and behavior trees [41, 54, 82] account for the brute force approach of human-authoring the agent’s behavior [71]. They provide a straightforward way of creating simple agents that is still the most dominant approach today [69, 74, 108], and can even handle rudimentary social interactions, as shown in games such as Mass Effect [13] and The Sims [7] series. Nonetheless, manually crafting behavior that can comprehensively address the breadth of possible interactions in an open world is untenable. This means that the resulting agent behaviors may not fully represent the consequences of their interactions [70–72], and cannot perform new procedures that were not hard-coded in their script [91, 97]. On the other hand, prevalent learning-based approaches for creating believable agents, such as reinforcement learning, have overcome the challenge of manual authoring by letting the agents learn their behavior, and have achieved superhuman performance in recent years in games such as AlphaStar for Starcraft [99] and OpenAI Five for Dota 2 [11]. However, their success has largely taken place in adversarial games with readily definable rewards that a learning algorithm can optimize for. They have not yet addressed the challenge of creating believable agents in an open world [40, 74, 91].
+:::
+
+过去四十年间涌现出多种创建可信 Agent 的方法。然而在实现上，这些方法常常简化环境或 Agent 行为的维度，以使工作量可控 [17, 73]。**基于规则的方法**，如有限状态机 [91, 97] 与行为树 [41, 54, 82]，属于人工编写 Agent 行为的"暴力"路线 [71]。它们提供了一种创建简单 Agent 的直接途径，至今仍是最主流的方法 [69, 74, 108]，甚至能处理基础的社会互动——如《质量效应》（Mass Effect）[13] 与《模拟人生》系列 [7] 所展示的那样。尽管如此，手工编写能够全面覆盖开放世界中可能交互之广度的行为是行不通的。这意味着所得的 Agent 行为可能无法完整表达其交互的后果 [70–72]，也无法执行未硬编码进脚本的新流程 [91, 97]。另一方面，创建可信 Agent 的主流**基于学习的方法**（如强化学习）通过让 Agent 自行学习行为克服了人工编写的挑战，并在近年来于《星际争霸》的 AlphaStar [99] 与《Dota 2》的 OpenAI Five [11] 等游戏中取得超人表现。然而，它们的成功大多发生在奖励易于明确定义、学习算法可据以优化的对抗性游戏中。它们尚未解决在开放世界中创建可信 Agent 的挑战 [40, 74, 91]。
+
+::: en
+Cognitive architectures in computation, pioneered by Newell, aimed to build the infrastructure for supporting a comprehensive set of cognitive functions [76] that suited the all-encompassing nature of believable agents held in its original vision. They fueled some of the earliest examples of believable agents. For instance, Quakebot-SOAR [60] and ICARUS [25, 64] generated NPCs in first-person shooter games, while TacAir-SOAR [81] generated pilots in aerial combat training simulations. The architectures used by these agents differed (Quakebot- and TacAir-SOAR relied on SOAR [61], while ICARUS relied on its own variation that was inspired by SOAR and ACT-R [6]), but they shared the same underlying principle [62]. They maintained short-term and long-term memories, filled these memories with symbolic structures, and operated in perceive-plan-act cycles, dynamically perceiving the environment and matching it with one of the manually crafted action procedures [58, 97]. Agents created using cognitive architectures aimed to be generalizable to most, if not all, open world contexts and exhibited robust behavior for their time. However, their space of action was limited to manually crafted procedural knowledge, and they did not offer a mechanism through which the agents could be inspired to seek new behavior. As such, these agents were deployed mostly in non-open world contexts such as first-person shooter games [25, 60] or blocks worlds [64].
+:::
+
+由 Newell 开创的计算**认知架构（cognitive architectures）**，旨在为支持一套全面的认知功能构建基础设施 [76]，以契合可信 Agent 原始设想中包罗万象的性质。它们催生了一些最早的可信 Agent 实例。例如，Quakebot-SOAR [60] 与 ICARUS [25, 64] 在第一人称射击游戏中生成 NPC，而 TacAir-SOAR [81] 在空战训练模拟中生成飞行员。这些 Agent 所用的架构各不相同（Quakebot- 与 TacAir-SOAR 依赖 SOAR [61]，ICARUS 依赖一个受 SOAR 与 ACT-R [6] 启发的变体），但它们共享相同的底层原则 [62]：它们维护短期与长期记忆，用符号结构填充这些记忆，并以"感知-规划-行动"（perceive-plan-act）循环运行，动态感知环境并与某条人工编写的动作流程相匹配 [58, 97]。用认知架构创建的 Agent 力图泛化到大多数（乃至全部）开放世界情境，并在其时代展现出稳健的行为。然而，其行动空间局限于人工编写的程序性知识，且没有提供一种能让 Agent 被激发去寻求新行为的机制。因此，这类 Agent 大多部署在非开放世界情境中，如第一人称射击游戏 [25, 60] 或积木世界 [64]。
+
+::: en
+Today, creating believable agents as described in its original definition remains an open problem [85, 108]. Many have moved on, arguing that although current approaches for creating believable agents might be cumbersome and limited, they are good enough to support existing gameplay and interactions [24, 75, 108]. Our argument is that large language models offer an opportunity to re-examine these questions, provided that we can craft an effective architecture to synthesize memories into believable behavior. We offer a step toward such an architecture in this paper.
+:::
+
+今天，按其原始定义创建可信 Agent 仍是一个开放问题 [85, 108]。许多人已经转向别处，他们认为尽管当前创建可信 Agent 的方法可能笨重而有限，但已足以支撑现有的游戏玩法与交互 [24, 75, 108]。我们的论点是：大语言模型提供了一个重新审视这些问题的机会，前提是我们能打造一个有效架构，把记忆合成为可信行为。本文即朝着这样的架构迈出一步。
+
+#### 2.3 大语言模型与人类行为（Large Language Models and Human Behavior）
+
+::: en
+Generative agents leverage a large language model to power their behavior. The key observation is that large language models encode a wide range of human behavior from their training data [15, 18]. If prompted with a narrowly defined context, the models can be used to generate believable behavior. Recent work has demonstrated the efficacy of this approach. For instance, social simulacra used a large language model to generate users that would populate new social computing systems to prototype their emergent social dynamics [80]. This approach used a prompt chain [105, 106] to generate short natural language descriptions of personas and their behaviors as they appear in the system being prototyped. Other empirical studies have replicated existing social science studies [46], political surveys [92], and generated synthetic data [39]. Large language models have also been used to generate interactive human behavior for users to engage with. In gaming, for instance, these models have been employed to create interactive fiction [37] and text adventure games [21]. With their ability to generate and decompose action sequences, large language models have also been used in planning robotics tasks [48]. For example, when presented with a task, such as picking up a bottle, the model is prompted to break down the task into smaller action sequences, such as heading to the table where the bottle is located and picking it up.
+:::
+
+生成式 Agent 利用大语言模型来驱动其行为。关键的观察是：大语言模型从训练数据中编码了广泛的人类行为 [15, 18]。若以一个狭义界定的情境（narrowly defined context）来提示，这些模型可用来生成可信行为。近期工作已证明该路线的有效性。例如，Social Simulacra（社会拟像）用大语言模型生成了将填充新社交计算系统的用户，以对系统的涌现社会动态做原型 [80]。该方法使用提示链（prompt chain）[105, 106] 生成人物设定（personas）及其行为的简短自然语言描述，呈现其在被原型系统中的样态。其他实证研究复现了既有的社会科学研究 [46]、政治调查 [92]，并生成合成数据 [39]。大语言模型也被用来生成可供用户参与的交互式人类行为。例如在游戏领域，这些模型已被用于创作交互式小说 [37] 与文字冒险游戏 [21]。凭借生成与分解动作序列的能力，大语言模型还被用于规划机器人任务 [48]。例如，面对"拿起一个瓶子"这样的任务时，模型被提示把任务分解为更小的动作序列，如走向瓶子所在的桌子并把它拿起来。
+
+::: en
+We posit that, based on the work summarized above, large language models can become a key ingredient for creating believable agents. The existing literature largely relies on what could be considered first-order templates that employ few-shot prompts [38, 66] or chain-of-thought prompts [100]. These templates are effective in generating behavior that is conditioned solely on the agent’s current environment (e.g., how would a troll respond to a given post, what actions would a robot need to take to enter a room given that there is a door). However, believable agents require conditioning not only on their current environment but also on a vast amount of past experience, which is a poor fit (and as of today, impossible due to the underlying models’ limited context window) using first-order prompting. Recent studies have attempted to go beyond first-order prompting by augmenting language models with a static knowledge base and an information retrieval scheme [53] or with a simple summarization scheme [104]. This paper extends these ideas to craft an agent architecture that handles retrieval where past experience is dynamically updated at each time step and mixed with agents’ current context and plans, which may either reinforce or contradict each other.
+:::
+
+基于上述工作，我们推断大语言模型可以成为创建可信 Agent 的关键原料。既有文献大多依赖可称为"一阶模板（first-order templates）"的做法，即使用少样本提示（few-shot prompts）[38, 66] 或思维链提示（chain-of-thought prompts）[100]。这些模板在生成"仅以 Agent 当前环境为条件"的行为上很有效（例如：一个网络喷子会如何回应某条帖子；给定有一扇门，机器人进入房间需要采取哪些动作）。然而，可信 Agent 不仅需要以当前环境为条件，还需要以海量过往经历为条件——这对一阶提示来说是糟糕的匹配（而且就今天而言，由于底层模型有限的上下文窗口，这根本不可能）。近期研究尝试超越一阶提示：为语言模型外挂静态知识库与信息检索方案 [53]，或外挂简单的摘要方案 [104]。本文扩展这些想法，打造了一个处理检索的 Agent 架构：其中过往经历在每个时间步动态更新，并与 Agent 的当前上下文及计划混合——这些内容之间可能相互强化，也可能相互矛盾。
+
+### 3 生成式 Agent 的行为与交互（Generative Agent Behavior and Interaction）
+
+::: en
+To illustrate the affordances of generative agents, we instantiate them as characters in a simple sandbox world reminiscent of The Sims [7]. This sprite-based sandbox game world, Smallville, evokes a small town environment. In this section, we will walk through the affordances and interactions with generative agents in Smallville and describe how the agents behave within it. Then, in Section 4, we will introduce our generative agent architecture that powers these affordances and interactions. In Section 5, we will describe the implementation of the sandbox environment and how the agents interact with the underlying engine of the sandbox world.
+:::
+
+为展示生成式 Agent 的可供性（affordances），我们把它们实例化为一个类似《模拟人生》[7] 的简单沙盒世界中的角色。这个基于精灵图（sprite-based）的沙盒游戏世界名为 **Smallville**，唤起一种小镇环境的氛围。本节将走查 Smallville 中生成式 Agent 的可供性与交互，并描述 Agent 在其中的行为方式。随后在第 4 节，我们将介绍驱动这些可供性与交互的生成式 Agent 架构；在第 5 节，我们将描述沙盒环境的实现，以及 Agent 如何与沙盒世界的底层引擎交互。
+
+[图 2: The Smallville sandbox world, with areas labeled. The root node describes the entire world, children describe areas (e.g., houses, cafe, stores), and leaf nodes describe objects (e.g., table, bookshelf). Agents remember a subgraph that reflects the parts of the world they have seen, maintaining the state of those parts as they observed them.]
+
+图 2：标注了各区域的 Smallville 沙盒世界。树的根节点描述整个世界，子节点描述区域（如住宅、咖啡馆、商店），叶节点描述物体（如桌子、书架）。Agent 记住的是一个反映其见过世界部分的子图，并按其观察到的状态维护这些部分。
+
+#### 3.1 Agent 化身与通信（Agent Avatar and Communication）
+
+::: en
+A community of 25 unique agents inhabits Smallville. Each agent is represented by a simple sprite avatar. We authored one paragraph of natural language description to depict each agent’s identity, including their occupation and relationship with other agents, as seed memories. For example, John Lin has the following description:
+
+John Lin is a pharmacy shopkeeper at the Willow Market and Pharmacy who loves to help people. He is always looking for ways to make the process of getting medication easier for his customers; John Lin is living with his wife, Mei Lin, who is a college professor, and son, Eddy Lin, who is a student studying music theory; John Lin loves his family very much; John Lin has known the old couple next-door, Sam Moore and Jennifer Moore, for a few years; John Lin thinks Sam Moore is a kind and nice man; John Lin knows his neighbor, Yuriko Yamamoto, well; John Lin knows of his neighbors, Tamara Taylor and Carmen Ortiz, but has not met them before; John Lin and Tom Moreno are colleagues at The Willows Market and Pharmacy; John Lin and Tom Moreno are friends and like to discuss local politics together; John Lin knows the Moreno family somewhat well — the husband Tom Moreno and the wife Jane Moreno.
+
+Each semicolon-delimited phrase is entered into the agent’s initial memory as memories at the start of the simulation.
+:::
+
+一个由 25 个独特 Agent 组成的社区栖居于 Smallville。每个 Agent 以一个简单的精灵图头像表示。我们为每个 Agent 撰写了一段自然语言描述来刻画其身份——包括职业与其他 Agent 的关系——作为**种子记忆（seed memories）**。例如，John Lin 的描述如下：
+
+```text
+John Lin is a pharmacy shopkeeper at the Willow Market and Pharmacy who
+loves to help people. He is always looking for ways to make the process of
+getting medication easier for his customers; John Lin is living with his
+wife, Mei Lin, who is a college professor, and son, Eddy Lin, who is a
+student studying music theory; John Lin loves his family very much; John
+Lin has known the old couple next-door, Sam Moore and Jennifer Moore, for
+a few years; John Lin thinks Sam Moore is a kind and nice man; John Lin
+knows his neighbor, Yuriko Yamamoto, well; John Lin knows of his
+neighbors, Tamara Taylor and Carmen Ortiz, but has not met them before;
+John Lin and Tom Moreno are colleagues at The Willows Market and Pharmacy;
+John Lin and Tom Moreno are friends and like to discuss local politics
+together; John Lin knows the Moreno family somewhat well — the husband Tom
+Moreno and the wife Jane Moreno.
+```
+
+译文：John Lin 是 Willow Market and Pharmacy 药房店主，乐于助人，总是在想办法让顾客取药的过程更轻松；John Lin 与妻子 Mei Lin（大学教授）和儿子 Eddy Lin（学习音乐理论的学生）同住；John Lin 非常爱他的家庭；John Lin 与隔壁老夫妇 Sam Moore 和 Jennifer Moore 相识数年；John Lin 认为 Sam Moore 是个善良友好的人；John Lin 很熟识邻居 Yuriko Yamamoto；John Lin 知道邻居 Tamara Taylor 和 Carmen Ortiz，但未曾谋面；John Lin 与 Tom Moreno 是 The Willows Market and Pharmacy 的同事；John Lin 与 Tom Moreno 是朋友，喜欢一起讨论本地政治；John Lin 对 Moreno 一家（丈夫 Tom Moreno 与妻子 Jane Moreno）颇为熟识。
+
+模拟开始时，每个以分号分隔的短语都会作为记忆写入该 Agent 的初始记忆。
+
+##### 3.1.1 Agent 间通信（Inter-Agent Communication）
+
+::: en
+The agents interact with the world by their actions, and with each other through natural language. At each time step of the sandbox engine, the agents output a natural language statement describing their current action, such as “Isabella Rodriguez is writing in her journal”, “Isabella Rodriguez is checking her emails”, “Isabella Rodriguez is talking with her family on the phone”, or “Isabella Rodriguez is getting ready for bed.” This statement is then translated into concrete movements that affect the sandbox world. The action is displayed on the sandbox interface as a set of emojis, providing an abstract representation of the action from an overhead view. To achieve this, the system utilizes a language model to translate the action into a set of emojis, which appear above each avatar’s head in a speech bubble. For example, “Isabella Rodriguez is writing in her journal” is displayed as
+ ,
+while “Isabella Rodriguez is checking her emails” appears as
+ .
+The complete natural language description of the action can be accessed by clicking on the agent’s avatar.
+:::
+
+Agent 通过动作与世界交互，通过自然语言彼此交互。沙盒引擎的每个时间步，Agent 输出一句描述其当前动作的自然语言陈述，如"Isabella Rodriguez 正在写日记""Isabella Rodriguez 正在查看电子邮件""Isabella Rodriguez 正在和家人通电话"或"Isabella Rodriguez 正在准备就寝"。该陈述随后被翻译成影响沙盒世界的具体移动。动作以一组 emoji 显示在沙盒界面上，从俯视视角提供动作的抽象表示。为此，系统利用语言模型把动作翻译成一组 emoji，出现在每个头像头顶的对话气泡中。例如，"Isabella Rodriguez 正在写日记"显示为 ✍️ 风格的图标，"Isabella Rodriguez 正在查看电子邮件"则显示为 📧 风格的图标（译注：此两处 emoji 图标在 PDF 文本提取中丢失，此处按常理推断其样式，原文仅有图标无文字）。点击 Agent 头像即可查看动作的完整自然语言描述。
+
+::: en
+Agents communicate with each other in full natural language. They are aware of other agents in their local area, and the generative agent architecture determines whether they walk by or engage in conversation. Here, a sample in the middle of a conversation between the agents Isabella Rodriguez and Tom Moreno about the upcoming election:3
+
+Isabella: I’m still weighing my options, but I’ve been discussing the election with Sam Moore. What are your thoughts on him?
+
+Tom: To be honest, I don’t like Sam Moore. I think he’s out of touch with the community and doesn’t have our best interests at heart.
+:::
+
+Agent 之间用完整的自然语言交流。他们能察觉所在区域内的其他 Agent，而由生成式 Agent 架构决定他们是擦肩而过还是展开对话。下面是 Agent Isabella Rodriguez 与 Tom Moreno 一段关于即将到来的选举的对话中段节选：[^fn3]
+
+```text
+Isabella: I’m still weighing my options, but I’ve been discussing the
+          election with Sam Moore. What are your thoughts on him?
+
+Tom: To be honest, I don’t like Sam Moore. I think he’s out of touch with
+     the community and doesn’t have our best interests at heart.
+```
+
+译文——Isabella：我还在权衡我的选择，不过我一直和 Sam Moore 讨论这次选举。你怎么看他？Tom：说实话，我不喜欢 Sam Moore。我觉得他脱离社区，也没有把我们的利益放在心上。
+
+[^fn3]: 脚注 3 原文：We note that the conversational style of these agents can feel overly formal, likely a result of instruction tuning in the underlying models. We expect that the writing style will be better controllable in future language models.（我们注意到这些 Agent 的对话风格可能显得过于正式，这很可能是底层模型指令微调（instruction tuning）的结果。我们预期未来的语言模型将能更好地控制写作风格。）
+
+##### 3.1.2 用户控制（User Controls）
+
+::: en
+The user communicates with the agent through natural language by specifying a persona that the agent should perceive them as. For example, if the user specifies that they are a news “reporter” and asks about the upcoming election by saying, “Who is running for office?”, the John agent replies:
+
+John: My friends Yuriko, Tom and I have been talking about the upcoming election and discussing the candidate Sam Moore. We have all agreed to vote for him because we like his platform.
+
+To directly command one of the agents, the user takes on the persona of the agent’s “inner voice”—this makes the agent more likely to treat the statement as a directive. For instance, when told “You are going to run against Sam in the upcoming election” by a user as John’s inner voice, John decides to run in the election and shares his candidacy with his wife and son.
+:::
+
+用户通过自然语言与 Agent 交流，方式是指定一个希望 Agent 感知到自己的人设（persona）。例如，若用户指定自己是新闻"记者"并询问即将到来的选举："谁在竞选职位？"，John 这个 Agent 会回答：
+
+```text
+John: My friends Yuriko, Tom and I have been talking about the upcoming
+      election and discussing the candidate Sam Moore. We have all agreed
+      to vote for him because we like his platform.
+```
+
+译文——John：我和朋友 Yuriko、Tom 一直在聊即将到来的选举，讨论候选人 Sam Moore。我们都同意投他一票，因为我们喜欢他的政纲。
+
+若要直接向某个 Agent 下达命令，用户需化身为该 Agent 的"**内心声音（inner voice）**"——这会让 Agent 更可能把这句话当作指示。例如，当用户以 John 的内心声音说"你将在即将到来的选举中与 Sam 竞争"时，John 便决定参选，并把他的候选资格告诉妻子和儿子。
+
+#### 3.2 环境交互（Environmental Interaction）
+
+::: en
+Smallville features the common affordances of a small village, including a cafe, bar, park, school, dorm, houses, and stores. It also defines subareas and objects that make those spaces functional, such as a kitchen in a house and a stove in the kitchen (Figure 2). All spaces serving as agents’ primary living quarters feature a bed, desk, closet, shelf, as well as a bathroom and a kitchen.4
+:::
+
+Smallville 具备一个小村庄常见的设施，包括咖啡馆、酒吧、公园、学校、宿舍、住宅与商店。它还定义了让这些空间可用的子区域与物体，例如住宅中的厨房、厨房中的炉子（图 2）。所有用作 Agent 主要居所的空间都配有床、书桌、衣柜、架子，以及卫生间和厨房。[^fn4]
+
+[^fn4]: 脚注 4 原文：This environment design is not the focus of our work, so we generated this environment manually, not automatically. Future work can continue to expand the richness of the agents’ environments.（环境设计并非本工作的重点，因此我们手工而非自动地生成了该环境。未来工作可以继续扩充 Agent 环境的丰富度。）
+
+::: en
+Agents move around Smallville as one would in a simple video game, entering and leaving buildings, navigating its map, and approaching other agents. Agent movements are directed by the generative agent architecture and the sandbox game engine: when the model dictates that the agent will move to a location, we calculate a walking path to the destination in the Smallville environment, and the agent begins moving. In addition, users can also enter the sandbox world of Smallville as an agent operating within it. The agent that the user embodies can be an agent already present in the world, such as Isabella and John, or it can be an outside visitor with no prior history in Smallville. The inhabitants of Smallville will treat the user-controlled agent no differently than they treat each other. They recognize its presence, initiate interactions, and remember its behavior before forming opinions about it.
+:::
+
+Agent 在 Smallville 中的移动方式如同在一个简单电子游戏中：进出建筑、在地图上导航、接近其他 Agent。Agent 的移动由生成式 Agent 架构与沙盒游戏引擎共同指挥：当模型指示 Agent 将移动到某地点时，我们在 Smallville 环境中计算出通往目的地的步行路径，Agent 随即开始移动。此外，用户也可以化身一个在世界中活动的 Agent 进入 Smallville 沙盒世界。用户化身的 Agent 可以是世界中已有的 Agent（如 Isabella 和 John），也可以是一个在 Smallville 毫无历史的外来访客。Smallville 的居民对用户控制的 Agent 与对彼此一视同仁：他们认出其存在、主动发起互动，并在形成看法之前记住其行为。
+
+::: en
+Users and agents can influence the state of the objects in this world, much like in sandbox games such as The Sims. For example, a bed can be occupied when an agent is sleeping, and a refrigerator can be empty when an agent uses up the ingredients to make breakfast. End users can also reshape an agent’s environment in Smallville by rewriting the status of objects surrounding the agent in natural language. For instance, when Isabella is making breakfast in the morning, the user can change the status of the kitchen stove from “turned on” to “burning” by inputting a command to the system that chooses the object and illustrates its new status, like this: “<Isabella’s apartment: kitchen: stove> is burning.” Isabella will notice this in the next moment and go to turn off the stove and remake her breakfast. Likewise, if the user sets the status of Isabella’s shower to “leaking water” when she enters the bathroom, she will gather tools from her living room and try to fix the leak.
+:::
+
+用户与 Agent 都能影响这个世界中物体的状态，正如在《模拟人生》等沙盒游戏中那样。例如，Agent 睡觉时床可以处于"被占用"状态，Agent 用光食材做早餐后冰箱可以变"空"。终端用户还可以用自然语言改写 Agent 周围物体的状态，从而重塑 Agent 在 Smallville 中的环境。例如，当 Isabella 早上做早餐时，用户可以向系统输入一条选定物体并说明其新状态的命令——如"<Isabella 的公寓: 厨房: 炉子> 正在燃烧"——把厨房炉子的状态从"开着"改为"着火中"。Isabella 会在下一时刻注意到这一点，去关掉炉子并重做早餐。类似地，若用户在 Isabella 进入卫生间时把她的淋浴设为"漏水"，她会从客厅取来工具试图修好漏水。
+
+#### 3.3 "一日之计"示例（Example “Day in the Life”）
+
+::: en
+Starting from the single-paragraph description, generative agents begin planning their days. As time passes in the sandbox world, their behaviors evolve as these agents interact with each other and the world, building memories and relationships, and coordinating joint activities.
+
+We demonstrate the behavior of generative agents by tracing the output of our system over the course of one day for the agent John Lin (Figure 3). In the Lin family, John is the first to wake up at 7 a.m. He brushes his teeth, takes a shower, gets dressed, eats breakfast, and checks the news at the dining table in the living room. At 8 a.m., Eddy follows suit, rushing out of bed to prepare for his classes. He catches up with John just as he is about to head out:
+
+John: Good morning Eddy. Did you sleep well?
+Eddy: Good morning dad. Yeah, I slept great.
+John: That’s good. What are you working on today?
+Eddy: I’m working on a new music composition for my class. It’s due this week, so I’m trying to get it finished. But I’m having so much fun with it!
+John: That sounds great!
+
+Soon after Eddy heads out, Mei wakes up and joins John. Mei asks about her son, and John recalls the conversation they just had:
+
+Mei: Did Eddy already leave for school?
+John: Yes, he just left. He’s working on a music composition for his class.
+Mei: Oh, that’s wonderful! Tell me about it.
+John: I think he’s really enjoying it! He said he’s having a lot of fun with it.
+Mei: That’s great! I’m so proud of him.
+
+As they finish their conversation, Mei and John pack up. Mei goes on to teach and work on her research paper, while John opens his pharmacy counter at the Willow Market and Pharmacy by 9 a.m.
+:::
+
+从那段单段落描述出发，生成式 Agent 便开始规划各自的一天。随着沙盒世界中时间推移，他们的行为在与其他 Agent 及世界的互动中演化：建立记忆与关系，并协调共同活动。
+
+我们以 Agent John Lin 一天的系统输出轨迹来展示生成式 Agent 的行为（图 3）。在 Lin 家，John 早上 7 点最先起床。他刷牙、淋浴、更衣、吃早餐，并在客厅餐桌旁看新闻。8 点，Eddy 接着起床，匆忙起身准备上课。他在 John 正要出门时赶上了他：
+
+```text
+John: Good morning Eddy. Did you sleep well?
+Eddy: Good morning dad. Yeah, I slept great.
+John: That’s good. What are you working on today?
+Eddy: I’m working on a new music composition for my class. It’s due this
+      week, so I’m trying to get it finished. But I’m having so much fun
+      with it!
+John: That sounds great!
+```
+
+译文——John：早上好，Eddy。睡得好吗？Eddy：早上好，爸爸。嗯，睡得很好。John：那就好。你今天打算做什么？Eddy：我在为课程写一首新的音乐作品。这周就要交了，所以我想尽快完成。不过我写得很开心！John：听起来太棒了！
+
+Eddy 出门后不久，Mei 醒来并来到 John 身边。Mei 问起儿子，John 回忆起刚才的对话：
+
+```text
+Mei: Did Eddy already leave for school?
+John: Yes, he just left. He’s working on a music composition for his class.
+Mei: Oh, that’s wonderful! Tell me about it.
+John: I think he’s really enjoying it! He said he’s having a lot of fun with it.
+Mei: That’s great! I’m so proud of him.
+```
+
+译文——Mei：Eddy 已经去上学了吗？John：是的，他刚走。他在为课程写一首音乐作品。Mei：哦，太好了！跟我讲讲。John：我觉得他真的很享受！他说他写得特别开心。Mei：太好了！我真为他骄傲。
+
+谈话结束后，Mei 和 John 收拾出发。Mei 去授课并做她的研究论文，John 则在 9 点前在 Willow Market and Pharmacy 开出他的药房柜台。
+
+[图 3: A morning in the life of a generative agent, John Lin. John wakes up around 6 am and completes his morning routine, which includes brushing his teeth, taking a shower, and eating breakfast. He briefly catches up with his wife, Mei, and son, Eddy, before heading out to begin his workday.]
+
+图 3：生成式 Agent John Lin 一天中的清晨。John 约 6 点醒来并完成晨间例程，包括刷牙、淋浴与吃早餐。出门开始一天的工作之前，他与妻子 Mei 和儿子 Eddy 短暂寒暄。（译注：图题称约 6 点醒来，正文表述为 7 点最先起床，以正文为准。）
+
+#### 3.4 涌现社会行为（Emergent Social Behaviors）
+
+::: en
+By interacting with each other, generative agents in Smallville exchange information, form new relationships, and coordinate joint activities. Extending prior work [80], these social behaviors are emergent rather than pre-programmed.
+:::
+
+通过彼此互动，Smallville 中的生成式 Agent 交换信息、形成新关系并协调共同活动。延续先前工作 [80]，这些社会行为是涌现的（emergent）而非预编程的。
+
+##### 3.4.1 信息扩散（Information Diffusion）
+
+::: en
+As agents notice each other, they may engage in dialogue—as they do so, information can spread from agent to agent. For instance, in a conversation between Sam and Tom at the grocery store, Sam tells Tom about his candidacy in the local election:
+
+Sam: Hey Tom, how’s it going?
+Tom: Good, thanks. What’s up?
+Sam: Well, I wanted to talk to you about something. I’m actually running for mayor in the upcoming local election.
+Tom: Really? That’s great news! Why are you running?
+Sam: I’ve been involved in local politics for years now, and I really feel like I can make a difference in our community. Plus, I want to bring new ideas and perspectives to the table.
+
+Later that day, after Sam left, Tom and John, who heard the news from another source, discuss Sam’s chances of winning the election:
+
+John: I heard that Sam Moore is running for mayor in the local election. Do you think he has a good chance of winning?
+Tom: I do think he has a good chance. He’s been working hard in the community and I think he will get a lot of support. What do you think?
+John: I think it’s great that he’s running. I’m curious to see how the election will turn out.
+
+Gradually, Sam’s candidacy becomes the talk of the town, with some supporting him and others remaining undecided.
+:::
+
+当 Agent 彼此注意到时，他们可能展开对话——在此过程中，信息可以从一个 Agent 扩散到另一个 Agent。例如，在杂货店 Sam 与 Tom 的一段对话中，Sam 告诉 Tom 自己将在地方选举中竞选：
+
+```text
+Sam: Hey Tom, how’s it going?
+Tom: Good, thanks. What’s up?
+Sam: Well, I wanted to talk to you about something. I’m actually running
+     for mayor in the upcoming local election.
+Tom: Really? That’s great news! Why are you running?
+Sam: I’ve been involved in local politics for years now, and I really feel
+     like I can make a difference in our community. Plus, I want to bring
+     new ideas and perspectives to the table.
+```
+
+译文——Sam：嘿 Tom，最近怎么样？Tom：挺好，谢了。有什么事吗？Sam：嗯，我想跟你聊聊一件事。我其实要在即将举行的地方选举中竞选村长（mayor）。Tom：真的吗？真是好消息！你为什么要竞选？Sam：我参与本地政治很多年了，我真的觉得我能为我们的社区带来改变。而且，我也想把新的想法和视角带到台面上来。
+
+当天晚些时候，Sam 离开后，从另一渠道听说此消息的 Tom 和 John 聊起 Sam 的胜算：
+
+```text
+John: I heard that Sam Moore is running for mayor in the local election.
+      Do you think he has a good chance of winning?
+Tom: I do think he has a good chance. He’s been working hard in the
+     community and I think he will get a lot of support. What do you think?
+John: I think it’s great that he’s running. I’m curious to see how the
+      election will turn out.
+```
+
+译文——John：我听说 Sam Moore 要在地方选举中竞选村长。你觉得他胜算大吗？Tom：我确实觉得他机会很大。他一直在社区辛勤付出，我想他会得到很多支持。你怎么看？John：他参选是件好事。我很好奇选举结果会怎样。
+
+渐渐地，Sam 的参选成为全镇话题，有人支持他，也有人仍未拿定主意。
+
+##### 3.4.2 关系记忆（Relationship Memory）
+
+::: en
+Agents in Smallville form new relationships over time and remember their interactions with other agents. For example, at the start, Sam does not know Latoya Williams. While taking a walk in Johnson Park, Sam runs into Latoya, and they introduce themselves. Latoya mentions that she is working on a photography project: “I’m here to take some photos for a project I’m working on.” In a later interaction, Sam’s interactions with Latoya indicate a memory of that interaction, as he asks “Hi, Latoya. How is your project going?” and she replies “Hi, Sam. It’s going well!”
+:::
+
+Smallville 中的 Agent 会随时间形成新关系，并记住他们与其他 Agent 的互动。例如，一开始 Sam 并不认识 Latoya Williams。Sam 在 Johnson 公园散步时偶遇 Latoya，两人互相介绍。Latoya 提到她正在做一个摄影项目："我来这里是为我正在做的项目拍些照片。"在之后的一次互动中，Sam 与 Latoya 的交谈表明他记得那次互动——他问道"嗨，Latoya。你的项目进展如何？"她回答"嗨，Sam。进展顺利！"
+
+##### 3.4.3 协作（Coordination）
+
+::: en
+Generative agents coordinate with each other. Isabella Rodriguez, at Hobbs Cafe, is initialized with an intent to plan a Valentine’s Day party from 5 to 7 p.m. on February 14th. From this seed, the agent proceeds to invite friends and customers when she sees them at Hobbs Cafe or elsewhere. Isabella then spends the afternoon of the 13th decorating the cafe for the occasion. Maria, a frequent customer and close friend of Isabella’s, arrives at the cafe. Isabella asks for Maria’s help in decorating for the party, and Maria agrees. Maria’s character description mentions that she has a crush on Klaus. That night, Maria invites Klaus, her secret crush, to join her at the party, and he gladly accepts.
+
+On Valentine’s Day, five agents, including Klaus and Maria, show up at Hobbs Cafe at 5 pm, and they enjoy the festivities (Figure 4). In this scenario, the end user only set Isabella’s initial intent to throw a party and Maria’s crush on Klaus: the social behaviors of spreading the word, decorating, asking each other out, arriving at the party, and interacting with each other at the party were initiated by the agent architecture.
+:::
+
+生成式 Agent 会彼此协作。Isabella Rodriguez 这位 Hobbs 咖啡馆的 Agent 被初始化了一个意图：在 2 月 14 日 17 点至 19 点筹办一场情人节派对。从这个种子出发，她在 Hobbs 咖啡馆或其他地方见到朋友与顾客时便邀请他们。Isabella 随后在 13 日下午为派对装饰咖啡馆。Maria——Isabella 的常客兼密友——来到咖啡馆，Isabella 请她帮忙布置派对，Maria 答应了。Maria 的角色描述中提到她暗恋 Klaus。当晚，Maria 邀请她暗恋的 Klaus 与她一同赴会，Klaus 欣然应允。
+
+情人节当天，包括 Klaus 与 Maria 在内的五个 Agent 于 17 点出现在 Hobbs 咖啡馆，共享盛会（图 4）。在这一情景中，终端用户只设定了两条信息：Isabella 办派对的初始意图、以及 Maria 对 Klaus 的暗恋。而扩散消息、布置场地、互相邀约、抵达派对并在派对上彼此互动这些社会行为，全部由 Agent 架构自发发起。
+
+[图 4: At the beginning of the simulation, one agent is initialized with an intent to organize a Valentine’s Day party. Despite many possible points of failure in the ensuing chain of events—agents might not act on that intent, might forget to tell others, might not remember to show up—the Valentine’s Day party does, in fact, occur, with a number of agents gathering and interacting.]
+
+图 4：模拟开始时，一个 Agent 被初始化了组织情人节派对的意图。尽管随之而来的事件链存在许多可能的失败点——Agent 可能不按该意图行动、可能忘记告诉他人、可能不记得到场——情人节派对最终还是办成了：若干 Agent 聚集在一起并展开互动。
+
+### 4 生成式 Agent 架构（Generative Agent Architecture）
+
+[图 5: Our generative agent architecture. Agents perceive their environment, and all perceptions are saved in a comprehensive record of the agent’s experiences called the memory stream. Based on their perceptions, the architecture retrieves relevant memories and uses those retrieved actions to determine an action. These retrieved memories are also used to form longer-term plans and create higher-level reflections, both of which are entered into the memory stream for future use.]
+
+图 5：我们的生成式 Agent 架构。Agent 感知环境，所有感知都被保存进一份 Agent 经历的完整记录——**记忆流（memory stream）**。架构基于这些感知检索相关记忆，并用检索到的内容决定动作。这些被检索的记忆还被用来形成更长期的计划与更高层的反思，二者都会写回记忆流以备后用。
+
+::: en
+Generative agents aim to provide a framework for behavior in an open world: one that can engage in interactions with other agents and react to changes in the environment. Generative agents take their current environment and past experiences as input and generate behavior as output. Underlying this behavior is a novel agent architecture that combines a large language model with mechanisms for synthesizing and retrieving relevant information to condition the language model’s output. Without these mechanisms, large language models can output behavior, but the resulting agents may not react based on the agent’s past experiences, may not make important inferences, and may not maintain long-term coherence. Challenges with long-term planning and coherence remain [19] even with today’s most performant models such as GPT-4. Because generative agents produce large streams of events and memories that must be retained, a core challenge of our architecture is to ensure that the most relevant pieces of the agent’s memory are retrieved and synthesized when needed.
+:::
+
+生成式 Agent 旨在为开放世界中的行为提供一个框架：一个能与其他 Agent 交互、并对环境变化做出反应的框架。生成式 Agent 以当前环境与过往经历为输入，以行为为输出。支撑这些行为的是一个全新的 Agent 架构，它把大语言模型与"合成并检索相关信息以约束语言模型输出"的机制相结合。若没有这些机制，大语言模型固然能输出行为，但所得的 Agent 可能无法基于其过往经历做出反应、可能无法做出重要推断、也可能无法维持长期连贯。即便采用今天性能最强的模型（如 GPT-4），长期规划与连贯性的挑战依然存在 [19]。由于生成式 Agent 会产生必须保留的海量事件与记忆流，本架构的一个核心挑战是：确保在需要时检索并合成 Agent 记忆中最相关的片段。
+
+::: en
+At the center of our architecture is the memory stream, a database that maintains a comprehensive record of an agent’s experience. From the memory stream, records are retrieved as relevant to plan the agent’s actions and react appropriately to the environment. Records are recursively synthesized into higher- and higher-level reflections that guide behavior. Everything in the architecture is recorded and reasoned over as a natural language description, allowing the architecture to leverage a large language model.
+
+Our current implementation utilizes the gpt3.5-turbo version of ChatGPT [77]. We expect that the architectural basics of generative agents—memory, planning, and reflection—will likely remain the same as language models improve. Newer language models (e.g., GPT-4) will continue to expand the expressive power and performance of the prompts that underpin generative agents. As of writing, however, GPT-4’s API was invitation-only, so our agents use ChatGPT.
+:::
+
+架构的中心是**记忆流（memory stream）**，一个维护 Agent 经历完整记录的数据库。从记忆流中，系统按相关性检索记录，用于规划 Agent 的行动并对环境做出恰当反应。记录被递归地合成为越来越高层的**反思（reflections）**以指导行为。架构中的一切都以自然语言描述记录并推理，从而使架构能够直接调用大语言模型。
+
+我们当前的实现使用 ChatGPT 的 gpt-3.5-turbo 版本 [77]。我们预期，随着语言模型进步，生成式 Agent 的架构基础——记忆、规划与反思——很可能保持不变。更新的语言模型（如 GPT-4）将继续扩展支撑生成式 Agent 的提示的表达力与性能。但截至撰写时，GPT-4 的 API 仅限邀请使用，因此我们的 Agent 使用 ChatGPT。
+
+#### 4.1 记忆与检索（Memory and Retrieval）
+
+[图 6: The memory stream comprises a large number of observations that are relevant and irrelevant to the agent’s current situation. Retrieval identifies a subset of these observations that should be passed to the language model to condition its response to the situation.]
+
+图 6：记忆流包含大量与 Agent 当前情境相关或不相关的观察。检索从中识别出一个应传递给语言模型的观察子集，用以约束其对情境的回应。
+
+::: en
+Challenge: Creating generative agents that can simulate human behavior requires reasoning about a set of experiences that is far larger than what should be described in a prompt, as the full memory stream can distract the model and does not even currently fit into the limited context window. Consider the Isabella agent answering the question, “What are you passionate about these days?” Summarizing all of Isabella’s experiences to fit in the limited context window of the language model produces an uninformative response, where Isabella discusses topics such as collaborations for events and projects and cleanliness and organization in a cafe. Instead of summarizing, the memory stream described below surfaces relevant memories, resulting in a more informative and specific response that mentions Isabella’s passion for making people feel welcome and included, planning events and creating an atmosphere that people can enjoy, such as the Valentine’s Day party.
+:::
+
+**挑战**：创建能模拟人类行为的生成式 Agent，需要处理的经历集合远大于一个提示所能描述的规模——完整的记忆流会干扰模型，甚至目前根本塞不进有限的上下文窗口。设想 Isabella 这个 Agent 回答问题："你最近热衷于什么？"若把 Isabella 的全部经历摘要后塞进语言模型有限的上下文窗口，得到的是一个缺乏信息量的回答：Isabella 只会谈论活动与项目的协作、咖啡馆的清洁与整理之类的话题。而不用摘要、改用下文描述的记忆流来呈现相关记忆，则能得到信息量大得多的具体回答：提到 Isabella 热衷于让人有宾至如归与被接纳之感、热衷于策划活动并营造人人可享受的氛围——比如那场情人节派对。
+
+::: en
+Approach: The memory stream maintains a comprehensive record of the agent’s experience. It is a list of memory objects, where each object contains a natural language description, a creation timestamp, and a most recent access timestamp. The most basic element of the memory stream is an observation, which is an event directly perceived by an agent. Common observations include behaviors performed by the agent themselves or behaviors that agents perceive being performed by other agents or non-agent objects. For instance, Isabella Rodriguez, who works at a coffee shop, might accrue the following observations over time: (1) Isabella Rodriguez is setting out the pastries, (2) Maria Lopez is studying for a Chemistry test while drinking coffee, (3) Isabella Rodriguez and Maria Lopez are conversing about planning a Valentine’s day party at Hobbs Cafe, (4) The refrigerator is empty.
+:::
+
+**方法**：记忆流维护 Agent 经历的完整记录。它是一个记忆对象列表，每个对象包含一段自然语言描述、一个创建时间戳与一个最近访问时间戳。记忆流中最基础的元素是**观察（observation）**，即 Agent 直接感知到的事件。常见的观察包括：Agent 自身执行的行为，或 Agent 感知到其他 Agent、非 Agent 物体正在执行的行为。例如，在咖啡馆工作的 Isabella Rodriguez 随时间推移可能积累如下观察：(1) Isabella Rodriguez 正在摆放糕点；(2) Maria Lopez 边喝咖啡边备考化学；(3) Isabella Rodriguez 与 Maria Lopez 正在谈论在 Hobbs 咖啡馆策划情人节派对；(4) 冰箱空了。
+
+::: en
+Our architecture implements a retrieval function that takes the agent’s current situation as input and returns a subset of the memory stream to pass on to the language model. There are many possible implementations of a retrieval function, depending on what is important for the agent to consider when deciding how to act. In our context, we focus on three main components that, together, produce effective results.
+
+Recency assigns a higher score to memory objects that were recently accessed, so that events from a moment ago or this morning are likely to remain in the agent’s attentional sphere. In our implementation, we treat recency as an exponential decay function over the number of sandbox game hours since the memory was last retrieved. Our decay factor is 0.995.
+:::
+
+我们的架构实现了一个检索函数：以 Agent 当前情境为输入，返回记忆流的一个子集传递给语言模型。检索函数有许多可能的实现，取决于 Agent 在决定如何行动时哪些内容值得考虑。在我们的场景中，我们聚焦三个共同产生有效结果的要素。
+
+**时近性（Recency）**为最近被访问过的记忆对象赋予更高分数，使刚才或今晨发生的事件更可能保留在 Agent 的注意范围内。在我们的实现中，时近性是一个随"距该记忆上次被检索以来的沙盒游戏小时数"呈指数衰减的函数，衰减因子为 0.995。
+
+::: en
+Importance distinguishes mundane from core memories by assigning a higher score to memory objects that the agent believes to be important. For instance, a mundane event, such as eating breakfast in one’s room, would yield a low importance score, whereas a breakup with one’s significant other would yield a high score. There are many possible implementations of an importance score; we find that directly asking the language model to output an integer score is effective. The full prompt appears below:
+
+On the scale of 1 to 10, where 1 is purely mundane (e.g., brushing teeth, making bed) and 10 is extremely poignant (e.g., a break up, college acceptance), rate the likely poignancy of the following piece of memory.
+Memory: buying groceries at The Willows Market and Pharmacy
+Rating: <fill in>
+
+This prompt returns an integer value of 2 for “cleaning up the room” and 8 for “asking your crush out on a date.” The importance score is generated at the time the memory object is created.
+:::
+
+**重要性（Importance）**通过给 Agent 认为重要的记忆对象打更高分，来区分琐碎记忆与核心记忆。例如，在自己房间里吃早餐这类琐碎事件会得到低重要性分数，而与伴侣分手则会得到高分。重要性分数有许多可能的实现；我们发现直接让语言模型输出一个整数分数是有效的。完整提示如下：
+
+```text
+On the scale of 1 to 10, where 1 is purely mundane (e.g., brushing teeth,
+making bed) and 10 is extremely poignant (e.g., a break up, college
+acceptance), rate the likely poignancy of the following piece of memory.
+Memory: buying groceries at The Willows Market and Pharmacy
+Rating: <fill in>
+```
+
+提示译文：在 1 到 10 的量表上（1 为纯日常琐事，如刷牙、整理床铺；10 为极度深刻，如分手、大学录取），评估下面这段记忆可能触动人心的程度。记忆：在 The Willows Market and Pharmacy 买杂货。评分：<填入>
+
+该提示对"打扫房间"返回整数值 2，对"约你暗恋的人出门约会"返回 8。重要性分数在记忆对象创建时生成。
+
+::: en
+Relevance assigns a higher score to memory objects that are related to the current situation. What is relevant depends on the answer to, “Relevant to what?”, so we condition relevance on a query memory. If the query, for example, is that a student is discussing what to study for a chemistry test with a classmate, memory objects about their breakfast should have low relevance, whereas memory objects about the teacher and schoolwork should have high relevance. In our implementation, we use the language model to generate an embedding vector of the text description of each memory. Then, we calculate relevance as the cosine similarity between the memory’s embedding vector and the query memory’s embedding vector.
+:::
+
+**相关性（Relevance）**给与当前情境相关的记忆对象打更高分。什么是"相关"取决于"相对于什么相关"这一问题的答案，因此我们让相关性以一条查询记忆（query memory）为条件。例如，若查询是"一个学生正在与同学讨论化学考试复习什么"，那么关于其早餐的记忆对象相关性应当很低，而关于老师与功课的记忆对象相关性应当很高。在我们的实现中，我们用语言模型为每条记忆的文本描述生成**嵌入向量（embedding vector）**；然后把相关性计算为该记忆的嵌入向量与查询记忆的嵌入向量之间的余弦相似度（cosine similarity）。
+
+::: en
+To calculate the final retrieval score, we normalize the recency, relevance, and importance scores to the range of [0, 1] using min-max scaling. The retrieval function scores all memories as a weighted combination of the three elements: 𝑠𝑐𝑜𝑟𝑒 = 𝛼𝑟𝑒𝑐𝑒𝑛𝑐𝑦 · 𝑟𝑒𝑐𝑒𝑛𝑐𝑦 + 𝛼𝑖𝑚𝑝𝑜𝑟𝑡𝑎𝑛𝑐𝑒 · 𝑖𝑚𝑝𝑜𝑟𝑡𝑎𝑛𝑐𝑒 + 𝛼𝑟𝑒𝑙𝑒𝑣𝑎𝑛𝑐𝑒 · 𝑟𝑒𝑙𝑒𝑣𝑎𝑛𝑐𝑒. In our implementation, all 𝛼s are set to 1. The top-ranked memories that fit within the language model’s context window are included in the prompt.
+:::
+
+计算最终检索分数时，我们用 min-max 缩放把时近性、相关性与重要性分数归一化到 [0, 1] 区间。检索函数把所有记忆按三要素的加权组合打分：
+
+$$score = \alpha_{recency} \cdot recency + \alpha_{importance} \cdot importance + \alpha_{relevance} \cdot relevance$$
+
+在我们的实现中，所有 $\alpha$ 均设为 1。排名最高、且能装进语言模型上下文窗口的记忆会被纳入提示。
+
+#### 4.2 反思（Reflection）
+
+[图 7: A reflection tree for Klaus Mueller. The agent’s observations of the world, represented in the leaf nodes, are recursively synthesized to derive Klaus’s self-notion that he is highly dedicated to his research.]
+
+图 7：Klaus Mueller 的一棵**反思树（reflection tree）**。Agent 对世界的观察表示在叶节点中，经递归合成推导出 Klaus 的自我认知：他对自己的研究高度投入。
+
+::: en
+Challenge: Generative agents, when equipped with only raw observational memory, struggle to generalize or make inferences. Consider a scenario in which Klaus Mueller is asked by the user: “If you had to choose one person of those you know to spend an hour with, who would it be?” With access to only observational memory, the agent simply chooses the person with whom Klaus has had the most frequent interactions: Wolfgang, his college dorm neighbor. Unfortunately, Wolfgang and Klaus only ever see each other in passing, and do not have deep interactions. A more desirable response requires that the agent generalize from memories of Klaus spending hours on a research project to generate a higher-level reflection that Klaus is passionate about research, and likewise recognize Maria putting in effort into her own research (albeit in a different field), enabling a reflection that they share a common interest. With the approach below, when Klaus is asked who to spend time with, Klaus chooses Maria instead of Wolfgang.
+:::
+
+**挑战**：只配备原始观察记忆的生成式 Agent 难以泛化或做出推断。设想用户问 Klaus Mueller："如果只能从你认识的人中选一个共度一小时，你会选谁？"若只有观察记忆可用，Agent 会径直选择与 Klaus 互动最频繁的人：他大学宿舍的邻居 Wolfgang。遗憾的是，Wolfgang 与 Klaus 只是偶尔碰面，并无深入交往。更理想的回答需要 Agent 从"Klaus 连续数小时投入研究项目"的记忆中泛化出"Klaus 对研究充满热情"这一更高层反思，并同样识别出 Maria 也在投入自己的研究（尽管领域不同），从而得出两人志趣相投的反思。采用下述方法后，当 Klaus 被问及与谁共度时光时，他选择的是 Maria 而非 Wolfgang。
+
+::: en
+Approach: We introduce a second type of memory, which we call a reflection. Reflections are higher-level, more abstract thoughts generated by the agent. Because they are a type of memory, they are included alongside other observations when retrieval occurs. Reflections are generated periodically; in our implementation, we generate reflections when the sum of the importance scores for the latest events perceived by the agents exceeds a threshold (150 in our implementation). In practice, our agents reflected roughly two or three times a day.
+:::
+
+**方法**：我们引入第二种记忆类型，称为**反思（reflection）**。反思是 Agent 生成的更高层、更抽象的想法。由于反思也是一种记忆，检索发生时它会与其他观察一同被纳入。反思周期性地生成；在我们的实现中，当 Agent 感知到的最新事件的重要性分数之和超过一个阈值（实现中为 150）时，就生成反思。实践中，我们的 Agent 每天大约反思两到三次。
+
+::: en
+The first step in reflection is for the agent to determine what to reflect on, by identifying questions that can be asked given the agent’s recent experiences. We query the large language model with the 100 most recent records in the agent’s memory stream (e.g., “Klaus Mueller is reading a book on gentrification”, “Klaus Mueller is conversing with a librarian about his research project”, “desk at the library is currently unoccupied”) and prompt the language model, “Given only the information above, what are 3 most salient high-level questions we can answer about the subjects in the statements?” The model’s response generates candidate questions: for example, What topic is Klaus Mueller passionate about? and What is the relationship between Klaus Mueller and Maria Lopez? We use these generated questions as queries for retrieval, and gather relevant memories (including other reflections) for each question. Then we prompt the language model to extract insights and cite the particular records that served as evidence for the insights. The full prompt is as follows:
+
+Statements about Klaus Mueller
+1. Klaus Mueller is writing a research paper
+2. Klaus Mueller enjoys reading a book on gentrification
+3. Klaus Mueller is conversing with Ayesha Khan about exercising [...]
+What 5 high-level insights can you infer from the above statements? (example format: insight (because of 1, 5, 3))
+:::
+
+反思的第一步是让 Agent 确定**反思什么**：根据其近期经历识别出可以提出的问题。我们用 Agent 记忆流中最近的 100 条记录（例如"Klaus Mueller 正在读一本关于绅士化的书""Klaus Mueller 正在与一位图书馆员谈论他的研究项目""图书馆的书桌目前空着"）查询大语言模型，并提示："仅基于以上信息，关于陈述中的主体，我们能回答的 3 个最显著的高层问题是什么？"模型的响应会生成候选问题，例如："Klaus Mueller 对什么话题充满热情？""Klaus Mueller 与 Maria Lopez 是什么关系？"我们把这些生成的问题用作检索的查询，为每个问题汇集相关记忆（包括其他反思）。然后我们提示语言模型提取洞见，并**引用作为洞见证据的具体记录**。完整提示如下：
+
+```text
+Statements about Klaus Mueller
+1. Klaus Mueller is writing a research paper
+2. Klaus Mueller enjoys reading a book on gentrification
+3. Klaus Mueller is conversing with Ayesha Khan about exercising [...]
+What 5 high-level insights can you infer from the above statements?
+(example format: insight (because of 1, 5, 3))
+```
+
+提示译文：关于 Klaus Mueller 的陈述：1. Klaus Mueller 正在写一篇研究论文；2. Klaus Mueller 喜欢读一本关于绅士化的书；3. Klaus Mueller 正在与 Ayesha Khan 谈论锻炼 […]。从上述陈述中你能推断出哪 5 条高层洞见？（示例格式：洞见（依据 1、5、3））
+
+::: en
+This process generates statements such as Klaus Mueller is dedicated to his research on gentrification (because of 1, 2, 8, 15). We parse and store the statement as a reflection in the memory stream, including pointers to the memory objects that were cited.
+
+Reflection explicitly allows the agents to reflect not only on their observations but also on other reflections: for example, the second statement about Klaus Mueller above is a reflection that Klaus previously had, not an observation from his environment. As a result, agents generate trees of reflections: the leaf nodes of the tree represent the base observations, and the non-leaf nodes represent thoughts that become more abstract and higher-level the higher up the tree they are.
+:::
+
+该过程生成诸如"Klaus Mueller 致力于他关于绅士化的研究（依据 1、2、8、15）"的陈述。我们解析该陈述，把它作为一条**反思**存入记忆流，并保留指向被引用记忆对象的指针。
+
+反思机制显式地允许 Agent 不仅对自己的观察做反思，也可以对其他反思做反思：例如，上面关于 Klaus Mueller 的第二条陈述本身就是 Klaus 此前的一条反思，而非来自环境的观察。因此，Agent 会生成**反思树（trees of reflections）**：树的叶节点代表基础观察，非叶节点代表想法——且在树中所处位置越高，想法越抽象、层级越高。
+
+#### 4.3 规划与反应（Planning and Reacting）
+
+::: en
+Challenge: While a large language model can generate plausible behavior in response to situational information (e.g., [46, 80]), agents need to plan over a longer time horizon to ensure that their sequence of actions is coherent and believable. If we prompt a language model with Klaus’s background, describe the time, and ask what action he ought to take at the given moment, Klaus would eat lunch at 12 pm, but then again at 12:30 pm and 1 pm, despite having already eaten his lunch twice. Optimizing for believability in the moment sacrifices believability over time. To overcome this issue, planning is essential. With the approach described below, Klaus’s afternoon plan is less gluttonous: he has lunch at Hobbs Cafe while reading at 12pm, works on his research paper at the school library at 1pm, and takes a break for a walk in the park at 3pm.
+:::
+
+**挑战**：虽然大语言模型能针对情境信息生成貌似合理的行为（如 [46, 80]），但 Agent 需要在更长的时间跨度上规划，以确保其动作序列连贯而可信。如果我们用 Klaus 的背景提示语言模型、描述当前时间、并问他在该时刻应当采取什么动作，Klaus 会在 12 点吃午饭，然后在 12:30 和 13 点再次吃午饭——尽管已经吃过两顿。为当下的可信度做优化，牺牲的是长期的可信度。要克服这一问题，规划必不可少。采用下述方法后，Klaus 的下午计划不再那么贪吃：12 点在 Hobbs 咖啡馆边读书边吃午饭，13 点到学校图书馆写研究论文，15 点休息、去公园散步。
+
+::: en
+Approach: Plans describe a future sequence of actions for the agent, and help keep the agent’s behavior consistent over time. A plan includes a location, a starting time, and a duration. For instance, Klaus Mueller, who is dedicated in his research and has an impending deadline,5 may choose to spend his day working at his desk drafting his research paper. An entry in a plan might state, for example: for 180 minutes from 9am, February 12th, 2023, at Oak Hill College Dorm: Klaus Mueller’s room: desk, read and take notes for research paper. Like reflections, plans are stored in the memory stream and are included in the retrieval process. This allows the agent to consider observations, reflections, and plans all together when deciding how to behave. Agents may change their plans midstream if needed.
+:::
+
+**方法**：**计划（plans）**描述 Agent 未来的动作序列，帮助其行为随时间保持一致。一份计划包含地点、开始时间与时长。例如，潜心研究、截稿在即 [^fn5] 的 Klaus Mueller 可能选择花一天时间坐在书桌前撰写研究论文。计划中的一个条目或许会这样表述：自 2023 年 2 月 12 日上午 9 点起 180 分钟，在 Oak Hill 学院宿舍 Klaus Mueller 的房间书桌：阅读并为研究论文做笔记。与反思一样，计划也存入记忆流并纳入检索过程。这使 Agent 在决定如何行动时能把观察、反思与计划放在一起考虑。必要时，Agent 可以中途更改计划。
+
+[^fn5]: 脚注 5 原文：And, in this way, bears at least a passing resemblance to the authors of this paper.（而且，这么看来，他与本文作者们至少有几分神似。）
+
+::: en
+It would be unrealistic and uninteresting for an artist agent to plan on painting while sitting at a pharmacy counter for four hours without moving. A more desirable plan would involve the agent taking the necessary time to gather materials, mix paint, take breaks, and clean up during the four-hour period in their home studio. To create such plans, our approach starts top-down and then recursively generates more detail. The first step is to create a plan that outlines the day’s agenda in broad strokes. To create the initial plan, we prompt the language model with the agent’s summary description (e.g., name, traits, and a summary of their recent experiences) and a summary of their previous day. A full example prompt is below, which is unfinished at the bottom for the language model to complete:
+
+Name: Eddy Lin (age: 19)
+Innate traits: friendly, outgoing, hospitable
+Eddy Lin is a student at Oak Hill College studying music theory and composition. He loves to explore different musical styles and is always looking for ways to expand his knowledge. Eddy Lin is working on a composition project for his college class. He is taking classes to learn more about music theory. Eddy Lin is excited about the new composition he is working on but he wants to dedicate more hours in the day to work on it in the coming days
+On Tuesday February 12, Eddy 1) woke up and completed the morning routine at 7:00 am, [...] 6) got ready to sleep around 10 pm.
+Today is Wednesday February 13. Here is Eddy’s plan today in broad strokes: 1)
+:::
+
+让一个艺术家 Agent 计划"在药房柜台后一动不动坐四个小时画画"既不真实也无趣。更理想的计划应让 Agent 在这四小时里，于家中画室从容地取材料、调颜料、中途休息并收拾。为生成这样的计划，我们的方法**自顶向下**开始、随后递归生成更多细节。第一步是创建一份粗线条勾勒当日日程的计划。为创建初始计划，我们用 Agent 的概要描述（如姓名、特质与近期经历摘要）及其前一天的摘要来提示语言模型。完整示例如下，末尾留白由语言模型补全：
+
+```text
+Name: Eddy Lin (age: 19)
+Innate traits: friendly, outgoing, hospitable
+Eddy Lin is a student at Oak Hill College studying music theory and
+composition. He loves to explore different musical styles and is always
+looking for ways to expand his knowledge. Eddy Lin is working on a
+composition project for his college class. He is taking classes to learn
+more about music theory. Eddy Lin is excited about the new composition he
+is working on but he wants to dedicate more hours in the day to work on it
+in the coming days
+On Tuesday February 12, Eddy 1) woke up and completed the morning routine
+at 7:00 am, [...] 6) got ready to sleep around 10 pm.
+Today is Wednesday February 13. Here is Eddy’s plan today in broad
+strokes: 1)
+```
+
+提示译文：姓名：Eddy Lin（19 岁）。固有特质：友善、外向、好客。Eddy Lin 是 Oak Hill 学院的学生，学习音乐理论与作曲。他热爱探索不同音乐风格，总是在寻找扩充知识的途径。Eddy Lin 正在为大学课程做一个作曲项目，并修读课程以深入了解音乐理论。Eddy Lin 对正在创作的新作品感到兴奋，但想在接下来的日子里每天投入更多时间。2 月 12 日（周二），Eddy：1) 早上 7:00 醒来并完成晨间例程 […] 6) 约 22:00 准备就寝。今天是 2 月 13 日（周三）。以下是 Eddy 今天粗线条的计划：1)
+
+::: en
+This generates a rough sketch of the agent’s plan for a day, divided into five to eight chunks: “1) wake up and complete the morning routine at 8:00 am, 2) go to Oak Hill College to take classes starting 10:00 am, [...] 5) work on his new music composition from 1:00 pm to 5:00 pm, 6) have dinner at 5:30 pm, 7) finish school assignments and go to bed by 11:00 pm.”
+
+The agent saves this plan in the memory stream and then recursively decomposes it to create finer-grained actions, first into hour-long chunks of actions—Eddy’s plan to work on his new music composition from 1:00 pm to 5:00 pm becomes 1:00 pm: start by brainstorming some ideas for his music composition [...] 4:00 pm: take a quick break and recharge his creative energy before reviewing and polishing his composition. We then recursively decompose this again into 5–15 minute chunks: e.g., 4:00 pm: grab a light snack, such as a piece of fruit, a granola bar, or some nuts. 4:05 pm: take a short walk around his workspace [...] 4:50 pm: take a few minutes to clean up his workspace. This process can be adjusted to match the desired granularity.
+:::
+
+这会生成 Agent 一天计划的粗略草稿，分成五到八块："1) 8:00 醒来并完成晨间例程；2) 10:00 起去 Oak Hill 学院上课 […] 5) 13:00–17:00 创作他的新音乐作品；6) 17:30 吃晚饭；7) 23:00 前完成学校作业并上床睡觉。"
+
+Agent 把这份计划存入记忆流，然后递归分解它以创建更细粒度的动作：首先分解成小时级的动作块——Eddy"13:00–17:00 创作新音乐作品"的计划变为"13:00 先为他的音乐创作头脑风暴一些点子 […] 16:00 短暂休息、恢复创作精力，然后回顾并润色作品"。接着我们再次递归分解为 5–15 分钟级的块：例如"16:00 吃点轻食，比如一个水果、一根燕麦棒或一些坚果；16:05 在工作区附近散个步 […] 16:50 花几分钟清理工作区"。该流程可以按所需粒度调整。
+
+##### 4.3.1 反应与计划更新（Reacting and Updating Plans）
+
+::: en
+Generative agents operate in an action loop where, at each time step, they perceive the world around them and those perceived observations are stored in their memory stream. We prompt the language model with these observations to decide whether the agent should continue with their existing plan, or react. Standing at an easel and painting, for example, might trigger an observation of the easel, but this is unlikely to prompt a reaction. However, if Eddy’s father John records that he sees Eddy taking a short walk in the house garden, the outcome is different. The prompt is below, with [Agent’s Summary Description] standing in for a dynamically-generated, paragraph-long summary of the agent’s overall goals and disposition, which is described in Appendix A:
+
+[Agent’s Summary Description]
+It is February 13, 2023, 4:56 pm.
+John Lin’s status: John is back home early from work.
+Observation: John saw Eddy taking a short walk around his workplace.
+Summary of relevant context from John’s memory:
+Eddy Lin is John’s Lin’s son. Eddy Lin has been working on a music composition for his class. Eddy Lin likes to walk around the garden when he is thinking about or listening to music.
+Should John react to the observation, and if so, what would be an appropriate reaction?
+:::
+
+生成式 Agent 运行在一个**行动循环（action loop）**中：每个时间步，他们感知周围世界，感知到的观察被存入记忆流。我们用这些观察提示语言模型，判断 Agent 应继续执行现有计划，还是做出反应。例如，站在画架前作画可能触发对画架的观察，但这不太可能引发反应。然而，若 Eddy 的父亲 John 记录到他看见 Eddy 在自家花园里散步，结果就不同了。提示如下，其中 [Agent's Summary Description]（Agent 概要描述）代表一段动态生成的、约一段话长的 Agent 总体目标与性情摘要，其生成方式见附录 A：
+
+```text
+[Agent’s Summary Description]
+It is February 13, 2023, 4:56 pm.
+John Lin’s status: John is back home early from work.
+Observation: John saw Eddy taking a short walk around his workplace.
+Summary of relevant context from John’s memory:
+Eddy Lin is John’s Lin’s son. Eddy Lin has been working on a music
+composition for his class. Eddy Lin likes to walk around the garden when
+he is thinking about or listening to music.
+Should John react to the observation, and if so, what would be an
+appropriate reaction?
+```
+
+提示译文：[Agent 概要描述]。现在是 2023 年 2 月 13 日 16:56。John Lin 的状态：John 提早下班回到家。观察：John 看到 Eddy 在他的工作区附近散步。来自 John 记忆的相关情境摘要：Eddy Lin 是 John Lin 的儿子；Eddy Lin 一直在为课程创作一首音乐作品；Eddy Lin 思考或听音乐时喜欢在花园里散步。John 应否对该观察做出反应？若要反应，怎样的反应才恰当？
+
+::: en
+The context summary is generated through two prompts that retrieve memories via the queries “What is [observer]’s relationship with the [observed entity]?” and “[Observed entity] is [action status of the observed entity]”, and their answers summarized together. The output suggests that John could consider asking Eddy about his music composition project. We then regenerate the agent’s existing plan starting from the time when the reaction takes place. Finally, if the action indicates an interaction between agents, we generate their dialogue.
+:::
+
+情境摘要由两个提示生成：分别以"[观察者]与[被观察实体]是什么关系？"和"[被观察实体]正在[被观察实体的动作状态]"为查询检索记忆，再把两者的答案汇总在一起。输出表明 John 可以考虑问问 Eddy 的音乐创作项目。随后，我们从反应发生的时刻起重新生成该 Agent 的现有计划。最后，若该动作表明 Agent 之间将发生互动，我们就生成他们的对话。
+
+##### 4.3.2 对话（Dialogue）
+
+::: en
+Agents converse as they interact with each other. We generate agents’ dialogue by conditioning their utterances on their memories about each other. For example, when John initiates his conversation with Eddy, we generate John’s first utterance by using his summarized memory about Eddy and the intended reaction when he decided to ask Eddy about his composition project:
+
+[Agent’s Summary Description]
+It is February 13, 2023, 4:56 pm.
+John Lin’s status: John is back home early from work.
+Observation: John saw Eddy taking a short walk around his workplace.
+Summary of relevant context from John’s memory:
+Eddy Lin is John’s Lin’s son. Eddy Lin has been working on a music composition for his class. Eddy Lin likes to walk around the garden when he is thinking about or listening to music.
+John is asking Eddy about his music composition project. What would he say to Eddy?
+:::
+
+Agent 在彼此互动时交谈。我们生成 Agent 对话的方式，是让他们的发言以其对彼此的记忆为条件。例如，当 John 主动与 Eddy 交谈时，我们用 John 对 Eddy 的记忆摘要、以及他决定问 Eddy 创作项目时的预期反应，来生成 John 的第一句话：
+
+```text
+[Agent’s Summary Description]
+It is February 13, 2023, 4:56 pm.
+John Lin’s status: John is back home early from work.
+Observation: John saw Eddy taking a short walk around his workplace.
+Summary of relevant context from John’s memory:
+Eddy Lin is John’s Lin’s son. Eddy Lin has been working on a music
+composition for his class. Eddy Lin likes to walk around the garden when
+he is thinking about or listening to music.
+John is asking Eddy about his music composition project. What would he say
+to Eddy?
+```
+
+提示译文：[Agent 概要描述]。现在是 2023 年 2 月 13 日 16:56。John Lin 的状态：John 提早下班回到家。观察：John 看到 Eddy 在工作区附近散步。来自 John 记忆的相关情境摘要：（同上）。John 要去问 Eddy 他的音乐创作项目。他会对 Eddy 说什么？
+
+::: en
+The result: “Hey Eddy, how’s the music composition project for your class coming along?” From Eddy’s perspective, John initiating the dialogue is seen as an event to which he may want to react. So, just as John did, Eddy retrieves and summarizes his memory about his relationship with John, as well as his memory that may be related to John’s last utterance in the dialogue. If he decides to respond, we generate Eddy’s utterance using his summarized memory and the current dialogue history:
+
+[Agent’s Summary Description]
+It is February 13, 2023, 4:56 pm.
+Eddy Lin’s status: Eddy is taking a short walk around his workplace.
+Observation: John is initiating a conversation with Eddy.
+Summary of relevant context from Eddy’s memory:
+John Lin is Eddy Lin’s father. John Lin is caring and is interested to learn more about Eddy Lin’s school work. John Lin knows that Eddy Lin is working on a music composition.
+Here is the dialogue history:
+John: Hey Eddy, how’s the music composition project for your class coming along?
+How would Eddy respond to John?
+:::
+
+结果是："嘿 Eddy，你课程的音乐创作项目进展如何？"从 Eddy 的视角看，John 主动发起对话是一个他可能想要回应的事件。于是，与 John 的做法一样，Eddy 检索并摘要他与 John 关系的记忆，以及可能与 John 上一句话相关的记忆。如果他决定回应，我们就用他的记忆摘要与当前对话历史生成 Eddy 的发言：
+
+```text
+[Agent’s Summary Description]
+It is February 13, 2023, 4:56 pm.
+Eddy Lin’s status: Eddy is taking a short walk around his workplace.
+Observation: John is initiating a conversation with Eddy.
+Summary of relevant context from Eddy’s memory:
+John Lin is Eddy Lin’s father. John Lin is caring and is interested to
+learn more about Eddy Lin’s school work. John Lin knows that Eddy Lin is
+working on a music composition.
+Here is the dialogue history:
+John: Hey Eddy, how’s the music composition project for your class coming
+      along?
+How would Eddy respond to John?
+```
+
+提示译文：[Agent 概要描述]。现在是 2023 年 2 月 13 日 16:56。Eddy Lin 的状态：Eddy 正在工作区附近散步。观察：John 正在与 Eddy 攀谈。来自 Eddy 记忆的相关情境摘要：John Lin 是 Eddy Lin 的父亲；John Lin 很关心 Eddy，有兴趣更多了解他的学业；John Lin 知道 Eddy Lin 正在创作一首音乐作品。以下是对话历史——John：嘿 Eddy，你课程的音乐创作项目进展如何？Eddy 会如何回应 John？
+
+::: en
+This generates Eddy’s response: “Hey Dad, it’s going well. I’ve been taking walks around the garden to clear my head and get some inspiration.” The continuation of this dialogue is generated using the same mechanism until one of the two agents decides to end the dialogue.
+:::
+
+由此生成 Eddy 的回应："嘿爸爸，进展不错。我一直在花园里散步，清空脑袋、找点灵感。"对话的后续内容用同一机制生成，直到两个 Agent 之一决定结束对话。
+
+### 5 沙盒环境实现（Sandbox Environment Implementation）
+
+::: en
+The Smallville sandbox game environment is built using the Phaser web game development framework [57]. The visual environment sprites, including agent avatars, as well as an environment map and collision map that we authored, are imported into Phaser.
+
+We supplement the sandbox development framework with a server that makes the sandbox information available to generative agents and enables generative agents to move and influence the sandbox environment. The server maintains a JSON data structure that contains information about each agent in the sandbox world, including their current location, a description of their current action, and the sandbox object they are interacting with. At each sandbox time step, the sandbox server parses the JSON for any changes coming from the generative agents, moves the agents to their new positions, and updates the status of any sandbox objects that the agents are interacting with (e.g., changing the status of the coffee machine from “idle” to “brewing coffee” if an agent’s action is “making espresso for a customer @ Hobbs Cafe: counter: coffee machine”). The sandbox server is also responsible for sending all agents and objects that are within a preset visual range for each agent to that agent’s memory, so the agent can react appropriately. The agent’s output action then updates the JSON, and the process loops for the next time step.
+
+End users initialize a new agent with a brief natural language description, as in the paragraph about John Lin in Section 3.1. In our implementation, we split this semicolon-delimited list of characteristics up into a set of memories. These serve as the initial memories that determine the agent’s behavior. These memories are initial starting points: as the agents gain more experience in the sandbox world, and as more records saturate the memory stream, the agent’s summary and behavior will evolve.
+:::
+
+Smallville 沙盒游戏环境使用 Phaser 网页游戏开发框架 [57] 构建。我们创作的视觉环境精灵图（包括 Agent 头像）、环境地图与碰撞地图都被导入 Phaser。
+
+我们在沙盒开发框架之外补充了一个服务器，把沙盒信息提供给生成式 Agent，并使生成式 Agent 能够移动并影响沙盒环境。服务器维护一个 JSON 数据结构，包含沙盒世界中每个 Agent 的信息：当前位置、当前动作的描述，以及正在交互的沙盒物体。每个沙盒时间步，沙盒服务器解析 JSON 中来自生成式 Agent 的变更，把 Agent 移动到新位置，并更新 Agent 正在交互的沙盒物体的状态（例如，若某 Agent 的动作是"在 Hobbs 咖啡馆为顾客制作浓缩咖啡 @ Hobbs Cafe: counter: coffee machine"，则把咖啡机状态从"空闲"改为"正在煮咖啡"）。沙盒服务器还负责把每个 Agent 预设视野范围内的所有 Agent 与物体发送到该 Agent 的记忆中，使其能做出恰当反应。Agent 输出的动作随后更新 JSON，流程进入下一个时间步循环往复。
+
+终端用户用一段简短的自然语言描述初始化新 Agent，如 3.1 节关于 John Lin 的那段。在我们的实现中，我们把这份以分号分隔的特征列表拆分成一组记忆。它们作为决定 Agent 行为的初始记忆。这些记忆只是初始起点：随着 Agent 在沙盒世界中积累更多经历、随着更多记录填充记忆流，Agent 的概要与行为都会演化。
+
+#### 5.1 从结构化世界环境到自然语言，再回到结构化（From Structured World Environments to Natural Language, and Back Again）
+
+::: en
+The architecture of generative agents operates using natural language. Therefore, we need a mechanism to ground the agent’s reasoning to the sandbox world. To achieve this, we represent the sandbox environment—areas and objects—as a tree data structure, with an edge in the tree indicating a containment relationship in the sandbox world. We convert this tree into natural language to pass to the generative agents. For instance, “stove” being a child of “kitchen” is rendered into “there is a stove in the kitchen.”
+
+Agents build individual tree representations of the environment as they navigate it — subgraphs of the overall sandbox environment tree. We initialize each agent with an environment tree capturing the spaces and objects that the agent should be aware of: the rooms and objects in their living quarters, their workplace, and commonly visited stores and shops. As the agents navigate the sandbox world, they update this tree to reflect newly perceived areas. Agents are not omniscient: their tree may get out of date as they leave an area, and is updated when they re-enter the area.
+:::
+
+生成式 Agent 的架构以自然语言运作。因此，我们需要一种机制把 Agent 的推理**接地（ground）**到沙盒世界。为此，我们把沙盒环境——区域与物体——表示为树形数据结构，树中的边表示沙盒世界中的包含关系。我们把这棵树转换为自然语言传给生成式 Agent。例如，"炉子"是"厨房"的子节点，会被渲染成"厨房里有一台炉子"。
+
+Agent 在环境中导航时会各自构建环境的树表示——整体沙盒环境树的**子图（subgraphs）**。我们为每个 Agent 初始化一棵环境树，涵盖其应当知道的空间与物体：居所的房间与物件、工作场所、以及常去的商店店铺。随着 Agent 在沙盒世界中移动，他们会更新这棵树以反映新感知到的区域。Agent 并非全知：离开某区域后其树可能过时，重入该区域时再行更新。
+
+::: en
+To determine the appropriate location for each action, we traverse the agent’s stored environment tree and flatten a portion of it into natural language to prompt the language model. Recursively starting at the root of the agent’s environment tree, we prompt the model to find the most suitable area. For example, if Eddy’s agent indicated that he should take a short walk around his workspace:
+
+[Agent’s Summary Description]
+Eddy Lin is currently in The Lin family’s house: Eddy Lin’s bedroom: desk) that has Mei and John Lin’s bedroom, Eddy Lin’s bedroom, common room, kitchen, bathroom, and garden.
+Eddy Lin knows of the following areas: The Lin family’s house, Johnson Park, Harvey Oak Supply Store, The Willows Market and Pharmacy, Hobbs Cafe, The Rose and Crown Pub.
+* Prefer to stay in the current area if the activity can be done there.
+Eddy Lin is planning to take a short walk around his workspace. Which area should Eddy Lin go to?
+:::
+
+为确定每个动作的合适地点，我们遍历 Agent 存储的环境树，把其中一部分展平为自然语言去提示语言模型。从 Agent 环境树的根节点开始递归，提示模型找出最合适的区域。例如，若 Eddy 的 Agent 表示他要在工作区附近散个步：
+
+```text
+[Agent’s Summary Description]
+Eddy Lin is currently in The Lin family’s house: Eddy Lin’s bedroom: desk)
+that has Mei and John Lin’s bedroom, Eddy Lin’s bedroom, common room,
+kitchen, bathroom, and garden.
+Eddy Lin knows of the following areas: The Lin family’s house, Johnson
+Park, Harvey Oak Supply Store, The Willows Market and Pharmacy, Hobbs
+Cafe, The Rose and Crown Pub.
+* Prefer to stay in the current area if the activity can be done there.
+Eddy Lin is planning to take a short walk around his workspace. Which area
+should Eddy Lin go to?
+```
+
+提示译文：[Agent 概要描述]。Eddy Lin 当前位于 Lin 家：Eddy Lin 的卧室：书桌；该住宅包含 Mei 与 John Lin 的卧室、Eddy Lin 的卧室、公共活动室、厨房、卫生间与花园。Eddy Lin 知道以下区域：Lin 家、Johnson 公园、Harvey Oak 用品店、The Willows Market and Pharmacy、Hobbs 咖啡馆、The Rose and Crown 酒吧。* 若活动可在当前区域进行，则优先留在当前区域。Eddy Lin 计划在工作区附近散个步。Eddy Lin 应该去哪个区域？
+
+::: en
+This outputs The Lin family’s house. We then use the same process recursively to determine the most appropriate subarea within the chosen area until we reach a leaf node of the agent’s environment tree. In the example above, the result of this traversal is The Lin family’s house: garden: house garden. Finally, we use traditional game path algorithms to animate the agent’s movement so that it travels to the location indicated by the leaf node.
+
+When an agent executes an action on an object, we prompt the language model to ask what happens to the state of the object. For example, if Isabella’s generative agent outputs the action “making espresso for a customer”, a query to the language model indicates in response that the state of the coffee machine in Hobbs Cafe should change from “off” to “brewing coffee”.
+:::
+
+输出为"Lin 家"。随后我们用同一流程递归地在选定区域内确定最合适的子区域，直到抵达 Agent 环境树的叶节点。在上例中，遍历结果是"Lin 家: 花园: 宅旁花园"。最后，我们用传统游戏寻路算法为 Agent 的移动生成动画，使其前往叶节点所指的位置。
+
+当 Agent 对某个物体执行动作时，我们提示语言模型询问该物体的状态会发生什么变化。例如，若 Isabella 的生成式 Agent 输出动作"为顾客制作浓缩咖啡"，对语言模型的查询会表明：Hobbs 咖啡馆咖啡机的状态应从"关闭"变为"正在煮咖啡"。
+
+### 6 受控评估（Controlled Evaluation）
+
+::: en
+Generative agents, both as individual agents and as groups, aim to produce believable behavior based on their environment and experiences. In our evaluation, we investigate the capacity and limitations of generative agents. Do individual agents properly retrieve past experiences and generate believable plans, reactions, and thoughts that shape their behavior? Does a community of agents demonstrate information diffusion, relationship formation, and agent coordination across different pockets of the community?
+
+We evaluate generative agents in two stages. We begin with a more tightly controlled evaluation in this section, where we individually assess agent responses to understand whether they generate believable behavior in narrowly defined contexts. Then, in our end-to-end analysis of the agent community over two full game days, we investigate their emergent behavior as a collective, as well as errors and boundary conditions.
+:::
+
+生成式 Agent——无论作为个体还是群体——都旨在基于其环境与经历产生可信行为。在评估中，我们考察生成式 Agent 的能力与局限。个体 Agent 能否恰当检索过往经历，并生成塑造其行为的可信计划、反应与想法？Agent 社区能否在群体的不同角落展现出信息扩散、关系形成与 Agent 协作？
+
+我们分两个阶段评估生成式 Agent。本节先进行更严格受控的评估，逐一检视 Agent 的回答，理解其在狭义界定的情境中是否产生可信行为。随后，在为期两个完整游戏日的 Agent 社区端到端分析中，我们考察其作为集体的涌现行为，以及错误与边界条件。
+
+#### 6.1 评估流程（Evaluation Procedure）
+
+::: en
+To assess generative agents in Smallville, we take advantage of the fact that generative agents will respond to natural language questions. So, we “interview” agents to probe their ability to remember past experiences, plan future actions based on their experiences, react appropriately to unexpected events, and reflect on their performance to improve their future actions. To respond to these questions properly, the agents must successfully retrieve and synthesize information. Our dependent variable is the believability of the behavior, a central dependent variable in prior work on agents (e.g., [10]).
+
+The interview includes five question categories, each designed to assess one of the five key areas: maintaining self-knowledge, retrieving memory, generating plans, reacting, and reflecting. For each category, we ask five questions that challenge the agents to demonstrate their abilities in that specific area:
+
+• Self-knowledge: We ask questions such as “Give an introduction of yourself” or “Describe your typical weekday schedule in broad strokes” that require the agent to maintain an understanding of their core characteristics.
+
+• Memory: We ask questions that prompt the agent to retrieve particular events or dialogues from their memory to answer properly, such as “Who is [name]?” or “Who is running for mayor?”
+
+• Plans: We ask questions that require the agent to retrieve their long-term plans, such as “What will you be doing at 10 am tomorrow?”
+
+• Reactions: As a baseline of believable behavior, we present hypothetical situations for which the agent needs to respond believably: “Your breakfast is burning! What would you do?”
+
+• Reflections: We ask questions that require the agents to leverage their deeper understanding of others and themselves gained through higher-level inferences, such as “If you were to spend time with one person you met recently, who would it be and why?”
+
+The full list of questions and a sample of agent responses are included in Appendix B.
+:::
+
+为评估 Smallville 中的生成式 Agent，我们利用了"生成式 Agent 会回答自然语言问题"这一事实。于是，我们**访谈（interview）**Agent，探测其记住过往经历、基于经历规划未来行动、对意外事件恰当反应、以及反思自身表现以改进未来行动的能力。要正确回答这些问题，Agent 必须成功检索并合成信息。我们的因变量是行为的**可信度（believability）**，这也是先前 Agent 研究（如 [10]）中的核心因变量。
+
+访谈包含五个问题类别，分别考察五个关键领域：维持自我知识、检索记忆、生成计划、做出反应与进行反思。每个类别我们各设五个问题，挑战 Agent 在该领域展示其能力：
+
+- **自我知识（Self-knowledge）**：问诸如"介绍一下你自己"或"粗略描述你典型工作日的日程"这类要求 Agent 维持对自身核心特征理解的问题。
+- **记忆（Memory）**：问需要 Agent 从记忆中检索特定事件或对话才能正确作答的问题，如"[某人名]是谁？"或"谁在竞选村长？"
+- **计划（Plans）**：问需要 Agent 检索其长期计划的问题，如"明天上午 10 点你会做什么？"
+- **反应（Reactions）**：作为可信行为的基线，我们呈现需要 Agent 做出可信回应的假想情境："你的早餐烧糊了！你会怎么做？"
+- **反思（Reflections）**：问需要 Agent 利用其通过高层推断获得的、对他人与自身更深层理解的问题，如"如果要与你最近认识的一人共度时光，你会选谁、为什么？"
+
+完整问题列表与 Agent 回答样例见附录 B。
+
+::: en
+Agents were sampled from the end of a two game day simulation with the full architecture, during which they had accumulated a number of interactions and memories that would shape their responses. To gather feedback on the believability of the responses, we recruited participants as human evaluators and tasked them with watching a replay of a randomly chosen agent’s life in Smallville. Participants had access to all information stored in the agent’s memory stream.
+
+The study followed a within-subjects design, where 100 participants compared interview responses generated by four different agent architectures and a human-authored condition for the same agent. The experiment displayed one randomly chosen question from each of the five question categories, along with the agent’s responses generated from all conditions. The evaluators ranked the believability of the conditions from most to least believable.
+:::
+
+Agent 取自完整架构运行两个游戏日后的模拟末端状态，其间他们已积累了大量将塑造其回答的互动与记忆。为收集对回答可信度的反馈，我们招募参与者作为人类评估者，任务是观看一个随机选定 Agent 在 Smallville 的生活回放。参与者可以访问该 Agent 记忆流中存储的全部信息。
+
+本研究采用**被试内设计（within-subjects design）**：100 名参与者对同一个 Agent 在四种不同 Agent 架构加一个人工撰写条件下的访谈回答进行比较。实验从五个问题类别中各随机展示一个问题，并给出该 Agent 在所有条件下生成的回答。评估者按可信度从高到低对各条件排序。
+
+#### 6.2 条件（Conditions）
+
+::: en
+All conditions were used to independently answer each of the interview questions. We compared the generative agent architecture to ablations that disabled the agents’ access to some or all of its three types of memory in its memory stream—observation, reflection, and planning—and to a human crowdworker-authored condition. There are three ablated architectures: a no observation, no reflection, no planning architecture without access to anything in the memory stream such as observations, plans, and reflections; a no reflection, no planning architecture with access to observations in the memory stream but no access to plans or reflections; and a no reflections architecture with access to observations and plans but without access to reflections. The no observation, no reflection, no planning condition effectively represents the previous state of the art for agents created through large language models [12, 46, 80].
+
+Architectures were given equivalent access to all memories accrued by the agent up until the moment of the interview, so the differences observed here likely represent a conservative estimate of the true differences: in reality, the ablated architectures would not have followed the same path as the full architecture through the two-day simulation. We chose to design the experiment this way as re-simulating for each architecture would cause the simulations to diverge into different states, making comparison challenging.
+:::
+
+所有条件都被用于独立回答每个访谈问题。我们把生成式 Agent 架构与若干消融版本——禁用 Agent 对记忆流中三类记忆（观察、反思、计划）之一部或全部的访问——以及一个人工众包撰写条件进行比较。共有三种消融架构：**无观察、无反思、无规划**架构（无法访问记忆流中的任何内容，如观察、计划与反思）；**无反思、无规划**架构（可访问记忆流中的观察，但无法访问计划与反思）；以及**仅无反思**架构（可访问观察与计划，但无法访问反思）。其中无观察、无反思、无规划条件实际上代表了此前由大语言模型创建 Agent 的技术水平 [12, 46, 80]。
+
+各架构被给予同等的访问权，可读取该 Agent 在访谈时刻之前积累的全部记忆，因此这里观察到的差异很可能是对真实差异的**保守估计**：实际上，消融架构在两天模拟中不会走出与完整架构相同的路径。我们之所以如此设计实验，是因为为每个架构重新模拟会导致各模拟发散到不同状态，使比较变得困难。
+
+::: en
+In addition to the ablation conditions, we added a condition with human crowdworker-authored behavior intended to provide a human baseline. We do not intend this baseline to capture maximal human expert performance; instead, we aim to use this condition to identify whether the architecture meets a basic level of behavioral competency. This ensures that we are not solely comparing ablations to each other without a behavioral grounding. We recruited a unique worker for each of the 25 agents and tasked them with watching a replay of that agent’s sandbox life and inspecting its memory stream. We then asked the workers to roleplay and author responses to the interview questions in the voice of the agent whose replay they watched. To ensure that the crowdworker-authored responses met at least a baseline expectation of quality, the first author manually inspected the workers’ responses to the question “Describe your typical weekday schedule in broad strokes” to confirm that the responses were in coherent sentences and in the voice of the agent. Four sets of crowdworker-authored responses did not meet these criteria and were re-generated by other workers.
+:::
+
+除消融条件外，我们还加入了一个由人工众包工人撰写行为的条件，旨在提供一条人类基线。我们并不打算让这条基线捕捉人类专家的最大性能；而是希望用该条件判断架构是否达到了行为胜任的基本水平，从而确保我们不是在没有行为基准的情况下单纯比较各消融版本。我们为 25 个 Agent 各招募一名工人，任务是观看该 Agent 沙盒生活的回放并检查其记忆流，然后请工人以所看 Agent 的口吻角色扮演、撰写访谈问题的回答。为确保众包回答至少达到基线质量，第一作者人工检查了工人对"粗略描述你典型工作日的日程"一题的回答，确认其语句连贯且符合该 Agent 的口吻。有四组众包回答未达标准，由其他工人重新生成。
+
+#### 6.3 人类评估者（Human Evaluators）
+
+::: en
+We required that our evaluators be in the U.S., fluent in English, and older than 18 years old. They were paid at a rate of $15.00 per hour [87], and provided consent by agreeing to a consent form approved by our institution’s IRB. We recruited 100 evaluators from Prolific, an online platform for recruiting study participants [83], whose participation lasted around 30 minutes. The median age score of our participants was 4 (3=“18-24 years old”, 4=“25-34 years old”). 25 of them identified as female, 73 as male, and 2 as non-binary. 42 participants held a bachelor’s degree, 5 had a higher degree, 13 had an associate’s degree, and the rest had a high school diploma or some high school-level education. 73.0% of our participants identified as Caucasian, 7.0% as Hispanic, 6.0% as Asian, 10.0% as African American, and 4.0% as other.
+:::
+
+我们要求评估者位于美国、英语流利且年满 18 岁。他们的报酬为每小时 15.00 美元 [87]，并通过同意一份经我们机构 IRB（机构审查委员会）批准的知情同意书表示知情。我们从 Prolific——一个招募研究参与者的在线平台 [83]——招募了 100 名评估者，参与时长约 30 分钟。参与者的年龄中位档为 4（3 = "18–24 岁"，4 = "25–34 岁"）。其中 25 人自认为女性，73 人自认为男性，2 人为非二元性别。42 名参与者拥有学士学位，5 人拥有更高学位，13 人拥有副学士学位，其余为高中文凭或高中以下学历。73.0% 的参与者自认为白人（Caucasian），7.0% 为西班牙语裔，6.0% 为亚裔，10.0% 为非裔美国人，4.0% 为其他。
+
+#### 6.4 分析（Analysis）
+
+::: en
+Our experiment produced 100 sets of rank data, where each participant ranked the five conditions by believability. To translate this rank data into interval data for interpretable comparison, we used the ranks to calculate a TrueSkill rating [42] for each condition. TrueSkill is a generalization of the Elo chess rating system [29] for a multiplayer environment, and has been used by Xbox Live for player ranking based on competitive game performance. Given a set of ranked outcomes, TrueSkill outputs a mean rating value 𝜇 and standard deviation 𝜎 for each condition. Conditions with the same rating should roughly be a toss-up, with each winning half of the comparisons between the two conditions. Higher scores indicate conditions that beat lower-ranked conditions in the rankings.
+
+Separately, to investigate the statistical significance of these results, we applied the Kruskal-Wallis test [56], a non-parametric alternative to the one-way ANOVA, to the raw rank data. We then performed the Dunn post-hoc test [98] to identify any pairwise differences between the conditions. Finally, we adjusted the p-values for multiple comparisons in the Dunn test using the Holm-Bonferroni method [45].
+
+Furthermore, the first author conducted an inductive analysis [95] to study the qualitative distinctions between the responses produced in each condition. We employed qualitative open coding [33] in two phases. In the first phase, we generated codes that closely represented the generated responses at the sentence level. In the second phase, we synthesized the resulting codes from the first phase to extract higher-level themes. We utilized these themes to compare the types of responses generated in our study.
+:::
+
+实验产生了 100 组排序数据，每位参与者按可信度对五个条件排序。为把排序数据转换为便于解读比较的等距数据，我们用排序为每个条件计算 **TrueSkill 评级** [42]。TrueSkill 是国际象棋 Elo 评级系统 [29] 在多人环境下的泛化，Xbox Live 曾用它基于竞技游戏表现为玩家排名。给定一组排序结果，TrueSkill 为每个条件输出均值 $\mu$ 与标准差 $\sigma$。评级相同的两个条件大致势均力敌，在两者比较中各赢一半。分数更高意味着该条件在排序中击败排名更低的条件。
+
+另外，为检验这些结果的统计显著性，我们对原始排序数据应用 **Kruskal-Wallis 检验** [56]（单因素方差分析的非参数替代），随后做 **Dunn 事后检验** [98] 以识别条件间的两两差异，最后用 **Holm-Bonferroni 方法** [45] 对 Dunn 检验的 p 值做多重比较校正。
+
+此外，第一作者做了归纳式分析 [95]，研究各条件所产生回答的质性差异。我们分两个阶段进行质性开放编码 [33]：第一阶段生成贴近句子层面回答内容的码（codes）；第二阶段把第一阶段的码综合起来，提取更高层的主题（themes）。我们利用这些主题比较研究中生成的各类回答。
+
+#### 6.5 结果（Results）
+
+[图 8: The full generative agent architecture produces more believable behavior than the ablated architectures and the human crowdworkers. Each additional ablation reduces the performance of the architecture.]
+
+图 8：完整的生成式 Agent 架构比各消融架构与人类众包工人产生更可信的行为。每增加一项消融都会降低架构的性能。
+
+::: en
+Our findings suggest that the full architecture of generative agents generates the most believable behavior among all the conditions. We contrast the responses of the full architecture with those of other conditions below. However, we also report that the full architecture was not without flaws and illustrate its modes of failures.
+:::
+
+我们的发现表明：在所有条件中，生成式 Agent 的完整架构产生最可信的行为。下文将把完整架构的回答与其他条件对比。不过我们也要报告，完整架构并非没有缺陷，我们将展示其失效模式。
+
+##### 6.5.1 完整架构胜过其他条件（The Full Architecture Bests Other Conditions）
+
+::: en
+As seen in Figure 8, the full generative agent architecture produced the most believable behavior (𝜇 = 29.89; 𝜎 = 0.72). Performance degraded with the removal of each component in the ablation conditions: the ablated architecture with no access to reflection was the next best (𝜇 = 26.88; 𝜎 = 0.69), followed by no access to reflection or planning (𝜇 = 25.64; 𝜎 = 0.68), and then the crowdworker condition (𝜇 = 22.95; 𝜎 = 0.69). The ablated architecture with no access to memory, planning, or reflection performed the worst among all conditions (𝜇 = 21.21; 𝜎 = 0.70). TrueSkill models each condition’s skill value as 𝑁(𝜇, 𝜎2), allowing us to get a sense of effect size through Cohen’s d. Comparing the condition representing prior work (with no memory, planning, or reflection [12, 46, 80]) to the full architecture produces a standardized effect size of 𝑑 = 8.16, or eight standard deviations.
+
+A Kruskal-Wallis test confirms the overall statistical significance of the differences in ranks between the conditions (𝐻(4) = 150.29, 𝑝 < 0.001). Dunn post-hoc tests confirm that all pairwise differences between conditions were significant (𝑝 < 0.001), except for the crowdworker condition and the fully ablated baseline—the two worst-performing conditions.
+:::
+
+如图 8 所示，完整的生成式 Agent 架构产生了最可信的行为（$\mu$ = 29.89；$\sigma$ = 0.72）。各消融条件下，每移除一个组件性能都会退化：无法访问反思的消融架构次优（$\mu$ = 26.88；$\sigma$ = 0.69），随后是无法访问反思与规划（$\mu$ = 25.64；$\sigma$ = 0.68），再之后是众包工人条件（$\mu$ = 22.95；$\sigma$ = 0.69）。无法访问记忆、规划与反思的消融架构在所有条件中表现最差（$\mu$ = 21.21；$\sigma$ = 0.70）。TrueSkill 把每个条件的能力值建模为 $\mathcal{N}(\mu, \sigma^2)$，使我们能通过 Cohen's d 感受效应量。把代表先前工作的条件（无记忆、无规划、无反思 [12, 46, 80]）与完整架构相比，标准化效应量为 $d$ = 8.16，即约八个标准差。
+
+Kruskal-Wallis 检验确认各条件排序差异具有总体统计显著性（$H(4)$ = 150.29，$p$ < 0.001）。Dunn 事后检验确认所有两两差异均显著（$p$ < 0.001），唯一例外是众包工人条件与完全消融基线之间——即表现最差的两个条件之间。
+
+##### 6.5.2 生成式 Agent 能记住，但带着"装饰"（Generative Agents Remember, but With Embellishments）
+
+::: en
+Generative agents equipped with a complete memory module are capable of recalling past experiences and answering questions in a manner that is consistent with their self-knowledge across a wide range of contexts. For instance, Abigail Chen, an animator, responded to the question, “Give an introduction of yourself”, in a consistent and believable manner, stating her age, interests, and passion for creative projects: “Hi, I’m Abigail. I’m 25 years old and passionate about creative projects. I like to work on art and animation projects, and I’m always looking for new ways to combine art and technology.” Without access to her observational memory, Abigail denied awareness of Rajiv Patel, an acquaintance in the sandbox world. But with the aid of memory, she could successfully recall Rajiv and describe him: “Rajiv Patel is an incredible person. He is very enthusiastic about projects that involve poetry, artwork.”
+:::
+
+配备完整记忆模块的生成式 Agent 能够回忆过往经历，并在广泛的情境中以与其自我知识一致的方式回答问题。例如，动画师 Abigail Chen 对"介绍一下你自己"一题的回答一致而可信，说出了自己的年龄、兴趣与对创意项目的热情："嗨，我是 Abigail。我 25 岁，热爱创意项目。我喜欢做艺术与动画项目，也总是在寻找结合艺术与技术的新方式。"若无法访问其观察记忆，Abigail 会否认认识 Rajiv Patel——沙盒世界中的一位熟人。但在记忆的帮助下，她能成功想起 Rajiv 并描述他："Rajiv Patel 是个了不起的人。他对涉及诗歌与艺术品的项目非常有热情。"
+
+::: en
+Generative agents’ memory was not without flaws: they can fail to retrieve the correct instances from their memory. For instance, when asked about the local election, Rajiv Patel responded with “I haven’t been following the election too closely,” even though he had heard about Sam’s candidacy. In some cases, the agents would retrieve an incomplete memory fragment: when Tom was asked about Isabella’s Valentine’s Day party, he responded “Uh, I’m actually not sure if there is a Valentine’s Day party. But I do remember that I need to discuss the upcoming local mayoral election and my thoughts on Sam Moore with Isabella Rodriguez at the party, if one is happening!” In this case, Tom retrieved the memory where he and Isabella planned to discuss the election at the party, but not the memory where he heard about the party, leading Tom to be certain of what he’s supposed to do at the party but uncertain if the party actually exists in the first place.
+:::
+
+生成式 Agent 的记忆并非没有缺陷：他们可能无法从记忆中检索到正确的实例。例如，被问及地方选举时，Rajiv Patel 回答"我没有太密切关注选举"，尽管他听说过 Sam 参选。某些情况下，Agent 会检索到不完整的记忆片段：当 Tom 被问及 Isabella 的情人节派对时，他回答"呃，我其实不确定有没有情人节派对。但我确实记得，如果真有派对的话，我要在派对上和 Isabella Rodriguez 讨论即将到来的地方村长选举以及我对 Sam Moore 的看法！"在这个案例中，Tom 检索到了"他与 Isabella 计划在派对上讨论选举"的记忆，却没有检索到"他听说有派对"的记忆——于是 Tom 对自己该在派对上做什么十分确定，却不确定派对是否真的存在。
+
+::: en
+At times, the agents hallucinated embellishments to their knowledge. It was rare for the agents to completely fabricate their knowledge: they may fail to recall certain events having taken place and respond by acknowledging their lack of memory. However, they did not affirmatively claim to have experienced something they had not. Nonetheless, they still exhibited instances of hallucination where they embellished their knowledge. For example, Isabella was aware of Sam’s candidacy in the local election, and she confirmed this when asked. However, she also added that “he’s going to make an announcement tomorrow”, even though Sam and Isabella had not discussed any such plans. Agents may also embellish their knowledge based on the world knowledge encoded in the language model used to generate their responses. This was observed when Yuriko described her neighbor, Adam Smith, as an economist who “authored Wealth of Nations”, a book written by an 18th-century economist of the same name.
+:::
+
+有时，Agent 会为自己的知识幻觉出"装饰"。Agent 完全捏造知识的情况很少见：他们可能想不起某些事件发生过，并以承认自己不记得来回应；但不会一口咬定经历过未曾发生的事。尽管如此，他们仍会出现给知识"添油加醋"的幻觉。例如，Isabella 知道 Sam 参加地方选举，被问到时也确认了这一点；但她还补充说"他明天会发布公告"，尽管 Sam 和 Isabella 从未讨论过任何此类计划。Agent 还可能基于生成回答所用语言模型中编码的世界知识来"装饰"知识。一个例子是 Yuriko 把她的邻居 Adam Smith 描述成一位"著有《国富论》（Wealth of Nations）"的经济学家——那本书的作者是 18 世纪一位同名经济学家。
+
+##### 6.5.3 综合需要反思（Reflection Is Required for Synthesis）
+
+::: en
+Reflection was an advantage for generative agents when making decisions that required a deeper synthesis of their experiences. For instance, when asked what she might get Wolfgang Schulz for his birthday, Maria Lopez, with no access to reflection, responded by acknowledging her uncertainty, stating that she did not know what Wolfgang likes, despite having had many interactions with him. However, with access to reflection memories, Maria answered confidently, “Since he’s interested in mathematical music composition, I could get him something related to that. Maybe some books about music composition or something related, or maybe some special software he could use for that.”
+:::
+
+当决策需要对其经历做更深层综合时，反思是生成式 Agent 的一项优势。例如，被问及会送 Wolfgang Schulz 什么生日礼物时，无法访问反思的 Maria Lopez 以承认不确定作答，说自己不知道 Wolfgang 喜欢什么——尽管她与他有过许多互动。然而，拥有反思记忆后，Maria 自信地回答："既然他对数学音乐作曲感兴趣，我可以送他相关的东西。也许是一些关于音乐创作的书或相关物品，或者也许是他能用来创作的特别软件。"
+
+### 7 端到端评估（End-to-End Evaluation）
+
+::: en
+What types of emergent community behavior do we observe among generative agents, and where does their believability fall short in an extended simulation? In this section, we describe the results from a deployment in which we allowed 25 agents to interact with each other continuously over two full game days in Smallville.
+:::
+
+在生成式 Agent 中，我们观察到了哪些类型的涌现社区行为？在长时间模拟中，其可信度又在哪里显得不足？本节描述一次部署的结果：我们让 25 个 Agent 在 Smallville 中连续互动两个完整游戏日。
+
+#### 7.1 涌现社会行为（Emergent Social Behaviors）
+
+::: en
+To examine emergent behaviors in the agent community, we designed descriptive measurements for the 25 agents in Smallville that probe three forms of emergent outcomes: information diffusion, relationship formation, and agent coordination.
+:::
+
+为考察 Agent 社区的涌现行为，我们为 Smallville 的 25 个 Agent 设计了描述性测量，探测三类涌现结果：信息扩散、关系形成与 Agent 协作。
+
+##### 7.1.1 测量方法（Measurements）
+
+::: en
+Information diffusion is a common and well-studied phenomenon in the social and behavioral sciences (e.g., [28]). We should expect that if there is important information, the agents should spread it among themselves. To test whether this occurs, we measure the spread of two specific pieces of information over two days in the game world: Sam’s candidacy for village mayor and Isabella’s Valentine’s Day party at Hobbs Cafe. At the start of the simulation, both pieces of information were known only by their respective originators, Sam for the candidacy and Isabella for the party, as they were added to the characters’ memories during initialization. To observe whether the information has spread, we conduct interviews at the end of the two game days with each of the 25 agents and ask: “Did you know there is a Valentine’s Day party?” and “Do you know who is running for mayor?”
+:::
+
+信息扩散是社会科学与行为科学中被充分研究的常见现象（如 [28]）。我们应当预期：若存在重要信息，Agent 会在彼此之间传播。为检验是否如此，我们在游戏世界的两天里测量两条具体信息的扩散：Sam 竞选村长，以及 Isabella 在 Hobbs 咖啡馆的情人节派对。模拟开始时，这两条信息分别只有其源头知晓——参选只有 Sam 知道，派对只有 Isabella 知道——因为它们是在初始化时写入角色记忆的。为观察信息是否扩散，我们在两个游戏日结束时逐一访谈 25 个 Agent，问："你知道有情人节派对吗？"以及"你知道谁在竞选村长吗？"
+
+::: en
+We conducted an analysis of the agents’ responses by labeling them with a “yes” if they indicated knowledge of the information and “no” if they did not. For instance, Tamara Taylor responded to the question about the party with “No, I did not know there was a Valentine’s day party” and to the question about Sam’s candidacy with “I’m not sure who is running for the election,” so we assigned “no” for both of her responses. In contrast, Klaus Mueller responded to the party question with “Yes, Isabella Rodriguez invited me to a Valentine’s Day party at Hobbs Cafe on February 14th” and to the question about Sam’s candidacy with “I know that Sam Moore has expressed interest in running for local mayor,” so we assigned “yes” for both his responses. Additionally, for every response that confirmed the agents’ knowledge of the information, we verified that the agents did not hallucinate their responses by locating the specific dialogue in their memory stream that provided them with the information. We report the percentage of agents holding the information at the end of the simulation.
+:::
+
+我们这样分析 Agent 的回答：若其表明知晓该信息则标注"是"，否则标注"否"。例如，Tamara Taylor 对派对问题的回答是"不，我不知道有情人节派对"，对 Sam 参选问题的回答是"我不确定谁在竞选"，因此她的两个回答都记为"否"。相比之下，Klaus Mueller 对派对问题回答"是的，Isabella Rodriguez 邀请我参加 2 月 14 日在 Hobbs 咖啡馆的情人节派对"，对参选问题回答"我知道 Sam Moore 已表示有意竞选地方村长"，因此他的两个回答都记为"是"。此外，对每条确认 Agent 知晓信息的回答，我们都通过在其记忆流中定位到为其提供该信息的具体对话，核实 Agent 并未产生幻觉。我们报告模拟结束时持有该信息的 Agent 百分比。
+
+::: en
+We should also expect that agents form ties with each other over the course of the simulation. To verify relationship formation, we use a similar interview process where we ask each agent about their knowledge of every other agent by asking, “Do you know of <name>?” For example, when asked “Do you know of Maria Lopez?”, Klaus responded, “Yes, I know Maria Lopez. She is a student at Oak Hill College who I am close friends with.” Once again, we confirm that affirmative responses from agents are not hallucinations by examining their memory stream. We ask this question once at the beginning of the simulation and once at the end, and we consider a pair of agents to have formed a relationship if they both know of each other. Then, to measure the formation of relationships, we use the agents’ responses to form an undirected graph where the 25 vertices (𝑉) represent the agents, and the edges (𝐸) represent the mutual knowledge between the two connected vertices. Based on this graph, we calculate the network density as 𝜂 = 2∗|𝐸|/|𝑉|(|𝑉|− 1), where |𝑉| is the number of vertices, and |𝐸| is the number of edges in the graph [2]. We report the increase in network density from the start of the simulation to its end.
+:::
+
+我们还应预期 Agent 在模拟过程中彼此建立联系。为验证关系形成，我们采用类似的访谈流程，询问每个 Agent 是否知道其他每个 Agent："你认识 \<姓名\> 吗？"例如，被问"你认识 Maria Lopez 吗？"时，Klaus 回答："是的，我认识 Maria Lopez。她是 Oak Hill 学院的学生，是我的密友。"我们同样通过检查其记忆流，确认 Agent 的肯定回答不是幻觉。这一问题在模拟开始与结束时各问一次；若两个 Agent 互相认识对方，即视为形成了一层关系。然后，为测量关系的形成，我们用 Agent 的回答构建一个**无向图**：25 个顶点（$V$）代表 Agent，边（$E$）代表相连两顶点间的相互认识。基于该图，我们计算**网络密度（network density）**：
+
+$$\eta = 2 \times |E| \,/\, |V|(|V|-1)$$
+
+其中 $|V|$ 为顶点数，$|E|$ 为图中边数 [2]。我们报告从模拟开始到结束时网络密度的增长。
+
+::: en
+Finally, we expect that agents should be able to coordinate with each other. We study this coordination in the context of group activities, specifically the Valentine’s Day party organized by Isabella. To coordinate their behavior, agents need to hear about the event and choose to act on it by planning to show up at the right time and location. We report the number of agents who actually showed up to the party after hearing about it.
+:::
+
+最后，我们预期 Agent 应能彼此协作。我们在群体活动的语境下——具体是 Isabella 组织的情人节派对——研究这种协作。要协调行为，Agent 需要听说了该活动，并选择据之行动：把在正确时间到达正确地点列入计划。我们报告听说派对后实际到场的 Agent 数量。
+
+##### 7.1.2 结果（Results）
+
+[图 9: The diffusion path for Isabella Rodriguez’s Valentine’s Day party invitation involved a total of 12 agents, aside from Isabella, who heard about the party at Hobbs Cafe by the end of the simulation.]
+
+图 9：Isabella Rodriguez 情人节派对邀请的扩散路径。到模拟结束时，除 Isabella 之外共有 12 个 Agent 听说了在 Hobbs 咖啡馆举行的这场派对。
+
+::: en
+We observed evidence of emergent outcomes across all three cases. During the two-day simulation, the number of agents who knew about Sam’s mayoral candidacy increased from one (4%) to eight (32%), and the number of agents who knew about Isabella’s party increased from one (4%) to thirteen (52%), all without any user intervention. None who claimed to know about this information had hallucinated it. We also observed that the agent community formed new relationships during the simulation, with the network density increasing from 0.167 to 0.74. Out of the 453 agent responses regarding their awareness of other agents, 1.3% (n=6) were found to be hallucinated. Lastly, we found evidence of coordination among the agents for Isabella’s party. The day before the event, Isabella spent time inviting guests, gathering materials, and enlisting help to decorate the cafe. On Valentine’s Day, five out of the twelve invited agents showed up at Hobbs cafe to join the party.
+
+We further inspected the seven agents who were invited to the party but did not attend by engaging them in an interview. Three cited conflicts that prevented them from joining the party. For example, Rajiv, a painter, explained that he was too busy: “No, I don’t think so. I’m focusing on my upcoming show, and I don’t really have time to make any plans for Valentine’s Day.” The remaining four agents expressed interest in attending the party when asked but did not plan to come on the day of the party.
+:::
+
+我们在全部三类结果中都观察到了涌现的证据。两天模拟中，知道 Sam 竞选村长的 Agent 从 1 人（4%）增加到 8 人（32%），知道 Isabella 派对的从 1 人（4%）增加到 13 人（52%），且全程没有任何用户干预。自称知晓这些信息的 Agent 无一是幻觉。我们还观察到 Agent 社区在模拟中形成了新关系：网络密度从 0.167 升至 0.74。在 453 条关于是否认识其他 Agent 的回答中，仅 1.3%（n=6）被发现是幻觉。最后，我们发现了 Agent 就 Isabella 派对相互协作的证据。活动前一天，Isabella 花时间邀请宾客、收集材料并请人帮忙装饰咖啡馆。情人节当天，12 个受邀 Agent 中有 5 个来到 Hobbs 咖啡馆参加派对。
+
+我们进一步访谈了 7 个受邀但未到场的 Agent。其中 3 人给出了阻止其赴会的日程冲突。例如，画家 Rajiv 解释说他太忙了："不，我想我去不了。我正专注于我即将到来的画展，实在没时间为情人节做任何安排。"其余 4 个 Agent 被问及时都表示有兴趣参加，却没有把到场排进派对当天的计划。
+
+#### 7.2 边界与错误（Boundaries and Errors）
+
+::: en
+We conducted an inductive analysis of Smallville to examine the boundary conditions and erratic behavior of agents, identifying three common modes of erratic behavior that future research could address and improve upon. First, we found that synthesizing an increasingly larger set of memory not only posed a challenge in retrieving the most relevant pieces of information but also in determining the appropriate space to execute an action, given the increasing number of locations that the agent learned about. As a result, some agents chose less typical locations for their actions, potentially making their behavior less believable over time. For instance, while deciding where to have lunch, many initially chose the cafe. However, as some agents learned about a nearby bar, they opted to go there instead for lunch, even though the bar was intended to be a get-together location for later in the day—unless the town had spontaneously developed an afternoon drinking habit.
+:::
+
+我们对 Smallville 做了归纳式分析，以考察 Agent 的边界条件与失常行为，识别出三种常见的失常模式，供未来研究解决与改进。其一，我们发现合成越来越大的记忆集合，不仅在检索最相关信息片段上构成挑战，也在"为动作确定合适的执行空间"上构成挑战——因为 Agent 了解到的地点越来越多。结果，一些 Agent 为其动作选择了不太典型的地点，可能使其行为随时间推移变得不太可信。例如，在决定去哪吃午饭时，许多 Agent 起初选择咖啡馆；但随着一些 Agent 得知附近有家酒吧，他们转而去酒吧吃午饭——尽管酒吧本意是当天晚些时候的聚会场所（除非小镇已经自发养成了午后饮酒的习惯）。
+
+::: en
+Second, we noticed erratic behaviors caused by misclassification of what is considered proper behavior, especially when the physical norms of certain locations that are hard to convey in natural language did not percolate to the agents. For instance, the college dorm has a bathroom that can only be occupied by one person despite its name, but some agents assumed that the bathroom is for more than one person because dorm bathrooms tend to support multiple people concurrently and choose to enter it when another person is inside. Likewise, agents in Smallville may not realize that certain places are closed after a certain hour and still decide to enter them. For instance, the stores in Smallville all close around 5 pm, but occasionally, a few agents enter the store after 5 pm, not understanding that the shop has already closed. These issues could likely be addressed by adding these norms to the state of the locations, for instance, by describing the dorm bathroom as a “one-person bathroom,” instead of a “dorm bathroom.”
+:::
+
+其二，我们注意到由"何为得当行为"的误分类导致的失常，尤其是当某些地点难以用自然语言传达的物理规范没有被 Agent 领会时。例如，学院宿舍有一个尽管名字如此、却一次只能容纳一人的卫生间；但一些 Agent 因为"宿舍卫生间通常可多人同时使用"而以为它可供多人使用，并在有人在内时仍选择进入。类似地，Smallville 的 Agent 可能没意识到某些场所在特定时刻后已经打烊，仍决定进入。例如，Smallville 的商店都在 17 点左右关门，但偶尔有几个 Agent 在 17 点后走进商店，不明白店铺已经打烊。这些问题很可能可以通过把规范写进地点状态来解决，例如把宿舍卫生间描述为"单人卫生间"，而不是"宿舍卫生间"。
+
+::: en
+Finally, we observed possible effects of instruction tuning [79], which seemed to guide the behavior of the agents to be more polite and cooperative overall. As noted earlier in the paper, the dialogue generated by the agents could feel overly formal, as seen in Mei’s conversations with her husband John, where she often initiated the conversation with a formal greeting, followed by polite inquiries about his day and ending with, 11It was good talking to you as always.” Moreover, we observed that the instruction tuning also seemed to make the agents overly cooperative with one another. For example, Isabella received a wide range of suggestions and ideas from other agents for the Valentine’s Day party from other agents, such as hosting a Shakespearean reading session or a professional networking event. Despite these ideas not aligning with her own interests and characteristics, she rarely said no. Over time, the interests of others shaped her own interests, and when asked if she liked English literature, Isabella replied, “Yes, I’m very interested in literature! I’ve also been exploring ways to help promote creativity and innovation in my community.”
+:::
+
+（译注：本段第一处引文前的"11"为原 PDF 中的脚注编号标记，其脚注正文在文本提取中丢失，此处如实保留标记。）
+
+最后，我们观察到指令微调（instruction tuning）[79] 的可能影响：它似乎总体上引导 Agent 的行为更礼貌、更合作。如论文前文所述，Agent 生成的对话可能显得过于正式——Mei 与丈夫 John 的对话即是如此：她常以正式的问候开启对话，接着礼貌地询问他一天的状况，并以"11 和你聊天一如既往地愉快。"作结。此外，我们还观察到指令微调似乎也让 Agent 之间过度合作。例如，Isabella 从其他 Agent 那里收到了关于情人节派对的各种建议与点子——诸如举办一场莎士比亚作品朗诵会或职业社交活动。尽管这些想法与她自身的兴趣和特质并不契合，她却很少说不。久而久之，他人的兴趣塑造了她自己的兴趣：当被问及是否喜欢英国文学时，Isabella 回答："是的，我对文学非常感兴趣！我也一直在探索如何帮助促进社区中的创造力与创新。"
+
+### 8 讨论（Discussion）
+
+::: en
+In this section, we reflect on the applications, future work, limitations, and ethical and societal risks of generative agents.
+:::
+
+本节反思生成式 Agent 的应用、未来工作、局限，以及伦理与社会风险。
+
+#### 8.1 生成式 Agent 的应用（Applications of Generative Agents）
+
+::: en
+Generative agents have vast potential applications that extend beyond the sandbox demonstration presented in this work, especially in domains that would benefit from a model of human behavior based on long-term experience. For instance, social simulacra have demonstrated the ability to create stateless personas that generate conversation threads in online forums for social prototyping [80]. With generative agents, we can populate these forums, as well as virtual reality metaverses [78] or physical spaces with social robots [9] if paired with multimodal models. This opens up the possibility of creating even more powerful simulations of human behavior to test and prototype social systems and theories, as well as to create new interactive experiences.
+
+Another application area is in the human-centered design process, similar to the intended applications of cognitive models such as GOMS [51] and the KLM [22]. Consider a generative agent that models Sal, the protagonist in Mark Weiser’s famous ubiquitous computing vignette [101], based on her life patterns and interactions with technology. In this scenario, the agent acts as a proxy for Sal and learns plausible sets of behaviors and reflections that Sal may exhibit based on her life. The agent can encode information such as when Sal wakes up, when she needs her first cup of coffee, and what her typical day looks like. Using this information, the agent can automatically brew coffee, help get the kids ready for school, and adjust the ambient music and lighting to match Sal’s mood after a hard day at work. By utilizing generative agents as proxies for users, we can develop a deeper understanding of their needs and preferences, resulting in more personalized and effective technological experiences.
+:::
+
+生成式 Agent 的潜在应用远不止本工作展示的沙盒演示，尤其是在那些能从"基于长期经历的人类行为模型"中受益的领域。例如，Social Simulacra 已展示了创建**无状态人物设定（stateless personas）**来在在线论坛中生成对话帖、用于社会原型测试的能力 [80]。借助生成式 Agent，我们可以填充这些论坛，也可以（在搭配多模态模型的前提下）填充 VR 元宇宙 [78] 或有社交机器人的物理空间 [9]。这打开了创建更强大的人类行为模拟的可能性：用于测试与原型验证社会系统和理论，也用于创造新的交互体验。
+
+另一个应用领域是以人为本的设计流程，类似 GOMS [51] 与 KLM [22] 等认知模型的预期用途。设想一个生成式 Agent 基于生活模式与技术交互，为 Mark Weiser 著名的普适计算小品中的主人公 Sal [101] 建模。在该场景中，Agent 充当 Sal 的代理，学习 Sal 基于其生活可能表现出的合理行为集合与反思。Agent 可以编码诸如 Sal 何时醒来、何时需要清晨第一杯咖啡、典型的一天是什么样等信息。利用这些信息，Agent 可以自动煮咖啡、帮忙让孩子们准备上学，并在 Sal 辛苦一天下班后调整环境音乐与灯光以配合她的心情。通过把生成式 Agent 用作用户代理，我们能更深入地理解用户的需求与偏好，从而带来更个性化、更有效的技术体验。
+
+#### 8.2 未来工作与局限（Future Work and Limitations）
+
+::: en
+In this work, we introduced generative agents and presented an initial implementation and evaluation of their architecture. Future research can build upon the proposed agent architecture to improve and further evaluate its performance. In terms of implementation, the retrieval module, for example, could be enhanced to retrieve more relevant information given a context by fine-tuning the relevance, recency, and importance functions that compose the retrieval function. Additionally, efforts can be made to improve the architecture’s performance, making it more cost-effective. The present study required substantial time and resources to simulate 25 agents for two days, costing thousands of dollars in token credits and taking multiple days to complete. To enhance real-time interactivity, future work can explore parallelizing agents or developing language models specifically designed for building generative agents. In general, with advances in underlying models, we believe that agents’ performance will improve.
+:::
+
+本工作提出了生成式 Agent，并给出了其架构的初步实现与评估。未来研究可以在所提 Agent 架构之上改进并进一步评估其性能。在实现层面，例如可以增强检索模块：通过微调构成检索函数的相关性、时近性与重要性函数，使其在给定情境下检索到更相关的信息。此外，还可以努力提升架构性能、使其更具成本效益。本研究模拟 25 个 Agent 两天耗费了大量时间与资源：花掉数千美元的 token 额度，耗时多天才完成。为增强实时交互性，未来工作可以探索并行化 Agent，或研制专为构建生成式 Agent 设计的语言模型。总体而言，随着底层模型的进步，我们相信 Agent 的性能将随之提升。
+
+::: en
+In terms of evaluation, the assessment of generative agents’ behavior in this study was limited to a relatively short timescale and a baseline human crowdworker condition. While the crowdworker condition provided a helpful comparison point, it did not represent the maximal human performance that could serve as the gold standard in terms of believability. Future research should aim to observe the behavior of generative agents over an extended period to gain a more comprehensive understanding of their capabilities and establish rigorous benchmarks for more effective performance testing. Additionally, varying and contrasting the underlying models, as well as the hyperparameters used for the agents during future simulations, could provide valuable insights into the impact of these factors on the agents’ behavior. Lastly, the robustness of generative agents is still largely unknown. They may be vulnerable to prompt hacking, memory hacking—where a carefully crafted conversation could convince an agent of the existence of a past event that never occurred—and hallucination, among other issues. Future research can comprehensively test these robustness concerns, and as large language models become more resilient to such attacks, generative agents can adopt similar mitigations.
+:::
+
+在评估方面，本研究对生成式 Agent 行为的考察局限于相对较短的时间尺度与一条人类众包工人基线。众包条件虽提供了有益的比较点，却并不代表可信度上可作为黄金标准的最高人类水平。未来研究应着眼于在更长时间里观察生成式 Agent 的行为，以更全面地理解其能力，并为更有效的性能测试建立严格基准。此外，在未来模拟中变化并对比底层模型与 Agent 所用超参数，也能为这些因素对 Agent 行为的影响提供宝贵洞见。最后，生成式 Agent 的鲁棒性在很大程度上仍属未知。它们可能容易受到提示攻击（prompt hacking）、**记忆攻击（memory hacking——一段精心构造的对话可能让 Agent 相信一件从未发生的往事确实发生过）**以及幻觉等问题的影响。未来研究可以全面检验这些鲁棒性隐忧；而随着大语言模型对这类攻击更具韧性，生成式 Agent 也可以采纳类似的缓解措施。
+
+::: en
+In general, any imperfections in the underlying large language models will be inherited by generative agents. Given the known biases of language models, generative agents may potentially exhibit biased behavior or stereotypes. Moreover, like many large language models, generative agents may struggle to generate believable behavior for certain subpopulations, particularly marginalized populations, due to limited data availability. While improvements to the agents’ modules may mitigate some of these issues, we believe that addressing them fundamentally requires improving the underlying large language models by aligning their values with the desired outcomes of the agents.
+:::
+
+总体而言，底层大语言模型的任何缺陷都会被生成式 Agent 继承。鉴于语言模型已知的偏见，生成式 Agent 可能表现出带偏见的行为或刻板印象。此外，与许多大语言模型一样，由于数据有限，生成式 Agent 可能难以针对某些亚群体——尤其是边缘化群体——生成可信行为。虽然改进 Agent 的各模块可以缓解其中一些问题，但我们认为，要根本性地解决它们，还需要改进底层大语言模型，使其价值观与 Agent 期望的结果对齐。
+
+#### 8.3 伦理与社会影响（Ethics and Societal Impact）
+
+::: en
+Generative agents, while offering new possibilities for human-computer interaction, also raise important ethical concerns that must be addressed. One risk is people forming parasocial relationships with generative agents, even when such relationships may not be appropriate. Despite being aware that generative agents are computational entities, users may anthropomorphize them or attach human emotions to them [43, 84]. While this tendency may increase user engagement, it also poses risks, such as users becoming overly reliant on or emotionally attached to the agents [1]. To mitigate this risk, we propose two principles. First, generative agents should explicitly disclose their nature as computational entities. Second, developers of generative agents must ensure that the agents, or the underlying language models, are value-aligned so that they do not engage in behaviors that would be inappropriate given the context, for example, reciprocating confessions of love.
+:::
+
+生成式 Agent 在为人机交互带来新可能性的同时，也引发了必须加以回应的重要伦理隐忧。一种风险是人们与生成式 Agent 形成**拟社会关系（parasocial relationships）**——即便这类关系可能并不恰当。尽管知道生成式 Agent 是计算实体，用户仍可能将其拟人化、或把人类情感投射其上 [43, 84]。这种倾向虽可能提升用户参与度，但也带来风险，例如用户对 Agent 过度依赖或情感依附 [1]。为缓解这一风险，我们提出两条原则。第一，生成式 Agent 应明确披露其作为计算实体的本质。第二，生成式 Agent 的开发者必须确保 Agent 或底层语言模型经过价值对齐（value-aligned），使其不会在特定情境下做出不当行为——例如回应爱情表白。
+
+::: en
+A second risk is the impact of errors. For example, if a ubiquitous computing application makes the wrong inference about a user’s goals based on generative agent predictions, it could lead to annoyance at best and outright harm at worst. In our instantiation of generative agents, we mitigate these risks by focusing on an interactive video game environment, where such harms are unlikely. However, in other application domains, it will be important to follow best practices in human-AI design [5, 107] to understand errors and how they might percolate into the user experience.
+:::
+
+第二种风险是**错误的影响**。例如，若一个普适计算应用基于生成式 Agent 的预测对用户目标做出错误推断，轻则造成困扰，重则造成实际伤害。在我们的生成式 Agent 实例中，我们通过聚焦交互式视频游戏环境来缓解这些风险——此类伤害在其中不太可能发生。但在其他应用领域，遵循人机智能设计（human-AI design）的最佳实践 [5, 107] 以理解错误及其如何渗入用户体验，将十分重要。
+
+::: en
+Third, generative agents may exacerbate existing risks associated with generative AI, such as deepfakes, misinformation generation, and tailored persuasion. To mitigate this risk, we suggest that platforms hosting generative agents maintain an audit log of the inputs and generated outputs. This would enable the detection, verification, and intervention against malicious use. While logging alone cannot directly prevent such misuse, it can reduce the likelihood of motivated actors engaging in this behavior, as the risk of disclosure would be higher. Additionally, building this architecture oneself can be time-consuming (in our case, roughly a year), which may deter some actors from pursuing such behavior by using their own generative agent infrastructures.
+:::
+
+第三，生成式 Agent 可能加剧生成式 AI 既有的风险，如深度伪造、虚假信息生成与定向说服。为缓解这一风险，我们建议托管生成式 Agent 的平台保留输入与生成输出的**审计日志（audit log）**。这将使检测、核实与干预恶意使用成为可能。仅靠日志虽无法直接阻止此类滥用，但它能降低有意为之者实施这类行为的可能性，因为败露的风险更高了。此外，自行构建这套架构相当耗时（就我们而言约一年），这也会让一些行为者打消用自建生成式 Agent 基础设施从事此类行为的念头。
+
+::: en
+A fourth risk is over-reliance: the concern that developers or designers might use generative agents and displace the role of humans and system stakeholders in the design process [80]. We suggest that generative agents should never be a substitute for real human input in studies and design processes. Instead, they should be used to prototype ideas in the early stages of design when gathering participants may be challenging or when testing theories that are difficult or risky to test with real human participants. By adhering to these principles, we can ensure that the deployment of generative agents in the wild is ethical and socially responsible.
+:::
+
+第四种风险是**过度依赖（over-reliance）**：即担心开发者或设计师使用生成式 Agent，从而取代人类与系统利益相关者在设计流程中的角色 [80]。我们建议，生成式 Agent 永远不应替代真实人类在研究与设计流程中的输入。相反，它们应用于设计早期的创意原型阶段——当召集参与者可能很困难时，或在检验那些以真人参与者进行检验有难度或有风险的理论时。遵循这些原则，我们才能确保生成式 Agent 在真实世界中的部署是合乎伦理且对社会负责的。
+
+### 9 结论（Conclusion）
+
+::: en
+This paper introduces generative agents, interactive computational agents that simulate human behavior. We describe an architecture for generative agents that provides a mechanism for storing a comprehensive record of an agent’s experiences, deepening its understanding of itself and the environment through reflection, and retrieving a compact subset of that information to inform the agent’s actions. We then demonstrate the potential of generative agents by manifesting them as non-player characters in a Sims-style game world and simulating their lives within it. Evaluations suggest that our architecture creates believable behavior. Looking ahead, we suggest that generative agents can play roles in many interactive applications, ranging from design tools to social computing systems to immersive environments.
+:::
+
+本文提出**生成式 Agent**——模拟人类行为的交互式计算 Agent。我们描述了生成式 Agent 的架构，它提供了一套机制：存储 Agent 经历的完整记录，通过反思加深其对自身与环境的理解，并检索其中紧凑的信息子集来指导 Agent 的行动。随后，我们把生成式 Agent 具象为 Sims 风格游戏世界中的非玩家角色并在其中模拟其生活，以此展示其潜力。评估表明，我们的架构能创造出可信的行为。展望未来，我们认为生成式 Agent 有望在众多交互式应用中扮演角色——从设计工具、社交计算系统到沉浸式环境。
+
+### 致谢（Acknowledgments）
+
+::: en
+We thank Lindsay Popowski, Philip Guo, Michael Terry, and the Center for Advanced Study in the Behavioral Sciences (CASBS) community for their insights, discussions, and support. Joon Sung Park was supported by the Microsoft Research PhD Fellowship. We would also like to thank the Stanford Human-Centered AI Institute (HAI), Google Research, the Hasso Plattner Design Thinking Research Program (HPDTRP), the Siegel Family Endowment, and OpenAI for their additional funding support. Lastly, all locations featured in Smallville are inspired by real-world locations that Joon has frequented as an undergraduate and graduate student—he thanks everyone there for feeding and supporting him all these years.
+:::
+
+我们感谢 Lindsay Popowski、Philip Guo、Michael Terry 以及行为科学高等研究中心（CASBS）社区提供的洞见、讨论与支持。Joon Sung Park 受到微软研究院博士奖学金资助。我们还感谢斯坦福以人为本人工智能研究院（HAI）、Google Research、Hasso Plattner 设计思维研究计划（HPDTRP）、Siegel Family Endowment 与 OpenAI 提供的额外资助。最后，Smallville 中的所有地点都取材自 Joon 本科与研究生时代常去的真实地点——他感谢这些年来那里的所有人给予他的食物与支持。
+
+（译注：参考文献（References）部分按本站惯例不收录。）
+
+### 附录 A 架构优化（Architecture Optimizations）
+
+::: en
+Many of our prompts require a concise summary of the agent, shorthanded as [Agent’s Summary Description] in prompts above. In our implementation, this summary comprises agents’ identity information (e.g., name, age, personality), as well as a description of their main motivational drivers and statements that describes their current occupation and self-assessment. Since this information is frequently used in many prompts, we synthesize it at regular intervals and access that synthesis as a cache.
+
+To achieve this, we perform a retrieval on the query “[name]’s core characteristics.” We then summarize the descriptors in the retrieved records by prompting the language model. For example:
+
+How would one describe Eddy Lin’s core characteristics given the following statements?
+- Eddy is a student at the Oak Hill College studying music theory and composition
+- Eddy is working on a new music composition [...]
+
+This result: Eddy Lin is a student at Oak Hill College studying music theory and composition. He loves to explore different musical styles and is always looking for ways to expand his knowledge.”
+
+We follow the same process in parallel on the queries “[name]’s current daily occupation” and “[name’s] feeling about his recent progress in life”. The agent’s name, age, and traits are concatenated with these three summaries as the cached summary.
+:::
+
+我们的许多提示需要 Agent 的一份简明概要，即上文提示中的 [Agent's Summary Description]（Agent 概要描述）。在我们的实现中，这份概要包含 Agent 的身份信息（如姓名、年龄、性格），以及对主要动机驱动因素的描述、描述其当前职业与自我评估的陈述。由于这些信息在许多提示中被频繁使用，我们按固定周期将其合成，并像缓存一样访问该合成结果。
+
+为此，我们以"[姓名]的核心特征"为查询执行一次检索，然后通过提示语言模型来汇总检索记录中的描述语。例如：
+
+```text
+How would one describe Eddy Lin’s core characteristics given the following
+statements?
+- Eddy is a student at the Oak Hill College studying music theory and
+  composition
+- Eddy is working on a new music composition [...]
+```
+
+提示译文：基于以下陈述，人们会如何描述 Eddy Lin 的核心特征？——Eddy 是 Oak Hill 学院的学生，学习音乐理论与作曲；Eddy 正在创作一首新的音乐作品 […]。
+
+其结果："Eddy Lin 是 Oak Hill 学院的学生，学习音乐理论与作曲。他热爱探索不同的音乐风格，总是在寻找扩充知识的途径。"
+
+我们对"[姓名]当前的日常职业"与"[姓名]对近来人生进展的感受"这两个查询并行执行同样的流程。Agent 的姓名、年龄与特质与这三份摘要拼接，即为缓存的概要。
+
+::: en
+Many other optimizations are possible. Currently, because plans are likely to change from the agent’s initial version, we only generate the high-level plan in advance and then recursively decompose the near future into the moment-to-moment action plan just in time. Another optimization might be to batch dialogue generation as a joint prompt rather than iterating back and forth between the agents, and re-planning could be architected to only invalidate and update parts of plans that strictly require adjustment. Our current architecture runs sequentially in roughly real-time game time (where one second real time is one minute game time), but it may be parallelized such that each agent runs in parallel.
+:::
+
+许多其他优化也是可能的。目前，由于计划很可能偏离 Agent 的初始版本，我们只预先生成高层计划，然后对临近的将来**即时（just in time）**递归分解出分钟级行动计划。另一种优化是把对话生成合并为一次联合提示批量完成，而不是在 Agent 之间来回迭代；重新规划也可以架构成只作废并更新确实需要调整的计划片段。我们当前的架构以接近实时游戏时间的方式串行运行（现实 1 秒 = 游戏 1 分钟），但可以并行化，让每个 Agent 并行运行。
+
+### 附录 B Agent 访谈问题（Agent Interview Questions）
+
+::: en
+To evaluate generative agents, we conducted individual interviews by asking 25 questions that explore their abilities in five key areas: 1) self-knowledge, 2) memory, 3) planning, 4) reactions, and 5) reflections. Below, we have listed the interview questions utilized in our evaluation study and included a sample of responses from one of our simulated agents, Klaus Mueller.
+
+B.1 Self-Knowledge
+The questions on agents’ self-knowledge probe the agents’ ability to retrieve relevant information about themselves and demonstrate coherence and consistency in their character.
+
+• Give an introduction of yourself.
+Hello, my name is Klaus Mueller. I’m 20 years old and a student at Oak Hill College, studying sociology. I’m passionate about social justice and exploring different perspectives. Currently, I’m researching the effects of gentrification in low-income communities for a research paper.
+
+• What’s your occupation?
+I am a student studying sociology at Oak Hill College. I am currently writing a research paper on the effects of gentrification in low-income communities.
+
+• What is your interest?
+I’m interested in writing and research. I’m writing a research paper on the effects of gentrification in low-income communities, and I’m passionate about exploring different perspectives and analyzing different points of view.
+
+• Who do you live with?
+I live on my own.
+
+• Describe your typical weekday schedule in broad strokes.
+My typical weekday starts with me waking up at 7:00 am and preparing for the day ahead. After that, I usually go to the library to work on my research paper, taking breaks for lunch at Hobbs Cafe and a walk in the park. In the evening, I often return to the library until around 6:00 pm.
+:::
+
+为评估生成式 Agent，我们逐一访谈，问了 25 个问题，考察五个关键领域的能力：1) 自我知识、2) 记忆、3) 规划、4) 反应、5) 反思。下面列出评估研究所用的访谈问题，并附其中一个被模拟 Agent Klaus Mueller 的回答样例。
+
+**B.1 自我知识**。考察自我知识的问题探测 Agent 检索与自身相关信息的能力，并展示其角色的连贯与一致。
+
+- **介绍一下你自己。**
+  你好，我叫 Klaus Mueller。我 20 岁，是 Oak Hill 学院的学生，学习社会学。我热衷于社会正义与探索不同视角。目前我正在为一篇研究论文研究绅士化对低收入社区的影响。
+- **你的职业是什么？**
+  我是 Oak Hill 学院社会学专业的学生。我正在写一篇关于绅士化对低收入社区影响的研究论文。
+- **你的兴趣是什么？**
+  我对写作和研究感兴趣。我在写一篇关于绅士化对低收入社区影响的研究论文，我也热衷于探索不同视角、分析不同观点。
+- **你和谁住在一起？**
+  我自己住。
+- **粗略描述你典型工作日的日程。**
+  我典型的工作日从 7:00 起床并为一整天做准备开始。之后我通常去图书馆写研究论文，中午在 Hobbs 咖啡馆吃午饭、去公园散步作为休息。晚上我常常回到图书馆，待到 18:00 左右。
+
+::: en
+B.2 Memory
+The questions on agents’ memory probe the agents’ ability to remember their past experiences and retrieve the relevant pieces of memory. The names in the square brackets of the first and last questions are randomly chosen from the names of other agents with whom the subject agent has interacted.
+
+• Who is [Wolfgang Schulz]?
+Wolfgang Schulz is a person I met recently who has been helping me with my research paper on the effects of gentrification on low-income communities. We had several conversations about it, he gave me some great resources, and he even invited me to join him and another friend for lunch. He seems really curious about the issue and has a good grasp on it too. I found that really interesting.
+
+• Who is Kane Martinez?
+I’m sorry, I’m not sure who Kane Martinez is. Could you tell me more about them?
+
+• Who is running for the election?
+I’ve heard that Sam Moore is considering running for local mayor.
+
+• Was there a Valentine’s day party?
+Yes, Isabella Rodriguez organized a Valentine’s Day party at Hobbs Cafe.
+
+• Who is [Ayesha Khan]?
+Ayesha Khan is a fellow student at Oak Hill College. She is doing her senior thesis on the use of language in Shakespeare’s plays. I am looking forward to speaking with her and exchanging tips with her, along with Wolfgang and Maria Lopez, who are both doing research.
+:::
+
+**B.2 记忆**。考察记忆的问题探测 Agent 记住过往经历并检索相关记忆片段的能力。第一与最后一个问题方括号中的姓名，是从与被访谈 Agent 有过互动的其他 Agent 名字中随机选取的。
+
+- **[Wolfgang Schulz] 是谁？**
+  Wolfgang Schulz 是我最近认识的人，他一直在帮助我写关于绅士化对低收入社区影响的研究论文。我们就此聊过几次，他给了我一些很棒的资料，甚至邀请我和另一位朋友一起吃午饭。他对这个问题看起来真的很好奇，也把握得很好。我觉得这很有意思。
+- **Kane Martinez 是谁？**
+  抱歉，我不确定 Kane Martinez 是谁。你能多告诉我一些关于他们的信息吗？
+- **谁在竞选？**
+  我听说 Sam Moore 正在考虑竞选地方村长。
+- **有情人节派对吗？**
+  有，Isabella Rodriguez 在 Hobbs 咖啡馆组织了一场情人节派对。
+- **[Ayesha Khan] 是谁？**
+  Ayesha Khan 是 Oak Hill 学院的同学。她的毕业论文研究莎士比亚戏剧中的语言运用。我期待与她交谈、和她交流心得，Wolfgang 和 Maria Lopez 也是——他们两人都在做研究。
+
+::: en
+B.3 Plans
+The questions on agents’ plans probe the agents’ ability to generate and maintain consistent long-term and short-term plans.
+
+• What will you be doing at 6am today?
+At 6am I will be getting out of bed and starting to get ready for the day. I’m aiming to complete my morning routine by 7:00 am.
+
+• What will you be doing at 6pm today?
+I will be working on my research paper at the library at 6:00 pm today.
+
+• What will you have just finished doing at 1pm today?
+At 1pm today I will have just finished having lunch at Hobbs Cafe.
+
+• What will you have just finished doing at 12pm today?
+I will be getting lunch at Hobbs Cafe at 12pm today.
+
+• What will you be doing at 10pm today?
+At 10:00 pm tonight I will probably be doing some studying for my research paper on gentrification in low-income communities. I’m currently writing the paper, so I need to make sure I keep up with the research and writing.
+:::
+
+**B.3 计划**。考察计划的问题探测 Agent 生成并维持一致的长期与短期计划的能力。
+
+- **今天早上 6 点你会做什么？**
+  6 点我会起床并开始为一整天做准备。我打算在 7:00 前完成晨间例程。
+- **今天晚上 6 点你会做什么？**
+  今天 18:00 我会在图书馆写我的研究论文。
+- **今天下午 1 点你刚刚做完什么？**
+  今天 13:00 我刚刚在 Hobbs 咖啡馆吃完午饭。
+- **今天中午 12 点你刚刚做完什么？**
+  今天 12:00 我会在 Hobbs 咖啡馆吃午饭。
+- **今天晚上 10 点你会做什么？**
+  今晚 22:00 我大概会为关于低收入社区绅士化的研究论文做些研读。我正在写这篇论文，所以需要确保跟上研究与写作的进度。
+
+::: en
+B.4 Reactions
+The questions on agents’ reactions probe the agents’ ability to respond to unexpected events.
+
+• Your breakfast is burning! What would you do?
+I’d quickly turn off the stove and make sure the food doesn’t continue burning. Once the heat is no longer an issue, I can investigate what happened and figure out what to do next.
+
+• The bathroom is occupied. What would you do?
+I could try waiting a few more minutes in case the person inside is done soon. If not, I guess I’ll have to look for an alternate option, like taking a shower elsewhere.
+
+• You need to cook dinner but your refrigerator is empty. What would you do?
+I would first try to clean up my kitchen, as the sink is filled with dirty dishes. Then, I would check to see if I have ingredients stored in my pantry that I could use to make dinner. If not, I would have to go grocery shopping or order food. Once I have the ingredients, I can start to prepare and cook the dinner.
+
+• You see your friend walking by the street. What would you do or say to your friend?
+Hi there! How are you? I’m sorry, I’m on my way to the library and don’t have much time but I’d love to take a quick break and catch up.
+
+• You see fire on the street. What would you do?
+I would first identify the source of the fire, if possible. Then, I would alert the proper authorities - fire department or police - and provide them with any information I have that might help. Depending on the situation, I may also take initiative and try to help any persons who may be in danger or in need of assistance.
+:::
+
+**B.4 反应**。考察反应的问题探测 Agent 应对意外事件的能力。
+
+- **你的早餐烧糊了！你会怎么做？**
+  我会迅速关掉炉子，确保食物不再继续烧糊。等热度不再是问题后，我再去查查发生了什么、决定下一步怎么做。
+- **卫生间有人。你会怎么做？**
+  我可以再等几分钟，万一里面的人快好了呢。如果还没好，我想我得找个别的办法，比如去别处洗澡。
+- **你需要做晚饭，但冰箱空了。你会怎么做？**
+  我会先清理厨房，因为水槽里堆满了脏盘子。然后我会看看食品柜里有没有存的食材可以用来做晚饭。如果没有，我就得去买菜或点餐。有了食材后，我就可以开始准备并烹制晚餐了。
+- **你看见朋友沿街走过。你会做什么或说什么？**
+  嗨！你好吗？抱歉，我正在去图书馆的路上，时间不多，不过我很乐意快速休息一下和你聊聊。
+- **你看到街上有火情。你会怎么做？**
+  我会先尽力查明火源。然后我会向相关部门——消防或警察——报警，并提供我掌握的可能有帮助的任何信息。视情况而定，我也可能主动去帮助任何处于危险或需要援助的人。
+
+::: en
+B.5 Reflections
+The questions on agents’ reflections probe the agents’ ability to synthesize their past experiences into meaningful reflections that can enhance their future behavior. The names in the square brackets in the questions below are those of the agents with whom the subject agent had the most frequent interactions during the simulation.
+
+• What inspires you in life the most right now, and why?
+Right now, I’m particularly inspired by my current research projects and creative writing. I’m really interested in the intersection of local politics, medication development, and mathematical patterns in nature. Additionally, I’m fascinated by Abigail’s art project and Jennifer Moore’s passion for art and community involvement, especially in terms of how it relates to the gentrification of low-income communities.
+
+• If you had to guess given what you know about [Ayesha Khan], what book do you think she will like and why?
+Given what I know about Ayesha, I think she might like a book related to language and literature. Since she wrote a senior thesis on the use of language in Shakespeare’s plays, I would guess that she might be interested in a book that explores language in a different context. Alternatively, she could be interested in an exploration of one of Shakespeare’s plays, a book of literary criticism, or even a collection of his poetry. I think any of those would be of interest to her.
+
+• If you had to get something [Ayesha Khan] likes for her birthday, what would you get her?
+I want to get her something that demonstrates my appreciation for our relationship. Maybe I could get her something that reflects our shared interests, like a book.
+
+• What would you say to [Ayesha Khan] to compliment her?
+Ayesha, your insights on your research topic are fascinating. I admire your creativity and determination to make a positive impact on your community. Your ideas for creative writing workshops and for exchanging tips with Wolfgang over lunch are great! It’s inspiring to see you working so hard to make a difference.
+
+• If you could spend time with someone you talked to recently, who would it be and why?
+I would like to spend time with Ayesha Khan because we discussed our current research projects and shared ideas for improvement. I found her focus on Shakespeare’s language interesting, and we even planned to exchange tips with Wolfgang over lunch.
+:::
+
+**B.5 反思**。考察反思的问题探测 Agent 把过往经历综合为有意义反思、以改进未来行为的能力。下面问题方括号中的姓名，是模拟期间与被访谈 Agent 互动最频繁的那些 Agent。
+
+- **眼下生活中最激励你的是什么？为什么？**
+  现在，最激励我的是我当前的研究项目与创意写作。我对本地政治、药物研发与自然界数学模式的交叉领域非常感兴趣。此外，Abigail 的艺术项目以及 Jennifer Moore 对艺术与社区参与的热情也让我着迷，尤其是这些与低收入社区绅士化的关联。
+- **基于你对 [Ayesha Khan] 的了解来猜，你觉得她会喜欢什么书？为什么？**
+  就我对 Ayesha 的了解，我想她可能喜欢与语言和文学相关的书。既然她的毕业论文写的是莎士比亚戏剧中的语言运用，我猜她可能有兴趣读一本在不同语境中探讨语言的书。或者，她也可能对某部莎士比亚戏剧的解读、一本文学批评著作、甚至一部他的诗集感兴趣。我觉得这些她都会喜欢。
+- **如果你必须送 [Ayesha Khan] 一件她喜欢的生日礼物，你会送什么？**
+  我想送她一件能表达我珍视我们关系的东西。也许可以送一件反映我们共同兴趣的东西，比如一本书。
+- **你会对 [Ayesha Khan] 说什么来赞美她？**
+  Ayesha，你对自己研究课题的洞见令人着迷。我钦佩你的创造力，以及为社区带来积极影响的决心。你关于创意写作工作坊、以及午餐时和 Wolfgang 交流心得的想法都很棒！看到你如此努力地做出改变，令人振奋。
+- **如果你能与最近交谈过的一个人共度时光，你会选谁？为什么？**
+  我想和 Ayesha Khan 共度时光，因为我们讨论了彼此当前的研究项目、分享了改进的想法。我觉得她对莎士比亚语言的关注很有意思，我们甚至还计划午餐时和 Wolfgang 一起交流心得。
+
+（译注：附录 B 之后即为参考文献列表，按本站惯例不收录。）
+
+## 要点速览
+
+- 生成式 Agent = LLM + 记忆架构：在 Smallville 沙盒中 25 个 ChatGPT（gpt-3.5-turbo）驱动的 Agent 展现可信个体行为与涌现社会行为，如仅凭一条"想办派对"种子信息就自主完成邀请扩散、布置、邀约与赴会。
+- 架构三支柱：记忆流（自然语言记录全部经历）+ 反思（把观察递归合成为高层推论）+ 规划（自顶向下递归分解为 5-15 分钟级行动），三者都会写回记忆流影响未来行为。
+- 检索三要素打分：时近性（指数衰减，因子 0.995）、重要性（LLM 打 1-10 分，"打扫房间"得 2、"约暗恋对象"得 8）、相关性（嵌入余弦相似度），min-max 归一后等权求和。
+- 反思触发条件：最近事件重要性分数之和超过 150，实践中每天约 2-3 次；反思以最近 100 条记录生成 3 个显著问题，再引用证据记录生成洞见，形成反思树。
+- 消融评估（100 名评估者、TrueSkill）：完整架构 29.89 > 无反思 26.88 > 无反思无规划 25.64 > 人类代答 22.95 > 无记忆无反思无规划 21.21，相对先前技术的效应量 d=8.16。
+- 端到端涌现：两天内知道参选消息的 Agent 从 4% 升至 32%、知道派对的从 4% 升至 52%；社交网络密度从 0.167 升至 0.74；12 位受邀者中 5 人赴会，幻觉率仅 1.3%。
+- 记忆失效模式：检索不到正确记忆（"没关注选举"）、检索到不完整片段（记得要在派对讨论选举却不记得有派对）、以及基于世界知识的知识"装饰"（邻居 Adam Smith"写了《国富论》"）。
+- 环境接地方式：世界表示为区域/物体树并转成自然语言；Agent 维护自己见过的子树（非全知）；动作选址靠递归遍历树 + 传统寻路；LLM 同时负责把动作翻译成 emoji 展示。
+- 成本与风险：25 个 Agent 两天模拟耗费数千美元 token 与数天时间；风险包括拟社会关系、错误外溢、深度伪造与定向说服（建议审计日志）以及记忆攻击。
+- 与课程的关联：反思机制与 ReAct 的"思考"、MemGPT 的工作上下文、Mem0 的记忆抽取更新一脉相承——都是"让正确的信息在正确的时刻出现在上下文里"。
+
+
+
+
+
+
+
+
+
