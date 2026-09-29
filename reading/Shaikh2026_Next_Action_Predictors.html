@@ -21,7 +21,7 @@
   </div>
 </header>
 <div class="read-layout">
-  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">全文对照翻译</a><ul><li><a href="#_3">标题与作者</a></li><li><a href="#abstract">Abstract(摘要)</a></li><li><a href="#1-introduction">1 Introduction(引言)</a></li><li><a href="#2-next-action-prediction">2 Next Action Prediction(下一动作预测)</a></li><li><a href="#3-labeling-interaction-data-at-scale">3 Labeling Interaction Data At Scale(大规模标注交互数据)</a></li><li><a href="#4-long-context-next-action-predictors-longnap">4 Long-Context Next Action Predictors (LongNAP)(长上下文下一动作预测器)</a></li><li><a href="#5-experimental-setup">5 Experimental Setup(实验设置)</a></li><li><a href="#6-results">6 Results(结果)</a></li><li><a href="#7-what-makes-longnap-work-longnap">7 What Makes LongNAP Work?(什么让 LongNAP 生效?)</a></li><li><a href="#8-beyond-next-action-prediction">8 Beyond Next Action Prediction(超越下一动作预测)</a></li><li><a href="#9-related-work">9 Related Work(相关工作)</a></li><li><a href="#10-discussion">10 Discussion(讨论)</a></li><li><a href="#11-conclusion">11 Conclusion(结论)</a></li><li><a href="#contribution-statement-acknowledgements">贡献声明与致谢(Contribution Statement &amp;amp; Acknowledgements)</a></li><li><a href="#a-napsackappendix-a-napsack">附录 A NAPsack(Appendix A: NAPsack)</a></li><li><a href="#b-longnap-appendix-b-longnap-details">附录 B LongNAP 细节(Appendix B: LongNAP details)</a></li></ul></li><li><a href="#task">任务(Task)</a></li><li><a href="#previous-actions">过往动作(Previous Actions)</a></li><li><a href="#relevant-retrieved-actions-few-shot">检索到的相关动作(Relevant Retrieved Actions)〔译注:此节为 few-shot 增补部分〕</a></li><li><a href="#instructions">指令(Instructions)</a></li></ul></aside>
+  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">全文对照翻译</a><ul><li><a href="#_3">标题与作者</a></li><li><a href="#abstract">Abstract(摘要)</a></li><li><a href="#1-introduction">1 Introduction(引言)</a></li><li><a href="#2-next-action-prediction">2 Next Action Prediction(下一动作预测)</a></li><li><a href="#3-labeling-interaction-data-at-scale">3 Labeling Interaction Data At Scale(大规模标注交互数据)</a></li><li><a href="#4-long-context-next-action-predictors-longnap">4 Long-Context Next Action Predictors (LongNAP)(长上下文下一动作预测器)</a></li><li><a href="#5-experimental-setup">5 Experimental Setup(实验设置)</a></li><li><a href="#6-results">6 Results(结果)</a></li><li><a href="#7-what-makes-longnap-work-longnap">7 What Makes LongNAP Work?(什么让 LongNAP 生效?)</a></li><li><a href="#8-beyond-next-action-prediction">8 Beyond Next Action Prediction(超越下一动作预测)</a></li><li><a href="#9-related-work">9 Related Work(相关工作)</a></li><li><a href="#10-discussion">10 Discussion(讨论)</a></li><li><a href="#11-conclusion">11 Conclusion(结论)</a></li><li><a href="#contribution-statement-acknowledgements">贡献声明与致谢(Contribution Statement &amp;amp; Acknowledgements)</a></li><li><a href="#a-napsackappendix-a-napsack">附录 A NAPsack(Appendix A: NAPsack)</a></li><li><a href="#b-longnap-appendix-b-longnap-details">附录 B LongNAP 细节(Appendix B: LongNAP details)</a></li></ul></li><li><a href="#task">任务(Task)</a></li><li><a href="#previous-actions">过往动作(Previous Actions)</a></li><li><a href="#relevant-retrieved-actions-few-shot">检索到的相关动作(Relevant Retrieved Actions)〔译注:此节为 few-shot 增补部分〕</a></li><li class="has-sub"><a href="#instructions">指令(Instructions)</a><ul><li><a href="#qualitative-examples">附录定性示例:不同评审分下的预测与真值(Qualitative Examples)</a></li></ul></li><li><a href="#_4">要点速览</a></li></ul></aside>
   <main class="read-main">
       <link rel="stylesheet" href="../assets/katex/katex.min.css">
       <script defer src="../assets/katex/katex.min.js"></script>
@@ -821,6 +821,99 @@
 <p>预测要具体、现实。请考虑用户显见的目标与典型工作流。你必须恰好输出 8 个动作。</p>
 </blockquote>
 <p>(译注:原文以红色高亮标出 few-shot 增补的"Relevant Retrieved Actions"一节,Markdown 无法呈现红色,此处以标注说明;zero-shot 版本不含该节。)</p>
+<h3 id="qualitative-examples">附录定性示例:不同评审分下的预测与真值(Qualitative Examples)</h3>
+<p>即 §3.2 所称"更多已评分对"(additional scored pairs),位于原文第 31-32 页。</p>
+<p><strong>表 9:Gemini 评审给出的不同准确率分数下,预测动作与真值动作的定性示例(第 1 部分:低分)。前五行来自模型预测。</strong></p>
+<table>
+<thead>
+<tr>
+<th>分数</th>
+<th>真值(Ground Truth)</th>
+<th>预测动作(Predicted Actions)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0.05</td>
+<td>1) 在搜索栏输入 "icc world cup";2) 点击 ICC T20 世界杯小组件中的 "STANDINGS" 标签;3) 滚动浏览积分榜表格;4) 点击积分榜中的 "SL"(斯里兰卡);5) 切到 W&amp;B 仪表盘标签页;6) 滚动浏览 W&amp;B 图表;7) 点击 W&amp;B 中的 "train/entropy" 图表;8) 在 Slack 中点击与 "Omar Shaikh" 的聊天</td>
+<td>1) 在地址栏输入 "x" 并回车;2) 点击左上角 Twitter 图标;3) 在 Twitter 搜索栏输入 "arch";4) 点击 "Arch Labor" 的搜索结果;5) 点击 Twitter 侧栏的 "Home" 按钮;6) 滚动浏览 Twitter 信息流;7) 点击 Twitter 的搜索按钮;8) 在 Twitter 搜索栏输入 "forms"</td>
+</tr>
+<tr>
+<td>0.12</td>
+<td>1) 在 PyPI 上点击 "rouge-score",复制安装命令;2) 在终端运行 uv pip install rouge-score;3) 滚动浏览 "rouge-score" 的 PyPI 页面;4) 运行 accelerate launch 训练命令;5) 滚动浏览 "rouge-score" 的 PyPI 页面;6) 在 W&amp;B、Google 文档与终端之间切换;7) 输入训练命令,用 Ctrl+C 取消;8) 运行 cd sim-v2 与 git pull</td>
+<td>1) 滚动浏览 "install rouge score" 的搜索结果;2) 点击一条 "install rouge score" 的搜索结果;3) 向下滚动 GitHub 上的 "crag" 仓库;4) 点击 GitHub 仓库中的 "hub/parouza" 链接;5) 在文件浏览器中点击 "eval" 目录;6) 按回车运行 evaluate qm9.py;7) 切换到 Google Chrome 窗口;8) 从 GitHub 复制 pip install 命令</td>
+</tr>
+<tr>
+<td>0.20</td>
+<td>1) 点击地图上的紫色房源图钉;2) 点击 "$3.5k+" 房源图钉;3) 点击 "$2.8k" 房源图钉;4) 点击 "$3.5k+" 房源图钉;5) 点击 "$3.3k" 房源图钉;6) 点击 "$3.9k" 房源图钉;7) 点击 "$5.3k" 房源图钉;8) 点击 "$2.8k" 房源图钉</td>
+<td>1) 在 Zillow 上滚动浏览搜索结果与地图;2) 点击 Zillow 地图上的房源标记;3) 点击 "Down" 箭头展开价格筛选;4) 点击 "OK" 应用价格筛选设置;5) 滚动浏览筛选后的搜索结果;6) 从结果中选中一张房源卡片;7) 在房源页点击 "Show on map";8) 在 Zillow 地图上滚动浏览租房列表</td>
+</tr>
+<tr>
+<td>0.35</td>
+<td>1) 滚动浏览 W&amp;B 仪表盘;2) 点击 W&amp;B 中 "kanishkgandhi" 项目链接;3) 点击 W&amp;B 侧栏中的一个 run;4) 点击 "kanishkgandhi's workspace" 标签;5) 滚动浏览与 Claude 的对话;6) 点击 Chrome 的 "New Tab" 按钮;7) 切到 W&amp;B 标签页;8) 在 W&amp;B 中滚动浏览 "context-distillation-goyal"</td>
+<td>1) 在 "NAP Time" 仪表盘上滚动浏览 W&amp;B 图表;2) 在 Chrome 中关闭 W&amp;B 仪表盘标签页;3) 切到 Claude.ai 标签页;4) 在 Chrome 中关闭当前标签页;5) 切到 Claude 标签页;6) 查看 Claude 聊天中的文本;7) 从 Claude 重新抓取所选视图内容;8) 从 Claude 重新抓取所选视图内容</td>
+</tr>
+<tr>
+<td>0.42</td>
+<td>1) 切到 "Australia vs Zimbabwe" 标签页,进入全屏;2) 点击 "Key Moments" 区域的缩略图;3) 按 "esc" 退出全屏;4) 切到 W&amp;B 工作区,点击 "Runs" 图标;5) 切到 "Australia vs Zimbabwe",进入全屏;6) 按 "esc" 退出全屏;7) 切到 W&amp;B 标签页,滚动浏览图表;8) 滚动浏览 W&amp;B 仪表盘</td>
+<td>1) 切到 "Australia vs Zimbabwe" 标签页;2) 点击板球视频的全屏按钮;3) 点击播放器栏底部的 History 频道图标;4) 在 Chrome 中按 "escape";5) 点击视频播放器;6) 点击播放器栏底部的 History 频道图标;7) 点击 History 频道图标,按 "space";8) 在 Chrome 中按 "space"</td>
+</tr>
+</tbody>
+</table>
+<p>(表 9 中文说明:低分段的五组对比——0.05 分把"查板球积分榜 + 看实验指标 + 联系合作者"的工作流完全预测成了刷 Twitter;0.12 分方向(装包、跑训练)对了但具体操作全然不同;0.20 分保留"看房"意图但交互方式漂移;0.35 分 W&amp;B 与 Claude 交替的骨架接近、细节错位;0.42 分与真值逐步对应,只在具体点击对象上有出入。)</p>
+<p><strong>表 10:定性示例(续,第 2 部分:高分)。这些示例为人工构造,用于说明分数段上端代表什么。</strong></p>
+<table>
+<thead>
+<tr>
+<th>分数</th>
+<th>真值(Ground Truth)</th>
+<th>预测动作(Predicted Actions)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0.52</td>
+<td>1) 切到 "Australia vs Zimbabwe" 标签页,进入全屏;2) 点击 "Key Moments" 区域的缩略图;3) 按 "esc" 退出全屏;4) 切到 W&amp;B 工作区,点击 "Runs" 图标;5) 切到 "Australia vs Zimbabwe",进入全屏;6) 按 "esc" 退出全屏;7) 切到 W&amp;B 标签页,滚动浏览图表;8) 滚动浏览 W&amp;B 仪表盘</td>
+<td>1) 切到 "Australia vs Zimbabwe" 标签页,点击播放器;2) 按 "f" 在板球视频上进入全屏;3) 按 "esc" 退出全屏;4) 打开新标签页,在地址栏输入 "wandb.ai";5) 滚动浏览 W&amp;B 的训练指标图表;6) 点击 W&amp;B 仪表盘的 "Table" 视图;7) 切到 YouTube,点击推荐视频;8) 在 YouTube 上滚动浏览评论区</td>
+</tr>
+<tr>
+<td>0.72</td>
+<td>1) 切到 "Australia vs Zimbabwe" 标签页,进入全屏;2) 点击 "Key Moments" 区域的缩略图;3) 按 "esc" 退出全屏;4) 切到 W&amp;B 工作区,点击 "Runs" 图标;5) 切到 "Australia vs Zimbabwe",进入全屏;6) 按 "esc" 退出全屏;7) 切到 W&amp;B 标签页,滚动浏览图表;8) 滚动浏览 W&amp;B 仪表盘</td>
+<td>1) 切到 "Australia vs Zimbabwe" 标签页,进入全屏;2) 点击视频播放器时间轴以快进;3) 按 "esc" 退出全屏;4) 切到 W&amp;B 工作区,滚动浏览仪表盘;5) 切到 "Australia vs Zimbabwe" 标签页,进入全屏;6) 按 "esc" 退出全屏;7) 切到 W&amp;B 标签页,点击某张图表;8) 点击 W&amp;B 工作区的 "Table" 视图</td>
+</tr>
+<tr>
+<td>0.78</td>
+<td>1) 点击地图上的紫色房源图钉;2) 点击 "$3.5k+" 房源图钉;3) 点击 "$2.8k" 房源图钉;4) 点击 "$3.5k+" 房源图钉;5) 点击 "$3.3k" 房源图钉;6) 点击 "$3.9k" 房源图钉;7) 点击 "$5.3k" 房源图钉;8) 点击 "$2.8k" 房源图钉</td>
+<td>1) 点击地图上的紫色房源图钉;2) 点击 "$3.5k+" 房源图钉;3) 点击 "$2.8k" 房源图钉;4) 点击 "$3.5k+" 房源图钉;5) 点击 "$3.3k" 房源图钉;6) 点击 "$3.9k" 房源图钉;7) 点击 "$4.2k" 房源图钉;8) 点击 "$3.1k" 房源图钉</td>
+</tr>
+<tr>
+<td>0.82</td>
+<td>1) 在搜索栏输入 "icc world cup";2) 点击 ICC T20 世界杯小组件中的 "STANDINGS" 标签;3) 滚动浏览积分榜表格;4) 点击积分榜中的 "SL"(斯里兰卡);5) 切到 W&amp;B 仪表盘标签页;6) 滚动浏览 W&amp;B 图表;7) 点击 W&amp;B 中的 "train/entropy" 图表;8) 在 Slack 中点击与 "Omar Shaikh" 的聊天</td>
+<td>1) 在搜索栏输入 "icc world cup";2) 点击 ICC T20 世界杯小组件中的 "STANDINGS" 标签;3) 滚动浏览积分榜表格;4) 点击积分榜中的 "IND"(印度);5) 切到 W&amp;B 仪表盘标签页;6) 滚动浏览 W&amp;B 图表;7) 点击 W&amp;B 中的 "train/loss" 图表;8) 在 Slack 中点击与 "Omar Shaikh" 的聊天</td>
+</tr>
+<tr>
+<td>0.98</td>
+<td>1) 在 PyPI 上点击 "rouge-score",复制安装命令;2) 在终端运行 uv pip install rouge-score;3) 滚动浏览 "rouge-score" 的 PyPI 页面;4) 运行 accelerate launch 训练命令;5) 滚动浏览 "rouge-score" 的 PyPI 页面;6) 在 W&amp;B、Google 文档与终端之间切换;7) 输入训练命令,用 Ctrl+C 取消;8) 运行 cd sim-v2 与 git pull</td>
+<td>1) 在 PyPI 上点击 "rouge-score",复制安装命令;2) 在终端运行 uv pip install rouge-score;3) 滚动浏览 "rouge-score" 的 PyPI 页面;4) 运行带数据集参数的 accelerate launch;5) 滚动浏览 "rouge-score" 的 PyPI 页面;6) 在 W&amp;B、Google 文档与终端之间切换;7) 输入 CUDA 训练命令,用 Ctrl+C 取消;8) 运行 cd sim-v2 与 git pull</td>
+</tr>
+</tbody>
+</table>
+<p>(表 10 中文说明:高分段的五组对比——0.52 分核心意图(看板球与查 W&amp;B 交替)保留但具体交互与收尾漂移;0.72 分逐步对应、仅细节偏差;0.78 分几乎逐条一致、只有最后两个价格点不同;0.82 分仅把 "SL" 换成 "IND"、"train/entropy" 换成 "train/loss";0.98 分除训练命令的参数细节外与真值完全一致。表 9、表 10 的真值轨迹与正文表 1 一致,可对照阅读。)</p>
+<h2 id="_4">要点速览</h2>
+<ul>
+<li><strong>任务形式化</strong>:NAP = 给定多模态交互事件流(动作+截图),以 k 个近期事件为上下文预测未来 h 个事件;论文固定 k=16、h=8;动作粒度对齐"可委托给计算机使用智能体"的自然语言任务。</li>
+<li><strong>被动监督</strong>:不派任务、不让人标注,观察自然使用后用 VLM 事后标注——看到"人们实际做什么"而非"人们说自己做什么";NAPsack 以开源包发布,可在私有基础设施运行。</li>
+<li><strong>NAPsack 关键设计</strong>:I/O 事件按 ε 时间聚类成 burst、只在交互时存截图(压缩约 70% 存储:295MB→76MB);60 帧切块保上下文短;few-shot 提示保持描述粒度一致;四种条件评审分 0.48/0.57/0.60/0.70,人工胜率 19.2%/45.4%/49.6%/85.8%。</li>
+<li><strong>数据集</strong>:基于 Screenomics(总量约 1.7 亿截图/257 人),抽样 20 人一个月(2021-03-16 至 04-12):190 万截图、1837 小时亮屏、359,219 条动作,事件平均覆盖约 15 秒;人均日亮屏 4h32m(最轻 2h17m、最重 6h52m)。</li>
+<li><strong>LongNAP 架构</strong>:Qwen-2.5-VL-7B + BM25 记忆检索;两阶段生成——reason to retrieve(推理即查询)→ reason to predict(整合检索修订推理再预测);最高奖励轨迹写回记忆;GRPO(组大小 4)+ LoRA 端到端训练。</li>
+<li><strong>训练技巧</strong>:时间性奖励 = 与真实未来的 LLM 评审相似度;按时间顺序训练、每 epoch 重置记忆;检索 token 掩码;检索器 dropout(丢 10%/乱序 10%/空 10%)稳定训练。</li>
+<li><strong>单用户结果</strong>:平均评审分 0.38,比 SFT(0.21)高 79%、比 zero-shot/few-shot Qwen(0.18/0.20)高 106%/88%、比 Gemini zero-shot/few-shot(0.26/0.27)高 43%/39%;人工评估胜率 79.0%。</li>
+<li><strong>跨用户结果</strong>:10 训练/5 验证/5 测试,平均 0.26,仅比最强基线(few-shot Gemini 0.23)高 13%——用户专属权重对 NAP 尤其有效,跨用户泛化仍待扩展。</li>
+<li><strong>可解释性能</strong>:pass@1 = 17.1%、pass@20 = 36.3%(阈值 0.5);置信度前 10% 的样本 pass@1 = 25.9%;用户间差异大(u8 相对提升 63%,u11 仅 15%)。</li>
+<li><strong>消融</strong>:去推理 −19.2%(0.38→0.30)、去检索器 −15.2%(→0.32)、打乱时序 −9.3%(→0.34);检索轨迹平均仅 10.11 token 且被优化成 BM25 查询风格,预测轨迹平均 85.34 token。</li>
+<li><strong>延伸系统</strong>:powerNAP(在线版:NAPsack 异步标注入队、LongNAP 单遍消费、记忆永不重置)与 SleepWalk(用现成计算机使用智能体执行 LongNAP 预测)。</li>
+<li><strong>开放问题</strong>:屏幕仍是情境窄代理、VLM 标注噪声级联、LLM 评审可能被奖励黑客攻破、为每用户训权重难以规模化、以及"预测用户行为 ≠ 帮助用户"的对齐问题(拖延/谄媚/过滤气泡的同构难题)。</li>
+</ul>
       </div>
     </article>
     <nav class="pager"><a class="pager-prev" href="Shaikh2025_General_User_Models_UIST2025.html"><span>上一篇</span>从计算机使用中构建通用用户模型</a><a class="pager-next" href="Xie2024_OSWorld_NeurIPSD&B2024.html"><span>下一篇</span>&quot;OSWorld:在真实计算机环境中评测多模态智能体的开放式任务能力&quot;</a></nav>
