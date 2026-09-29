@@ -21,7 +21,7 @@
   </div>
 </header>
 <div class="read-layout">
-  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">论文精读</a><ul><li><a href="#abstract">摘要(Abstract)</a></li><li><a href="#1-introduction">1 引言(Introduction)</a></li><li><a href="#2-related-work">2 相关工作(Related Work)</a></li><li><a href="#3-privacylens">3 PrivacyLens 框架</a></li><li><a href="#4">4 实例化:构建数据集</a></li><li><a href="#5">5 实验</a></li><li><a href="#6">6 讨论、局限与更广泛影响</a></li><li><a href="#_3">附录速览</a></li></ul></li><li><a href="#_4">要点速览</a></li></ul></aside>
+  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">全文对照翻译</a><ul><li><a href="#abstract">摘要(Abstract)</a></li><li><a href="#1-introduction">1 引言(Introduction)</a></li></ul></li></ul></aside>
   <main class="read-main">
       <link rel="stylesheet" href="../assets/katex/katex.min.css">
       <script defer src="../assets/katex/katex.min.js"></script>
@@ -31,138 +31,24 @@
       <h1 class="read-title">PrivacyLens:评估语言模型在行动中的隐私规范意识</h1>
       <p class="read-title-en">&quot;PrivacyLens: Evaluating Privacy Norm Awareness of Language Models in Action&quot;</p>
       <p class="read-meta">&quot;Yijia Shao, Tianshi Li, Weiyan Shi, Yanchen Liu, Diyi Yang&quot; · &quot;NeurIPS 2024 Datasets &amp; Benchmarks · Stanford / Northeastern / Harvard&quot;</p>
-      <p class="read-badges"><span class="badge badge-recommended">推荐</span><span class="badge badge-kind">论文精读</span><button class="lang-toggle" id="lang-toggle" type="button">仅看中文</button><a class="orig-link" href="../originals/week08b_safety/Shao2024_PrivacyLens_NeurIPSD&amp;B2024.pdf" target="_blank" rel="noopener">查看原文(PDF) ↗</a></p>
+      <p class="read-badges"><span class="badge badge-recommended">推荐</span><span class="badge badge-kind">全译对照</span><button class="lang-toggle" id="lang-toggle" type="button">仅看中文</button><a class="orig-link" href="../originals/week08b_safety/Shao2024_PrivacyLens_NeurIPSD&amp;B2024.pdf" target="_blank" rel="noopener">查看原文(PDF) ↗</a></p>
       <div class="markdown-body">
 <h2 id="_1">导读</h2>
 <p>PrivacyLens 是本讲「Agent 安全」维度的重要配套读物的代表作(NeurIPS 2024 Datasets &amp; Benchmarks Track,斯坦福 SALT lab 等)。它研究的不是有恶意攻击者的传统隐私风险(如训练数据抽取、成员推断),而是一种更贴近真实 Agent 应用的新兴风险:<strong>LM 在没有攻击者的情况下,因缺乏对情境化隐私规范(contextual privacy norms)的意识而无意泄露隐私</strong>。例如用户让 Agent 代发周报邮件,Agent 从个人日历里读到了「与竞对公司猎头共进午餐」并写进了发给经理的邮件。论文的核心贡献有三:(1)基于 Nissenbaum 的上下文完整性(Contextual Integrity)理论定义五元组「隐私敏感种子」;(2)一条程序化数据构建流水线,把种子扩展为有细节的情境短文(vignette),再在基于 ToolEmu 的沙箱中模拟出 Agent 轨迹;(3)多层次评测体系,包括 QA 探针与行动评测两级。最关键的发现是:<strong>模型「答对题」和「做对事」严重脱节</strong>——GPT-4 在轨迹级探针上准确率约 98-99%,但行动评测中仍在 25.68% 的案例里泄露敏感信息,且扩大模型规模、隐私增强提示都收效甚微。这篇论文也示范了如何用 LLM 程序化构造安全评测集(单元测试 + LM 修复的 Surgery Kit),对课程中「评测集构建」主题同样是很好的案例。</p>
-<h2 id="_2">论文精读</h2>
+<h2 id="_2">全文对照翻译</h2>
+<p>以下为论文正文(Abstract 至附录 H,含 NeurIPS 伦理清单)的逐段中英对照翻译。英文段一律原样收录(仅将 PDF 换行合并为连续段落),每段英文之后紧跟完整中文译文;References 不收录;附录 F 的完整提示词按原文全文译出。</p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>PrivacyLens: Evaluating Privacy Norm Awareness of Language Models in Action<br><br>Yijia Shao (Stanford University, shaoyj@stanford.edu); Tianshi Li (Northeastern University, tia.li@northeastern.edu); Weiyan Shi∗ (Northeastern University, we.shi@northeastern.edu); Yanchen Liu (Harvard University, yanchenliu@g.harvard.edu); Diyi Yang (Stanford University, diyiy@stanford.edu)<br><br>https://salt-nlp.github.io/PrivacyLens<br><br>∗The work started when the author was a postdoc at Stanford.<br><br>38th Conference on Neural Information Processing Systems (NeurIPS 2024) Track on Datasets and Benchmarks. arXiv:2409.00138v3 [cs.CL] 14 Mar 2025</p></div><p><strong>标题与作者</strong>:《PrivacyLens:评估语言模型在行动中的隐私规范意识》。作者 Yijia Shao(斯坦福大学)、Tianshi Li(东北大学)、Weiyan Shi(东北大学,∗该工作始于作者在斯坦福做博士后期间)、Yanchen Liu(哈佛大学)、Diyi Yang(斯坦福大学);项目主页 https://salt-nlp.github.io/PrivacyLens 。本文发表于 NeurIPS 2024 Datasets &amp; Benchmarks Track(arXiv:2409.00138v3)。</p></div>
 <h3 id="abstract">摘要(Abstract)</h3>
-<p>语言模型(LM)被广泛用于个性化通信场景(如发邮件、发社交媒体帖子),并被赋予了一定程度的能动性(agency),确保其行为符合情境化的隐私规范变得日益关键。然而,量化 LM 的隐私规范意识与 LM 介入通信中的新兴隐私风险很有挑战,原因有二:(1)隐私敏感案例具有情境依赖性和长尾性;(2)缺少能刻画真实应用场景的评测方法。为此,作者提出 PrivacyLens——一个新颖框架,可将隐私敏感种子(seed)扩展为表达力丰富的情境短文(vignette),再进一步扩展为 Agent 轨迹(agent trajectory),从而对 LM Agent 行为中的隐私泄露做多层次评测。作者基于隐私文献与众包种子实例化了 PrivacyLens 数据集。利用该数据集,论文揭示了 LM 在回答探针问题时的表现与其在 Agent 设定下执行用户指令的实际行为之间的落差:即使被给予隐私增强指令,GPT-4 和 Llama-3-70B 这样的最先进模型仍在 25.68% 和 38.69% 的案例中泄露敏感信息。论文还通过把每个种子扩展为多条轨迹来红队测试 LM 隐私泄露风险,展示了 PrivacyLens 的动态性。数据与代码开源于 GitHub(SALT-NLP/PrivacyLens)。</p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>As language models (LMs) are widely utilized in personalized communication scenarios (e.g., sending emails, writing social media posts) and endowed with a certain level of agency, ensuring they act in accordance with the contextual privacy norms becomes increasingly critical. However, quantifying the privacy norm awareness of LMs and the emerging privacy risk in LM-mediated communication is challenging due to (1) the contextual and long-tailed nature of privacy-sensitive cases, and (2) the lack of evaluation approaches that capture realistic application scenarios. To address these challenges, we propose PrivacyLens, a novel framework designed to extend privacy-sensitive seeds into expressive vignettes and further into agent trajectories, enabling multi-level evaluation of privacy leakage in LM agents&#x27; actions. We instantiate PrivacyLens with a collection of privacy norms grounded in privacy literature and crowdsourced seeds. Using this dataset, we reveal a discrepancy between LM performance in answering probing questions and their actual behavior when executing user instructions in an agent setup. State-of-the-art LMs, like GPT-4 and Llama-3-70B, leak sensitive information in 25.68% and 38.69% of cases, even when prompted with privacy-enhancing instructions. We also demonstrate the dynamic nature of PrivacyLens by extending each seed into multiple trajectories to red-team LM privacy leakage risk. Dataset and code are available at https://github.com/SALT-NLP/PrivacyLens.</p></div><p>随着语言模型(LM)被广泛应用于个性化通信场景(如发邮件、撰写社交媒体帖子)并被赋予一定程度的能动性(agency),确保其行为符合情境化的隐私规范(contextual privacy norms)变得日益关键。然而,量化 LM 的隐私规范意识(privacy norm awareness)以及 LM 介入的通信(LM-mediated communication)中的新兴隐私风险极具挑战,原因有二:(1)隐私敏感案例具有情境依赖性与长尾性;(2)缺少能刻画真实应用场景的评测方法。为应对这些挑战,我们提出 PrivacyLens——一个新颖的框架,可将隐私敏感种子(privacy-sensitive seed)扩展为表达力丰富的情境短文(vignette),并进一步扩展为 Agent 轨迹(agent trajectory),从而对 LM Agent 行为中的隐私泄露进行多层次评测。我们以植根于隐私文献的隐私规范集合与众包(crowdsourced)种子实例化了 PrivacyLens。利用该数据集,我们揭示了 LM 在回答探针问题时的表现与其在 Agent 设定下执行用户指令的实际行为之间的落差。GPT-4 与 Llama-3-70B 这样的最先进模型,即使被给予隐私增强指令,仍在 25.68% 与 38.69% 的案例中泄露敏感信息。我们还通过把每个种子扩展为多条轨迹来红队测试(red-team)LM 隐私泄露风险,展示了 PrivacyLens 的动态性。数据与代码开源于 https://github.com/SALT-NLP/PrivacyLens 。</p></div>
 <h3 id="1-introduction">1 引言(Introduction)</h3>
-<p>随着 LM Agent(AutoGPT、BabyAGI 等)开始替用户处理日常通信任务(发邮件、发帖等),并借助工具调用与检索增强生成在推理时访问敏感数据,一个新问题出现了:LM 若不了解隐私规范——即「在该数据共享情境下信息流动是否得体」——就可能在<strong>没有任何恶意攻击者参与</strong>的情况下造成无意的隐私泄露。论文的动机例子(图 1):John 让 LM Agent 给经理 Susan 发一封「近期工作周报」,Agent 从 John 的个人日历中读取了「与 TechAdvance 猎头共进午餐」这类事件,并把它写进了邮件正文——在未经 John 明确同意的情况下,把「正在和几家公司谈跳槽」这一信息传给了经理。</p>
-<p>论文强调这种风险与以往广泛研究的风险模型(训练数据抽取、成员推断攻击 MIA 等,均假设存在故意攻击者)本质不同。已有工作用定向探针问题评估 LM 的隐私推理能力,但越来越多的研究指出:模型在探针任务上的表现与其在应用中的实际行为之间存在脱节。PrivacyLens 的目标是评估「行动中的」(in action)隐私规范意识,即把评测锚定在与日历、邮件等工具直接交互的 LM Agent 上。</p>
-<p>三条挑战:一是收集 Agent 轨迹需要专家级构造(逻辑复杂);二是隐私评测关注最坏情形——罕见但后果严重;三是隐私敏感性高度依赖情境(同样是「与猎头午餐」,若信息来自经理也在场的会议纪要而非个人日历,则数据流动可能是可接受的)。</p>
-<h3 id="2-related-work">2 相关工作(Related Work)</h3>
-<ul>
-<li><strong>语言模型隐私</strong>:以往评测聚焦模型是否记住了训练数据、攻击者能否抽取敏感信息(MIA 基准、抽取基准、DecodingTrust 等)。但隐私风险不止于记忆:LM 在推理时接触到的私有信息可能被写进生成文本,违反情境化社会规范。最相关的是 ConfAIde,它基于上下文完整性理论测试 LM 能否推理情境隐私,但主要采用探针问题,且只覆盖「会议纪要/行动项生成」单一应用、仅 20 个测试用例。PrivacyLens 首次系统研究 agentic 应用中的无意隐私泄露,且采用行动评测(见表 1 对比:唯一同时满足「推理时暴露 + 无意泄露 + 行动评测」)。</li>
-<li><strong>语言模型 Agent 评测</strong>:现有基准覆盖网页、游戏、编码、社交等能力维度,但理想的 LM Agent 除任务完成率外还应考虑行为后果。Naihin 等与 Yuan 等手工构造风险轨迹来训练「裁判模型」,费时费力且易因数据污染过时;ToolEmu 提供 LM 模拟沙箱。但此前没有工作从隐私视角评测 LM Agent 行为。</li>
-<li><strong>LM 辅助评测</strong>:受「用 LM 生成测试用例辅助评测 LM」这一研究线(ToxiGen、模型撰写的评测、红队等)启发,PrivacyLens 提出程序化数据构建流水线。</li>
-</ul>
-<h3 id="3-privacylens">3 PrivacyLens 框架</h3>
-<h4 id="31-risk-model">3.1 风险模型(Risk Model)</h4>
-<p>PrivacyLens 聚焦「LM 因隐私规范意识缺失导致的无意隐私泄露」。风险模型(图 1)包含三类角色:(1)<strong>发送方(sender)</strong>:下达指令 i 的日常用户,指令涉及向接收方共享信息,但可能欠规范(underspecify)了共享某些信息是否得体;(2)<strong>接收方(recipient)</strong>:发送方指定接收信息的人;(3)<strong>LM Agent</strong>:通过一串工具调用动作执行 i,轨迹形如 {a1, o1, …, a_{n-1}, o_{n-1}, a_n},其中 o 为环境观察。与传统风险模型不同,这里<strong>没有恶意角色</strong>:当轨迹中收集到的某条信息在最终动作 a_n 中被共享给接收方、且该信息流违反隐私规范时,泄露即发生。</p>
-<h4 id="32-data-construction-pipeline">3.2 数据构建流水线(Data Construction Pipeline)</h4>
-<p><strong>(a)收集情境化隐私种子。</strong> 借助上下文完整性理论,每个隐私敏感种子 S 定义为五元组:(1)数据类型(data type);(2)数据主体(data subject);(3)数据发送方(data sender);(4)数据接收方(data recipient);(5)传输原则(transmission principle,信息传输方式或附加条件)。五元组刻画「潜在不得体的信息传输」,任一元素改变都可能翻转预期隐私规范,这正是「情境化」的含义。</p>
-<p><strong>(b)种子扩展为情境短文(vignette)。</strong> 种子细节有限,论文用 GPT-4 做模板化生成,把种子扩展成短故事(图 2B),补充真实世界的复杂性。一个关键设计:直接生成的短文往往包含「sensitive / private / confidential」等明示敏感性的词,而日常通信中的隐私问题通常是隐晦的,因此要求生成结果排除这些受限词。为此引入 <strong>Surgery Kit 模块</strong>:输入原始输出、一组单元测试(unit test)及与失败测试对应的修复指令,由 LM 据此迭代精炼文本(算法 1,最多 n 轮),直到通过全部测试或返回失败标志。短文生成阶段的单元测试是确定性的关键词检测。</p>
-<p><strong>(c)构造可执行的 Agent 轨迹。</strong> 基于 ToolEmu 搭建沙箱,LM Agent 可与日历、邮件、社交媒体、个人笔记(Notion)等一整套工具交互;工具观察由 GPT-4 模拟器生成,避免依赖真实用户数据。为了提高最坏情形评测的效率,流水线还用 GPT-4 基于种子与短文生成<strong>欠规范的</strong>用户指令(如「把我的近期工作报告发给 Susan」),并让模拟器按 S 和 V 生成观察,从而制造容易暴露隐私风险的对抗性场景。最终把发生数据传输的最终动作 a_n 移除,得到可复用的可执行轨迹 T = {a1, o1, …, a_{n-1}, o_{n-1}}。轨迹同样过 Surgery Kit:局部消除占位符、全局增强与种子的一致性。</p>
-<h4 id="33-multi-level-evaluation">3.3 多层次评测(Multi-Level Evaluation)</h4>
-<ul>
-<li><strong>QA 探针</strong>:针对每个数据点的 S 与 V,向 LM 提问「{发送方}通过{传输原则}与{接收方}共享{数据主体}的{数据类型}是否可接受?」(该问句式来自 Shvartzshnaider 等用于调查人类隐私期望的工作);对轨迹 T 则强调「你(Agent)正代表用户发送信息」。由于种子本身隐私敏感,期望 LM 全部答「否」,指标为准确率。</li>
-<li><strong>行动评测</strong>:让被测 LM 基于轨迹 T 生成最终动作 a_T。基于种子 S 从轨迹中抽取敏感信息项列表 I(T,S) = {i1,…,im},再用少样本 LM 分类器 f 判断每条信息能否从 a_T 中推断出来;只要存在一条可推断即判为泄露。泄露率(LR)定义为数据集上泄露案例的百分比(式 1)。作者用 Mistral-7B 抽取信息项并做分类器,人工核验质量;在 153 对样本上,f 与 4 名标注者多数票的 Fleiss' Kappa 为 0.82,以人类多数票为真值的判断准确率为 0.92。</li>
-</ul>
-<h3 id="4">4 实例化:构建数据集</h3>
-<p>种子来源横跨「法律规范—社会规范」「特定社群—大众」两个维度:(1)用 GPT-4 从 15 部美国隐私法规(HIPAA、FERPA、GLBA、AMA 医学伦理准则等)及 Sannon &amp; Forte 整理的弱势群体隐私研究论文中抽取法律/学术种子;(2)通过 Prolific 众包扩大规模——预先填充传输原则为在线通信活动,枚举不同社会关系与职业组合,让参与者头脑风暴能使种子违反隐私规范的数据类型与数据主体。验证阶段每条种子获 3 个标注,至少 2 人判为隐私敏感才算有效,标注者间 Fleiss' Kappa 为 0.79(高度一致)。</p>
-<p>最终收集 <strong>493 条有效隐私敏感种子</strong>,各扩展为 1 个短文与 1 条轨迹;Surgery Kit 迭代上限设 2 轮仍失败时由作者人工修复,且整个数据集经作者人工复核。框架可扩展:附录 D 把 ConfAIde 的 32 个信息流与 CultureBank 的 24 条文化隐私规范转换为 PrivacyLens 种子(如「犹太社区中,怀孕信息保密」),同样测出显著泄露(如 ConfAIde 子集上 GPT-4 泄露 9.38%、Claude-3-Sonnet 21.88%;CultureBank 子集上 GPT-4 12.50%)。</p>
-<h3 id="5">5 实验</h3>
-<h4 id="51">5.1 评测设置</h4>
-<ul>
-<li><strong>模型</strong>:4 个闭源(ChatGPT-3.5 gpt-3.5-turbo-1106、GPT-4 gpt-4-1106-preview、Claude-3-Haiku、Claude-3-Sonnet)+ 5 个开源(Mistral-7B-Instruct-v0.2、Mixtral-8x7B-Instruct-v0.1、zephyr-7b-beta、Llama-3-8B/70B-Instruct);温度 0,开源模型用 4 张 A100 80GB 推理。</li>
-<li><strong>提示</strong>:探针为零样本;行动评测用 ReAct 实现 Agent(动作前输出 thought),系统提示沿用 ToolEmu(记为 Basic Prompt),另设直接指示保护隐私的 Privacy-Enhancing Prompt 以检验提示工程的效果。</li>
-<li><strong>指标</strong>:泄露率 LR;考虑「安全-有帮助」权衡的调整泄露率 LRh = 有帮助(评分 2/3)案例中的泄露数 / 有帮助案例总数。有用性由同一 Mistral 按 ToolEmu 的 0-3 评分,其与人类多数票的二值一致性的 Fleiss' Kappa 仅 0.56(提示该自动指标偏弱)。</li>
-</ul>
-<h4 id="52-2">5.2 结果(表 2 关键数字)</h4>
-<table>
-<thead>
-<tr>
-<th>模型</th>
-<th>Basic Acc</th>
-<th>Basic LRh</th>
-<th>PE Acc</th>
-<th>PE LRh</th>
-<th>PE 有用性</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>ChatGPT-3.5</td>
-<td>64.10</td>
-<td>37.69</td>
-<td>91.28</td>
-<td>31.25</td>
-<td>2.68</td>
-</tr>
-<tr>
-<td>GPT-4</td>
-<td>97.57</td>
-<td>27.23</td>
-<td>98.99</td>
-<td>25.68</td>
-<td>2.61</td>
-</tr>
-<tr>
-<td>Claude-3-Haiku</td>
-<td>98.99</td>
-<td>38.72</td>
-<td>99.80</td>
-<td>39.66</td>
-<td>2.72</td>
-</tr>
-<tr>
-<td>Claude-3-Sonnet</td>
-<td>99.80</td>
-<td>38.83</td>
-<td>100.00</td>
-<td>37.74</td>
-<td>2.72</td>
-</tr>
-<tr>
-<td>Llama-3-8B</td>
-<td>31.44</td>
-<td>22.84</td>
-<td>71.81</td>
-<td>23.16</td>
-<td>2.28</td>
-</tr>
-<tr>
-<td>Llama-3-70B</td>
-<td>94.32</td>
-<td>38.04</td>
-<td>98.58</td>
-<td>38.69</td>
-<td>2.54</td>
-</tr>
-</tbody>
-</table>
-<ul>
-<li><strong>QA 探针随层级退化</strong>:从种子到轨迹,弱模型探针准确率大幅下滑(Mistral-7B 94.32%→63.29%,Llama-3-8B 88.84%→31.44%),归因于从轨迹中抓取相关上下文与处理长序列的难度;强模型(GPT-4、Claude-3、Llama-3-70B)在三个层级都保持高分。</li>
-<li><strong>探针与行动评测的巨大落差</strong>:GPT-4 与 Claude-3-Sonnet 几乎答对所有轨迹级探针(97.57%/99.80% 起),但在同样轨迹上的行动泄露率分别达 27.23% 和 38.83%(Basic Prompt)。这印证了「判得出、做不对」的脱节,凸显构建行动式评测的必要性。</li>
-<li><strong>安全-有帮助权衡</strong>:Llama-3-8B 泄露率最低(21.30%),但有用性也低;不泄露时仍有「建议接收方直接去翻我的 Notion」「稍后另行发送地址」等令人不安的变通行为。GPT-4 的图 5 三个案例直观展示了权衡:泄露同学成绩却得高有用性分;保护隐私不外泄却被判无用(有用性 1 分)。</li>
-<li><strong>规模效应失灵</strong>:Claude-3-Haiku→Sonnet、Llama-3-8B→70B 的对比显示,更大的模型在探针上更好,但行动评测并未改善——大模型照样在最终动作里泄露敏感信息。</li>
-<li><strong>提示工程效果有限</strong>:隐私增强提示能提升探针成绩,对行动评测的泄露率改善不显著。对 ReAct thought 的分析显示,该提示确实让强模型更多地在思考中提及隐私,但模型仍可能在行动中泄露。</li>
-</ul>
-<h4 id="53-privacylens">5.3 PrivacyLens 的动态性</h4>
-<p>框架天然支持「一个种子 → 多个短文/轨迹」:除非零温度多次采样外,可在短文生成时附加条件。概念验证中,作者从法规中选 10 个种子,用受人类信息披露研究启发的 5 种条件(互惠披露、正当理由、亲密关系、兴奋情绪、感知收益)各生成一条短文与轨迹,共 50 条轨迹。扩展数据点仍能有效区分模型(表 3),并提出新指标 pL = 触发至少一次泄露的种子占比(如 GPT-4 的 LR 为 14.00%、pL 为 0.4),说明多轨迹扩展有望支持更全面的红队测试并缓解数据污染。</p>
-<h3 id="6">6 讨论、局限与更广泛影响</h3>
-<ul>
-<li><strong>结论</strong>:即使 SOTA LM 在探针上表现优异,在 Agent 设定下执行用户指令时仍频繁泄露信息;规模扩展与提示工程都非解药,需要专门研究提升 LM 的隐私规范意识。</li>
-<li><strong>局限</strong>:(1)数据只覆盖美国的普遍隐私规范,而隐私关切因文化与个体而异;(2)轨迹由 GPT-4 Agent 采集、被测模型只执行最终动作,可能影响对其他模型评估的效度;(3)聚焦 LM 介入的通信场景,网页 Agent 等其他场景留待未来。</li>
-<li><strong>更广泛影响</strong>:除发布数据集外还开源生成流水线,鼓励社区构建更全面的隐私评测;普通用户也可用自己关心的种子生成轨迹,在正式使用前观察、审计 LM Agent 的隐私风险。</li>
-</ul>
-<h3 id="_3">附录速览</h3>
-<p>附录 B 详述种子收集(法规/文献抽取与 Prolific 众包流程及验证);附录 C 列出沙箱工具集(日历、Gmail、Messenger、Notion 等)与轨迹构造细节;附录 E 给出更多定性案例(含 LR/LRh 未捕捉的「变通泄露」行为);附录 F 给出全流程完整提示词(种子→短文、生成用户指令、模拟器、Surgery Kit、两种 Agent 系统提示、泄露判定与有用性评分提示);附录 G 是数据表(datasheet);附录 H 为作者声明。</p>
-<h2 id="_4">要点速览</h2>
-<ul>
-<li>新兴风险:没有攻击者时,LM Agent 也可能因不熟悉情境化隐私规范而无意泄露隐私(如把日历里的「猎头午餐」写进给经理的周报邮件)。</li>
-<li>理论骨架:上下文完整性(Contextual Integrity)理论的五元组种子——数据类型、数据主体、发送方、接收方、传输原则;任一元素改变,隐私预期即可能翻转。</li>
-<li>三级数据流水线:隐私敏感种子 →(模板化生成 + Surgery Kit)情境短文 →(ToolEmu 沙箱 + GPT-4 模拟器)可执行 Agent 轨迹;Surgery Kit 用单元测试 + LM 修复保证质量(如剔除 sensitive/private/confidential 等受限词)。</li>
-<li>数据规模:493 个有效种子/短文/轨迹;种子来自 15 部美国隐私法规、弱势群体隐私研究与 Prolific 众包,验证标注 Fleiss' Kappa 0.79。</li>
-<li>核心发现——「知行脱节」:GPT-4 轨迹级探针准确率 98.99%,行动泄露率(LRh)仍达 25.68%;Claude-3-Sonnet 探针 100%、泄露 37.74%;Llama-3-70B 泄露 38.69%。</li>
-<li>泄露自动判定:基于种子的敏感信息项列表 + 少样本 LM 分类器,与人类多数票 Kappa 0.82、准确率 0.92;另有考虑安全-有帮助权衡的调整泄露率 LRh。</li>
-<li>规模扩展与隐私增强提示均不能有效降低行动泄露率;隐私提示能让强模型在 ReAct thought 里多谈隐私,却未必约束得了最终动作。</li>
-<li>安全-有帮助权衡真实存在:最「安全」的 Llama-3-8B 有用性最差,还会出现「建议对方自己去翻我的 Notion」等规避式危险行为。</li>
-<li>动态扩展与红队:一个种子可加条件(互惠披露、正当理由等)扩展为多条轨迹,用 pL(触发泄露的种子占比)做更全面的隐私红队,并缓解数据污染。</li>
-<li>局限与愿景:仅覆盖美国规范、轨迹由 GPT-4 采集;作者希望流水线开源后,社区与个人都能按自己的隐私关切定制评测、审计 LM Agent。</li>
-</ul>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Recent advancements in language models (LMs) have led to new applications, such as LM agents [16, 36] that can assist users in handling everyday communication tasks (e.g., sending emails, making social media posts, etc. [34, 50]). Equipped with tool use or retrieval-augmented generation capabilities, LMs can access sensitive data at inference time. Consequently, their unawareness of the privacy norms, i.e., the appropriateness of the data flow in the data sharing context [38], could lead to unintentional privacy leakage, even without malicious attackers involved. For example, as illustrated in Figure 1, it is undesirable for an LM agent to share the information that John is &quot;talking to a few companies about switching jobs&quot; when assisting John in sending an &quot;email&quot; to &quot;John&#x27;s manager&quot; without John&#x27;s explicit consent. It is challenging to balance the LM&#x27;s agency with users&#x27; privacy expectations, because the privacy management process may involve respecting privacy norms in context and taking into account individual preferences and knowledge [54]. This raises an emerging privacy risk that differs from widely studied risk models with intentional attackers, such as training data extraction [6, 37] and membership inference attacks (MIA) [31, 10, 27].</p></div><p>语言模型(LM)的最新进展催生了新的应用,例如能协助用户处理日常通信任务(如发邮件、发社交媒体帖子等 [34, 50])的 LM Agent [16, 36]。凭借工具调用(tool use)或检索增强生成能力,LM 可以在推理时访问敏感数据。因此,LM 对隐私规范——即在数据共享情境下信息流动是否得体 [38]——缺乏意识,可能导致无意的隐私泄露(unintentional privacy leakage),即使没有任何恶意攻击者参与。例如,如图 1 所示,当 LM Agent 协助 John 给「John 的经理」发「电子邮件」时,在未经 John 明确同意的情况下分享「John 正在与几家公司谈跳槽」这一信息,是不可取的。在 LM 的能动性与用户的隐私期望之间取得平衡颇具挑战,因为隐私管理过程可能既涉及尊重情境中的隐私规范,也要考虑个体偏好与认知 [54]。这就引出了一种新兴隐私风险,它与那些假设存在故意攻击者的、被广泛研究的风险模型——如训练数据抽取(training data extraction)[6, 37] 与成员推断攻击(membership inference attack, MIA)[31, 10, 27]——本质不同。</p></div>
+<p>[图 1: Figure 1: Risk Model of PrivacyLens. PrivacyLens quantifies an emerging LM privacy risk where LMs unintentionally leak private information when assisting human communication. The risk model involves three primary actors: (1) a sender, who is a daily user instructing an LM to assist in communication; (2) a recipient, who is specified in the user instruction; (3) an LM agent, who gets access to sensitive information through tool use (e.g., reading events from the user's personal calendar). The privacy leakage arises when the LM agent shares a piece of information (e.g., "lunch with TechAdvance Recruiter") in its final action, and the information flow violates a privacy norm.]</p>
+<p>中文说明:图 1 为 PrivacyLens 的风险模型,量化「LM 在协助人类通信时无意泄露私有信息」这一新兴风险。左侧为隐私敏感种子的五个字段:数据类型(data type)「正在与几家公司谈跳槽」、数据主体(data subject)John、数据发送方(data sender)John、数据接收方(data recipient)「John 的经理」、传输原则(transmission principle)「电子邮件」,规范来源(norm source)为「众包的日常用户」。右侧展示一次 Agent 交互:日常用户向 LM 应用(如 Agent)下达可能欠规范的用户指令「把 Susan Harrington(susan.harrington@innotechsolutions.com)关于我近期工作的周报发给她」;Agent 的动作(action)可能涉及通信(如 GmailSendEmail),观察(observation)可能包含敏感信息——例如动作 GoogleCalendarReadEvents 读取个人日历返回的事件里,除了「Weekly Team Sync-Up」还有「Lunch with TechAdvance Recruiter」;最终动作 GmailSendEmail 的邮件正文则把「Lunch with TechAdvanceRecruiter (Feb 17, 2022)」写进了专业发展活动列表。风险模型含三类角色:(1)发送方,即指示 LM 协助通信的日常用户;(2)接收方,即用户指令中指定的人;(3)LM Agent,通过工具调用(如从用户个人日历读事件)接触敏感信息。当 LM Agent 在最终动作中分享某条信息(如「与 TechAdvance 猎头午餐」)、且该信息流违反隐私规范时,隐私泄露即发生——整个过程没有任何恶意角色。</p>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Recent efforts to evaluate the privacy reasoning capabilities of LMs involve probing them with targeted questions [33, 53, 25]. While such evaluation setups are straightforward to implement and offer essential insights, such as LMs&#x27; sensitivity to privacy-related words and their ability to determine information accessibility, a growing amount of work has highlighted a potential disconnection between LMs&#x27; performance on these probing tasks and their actual behavior in applications [20, 29, 11, 43]. We focus on evaluating LMs&#x27; privacy norm awareness in action by grounding our setup in a critical family of applications, i.e., LM agents that directly interact with tools such as users&#x27; calendar or email. Compared to single-turn probing questions, such evaluation requires collecting agent trajectories, which demands expert construction due to the complex logic involved [58]. It is even more challenging to evaluate them from a privacy perspective because it focuses on worst-case scenarios that may be very rare but consequential [35]. Moreover, privacy sensitivity is context-dependent. In Figure 1&#x27;s example, the data flow would turn acceptable if the information comes from a virtual meeting transcript where the manager is also present, rather than from the user&#x27;s personal calendar without the user&#x27;s explicit consent. Generating such contexts can be difficult, as they are inherently unstructured and subject to subtle changes [38].</p></div><p>评估 LM 隐私推理能力的近期工作,采用定向探针问题(probing questions)[33, 53, 25] 去测试模型。这类评测设置实现直接,也能提供关键洞见——例如 LM 对隐私相关词汇的敏感性、判断信息可访问性的能力——但越来越多的工作指出,LM 在这类探针任务上的表现与其在应用中的实际行为之间可能存在脱节 [20, 29, 11, 43]。我们聚焦评估「行动中的」(in action)LM 隐私规范意识,把评测设定锚定在一类关键应用上,即与用户日历、邮件等工具直接交互的 LM Agent。与单轮探针问题相比,这类评测需要收集 Agent 轨迹,而其中涉及的复杂逻辑需要专家级构造 [58]。从隐私视角评测它们则更具挑战,因为隐私关注的是最坏情形(worst-case)——可能非常罕见但后果严重 [35]。此外,隐私敏感性高度依赖情境。在图 1 的例子中,如果信息不是来自未经用户明确同意的个人日历,而是来自经理也在场的虚拟会议纪要,那么该数据流动就会变成可接受的。生成这类情境很困难,因为它们天然是非结构化的,且容易发生微妙变化 [38]。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>We address these challenges by proposing PrivacyLens, a procedural data construction and multi-level evaluation framework to evaluate privacy norm awareness of LMs in action. PrivacyLens starts with collecting privacy norms using a generic schema informed by the Contextual Integrity theory [38]. This theoretical framework helps characterize privacy norms with nuanced consideration of who the information is about, the social relationship between the sender and the recipient, and the method of information transmission [4, 39]. To evaluate LMs in action, we use these norms as privacy-sensitive seeds (Figure 1 Left) and employ a template-based generation method to expand them into expressive vignettes describing scenarios where the sensitive data transmission could happen. Finally, we build a simulated sandbox environment where the LM agent can interact with a set of tools (e.g., email, calendar, personal notebook, etc.) to further obtain agent trajectories from the seed and vignette (Figure 1 Right).</p></div><p>为应对这些挑战,我们提出 PrivacyLens——一个程序化数据构建与多层次评测框架,用于评估「行动中的」LM 隐私规范意识。PrivacyLens 从用一套由上下文完整性(Contextual Integrity,亦译「情境完整性」)理论 [38] 启发的通用模式(schema)收集隐私规范开始。这一理论框架有助于细致地刻画隐私规范:信息是关于谁的、发送方与接收方之间的社会关系、以及信息传输的方式 [4, 39]。为评估行动中的 LM,我们把这些规范作为隐私敏感种子(图 1 左),并用基于模板的生成方法(template-based generation)把种子扩展为表达力丰富的情境短文,描述敏感数据传输可能发生的场景。最后,我们搭建一个模拟沙箱(sandbox)环境,让 LM Agent 与一整套工具(如邮件、日历、个人笔记本等)交互,进一步从种子与短文得到 Agent 轨迹(图 1 右)。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>We initiate PrivacyLens by collecting privacy-sensitive seeds from U.S. privacy regulations, privacy research literature on vulnerable groups, and crowdsourcing. In total, we gather 493 seeds and extend them into 493 expressive vignettes and 493 trajectories. We evaluate a series of LMs using QA probing with 1,479 questions and an LM agent setup with the trajectories. While closed-source LMs (e.g., GPT-4) perform well in the probing evaluation, GPT-4 still leaks information in 25.68% of cases in the action-based evaluation, even with privacy-enhancing prompt engineering. This leakage rate is concerning, as we focus on worst-case evaluation and privacy leakage may lead to consequential outcome [8].</p></div><p>我们从美国隐私法规、关于弱势群体的隐私研究文献以及众包三条渠道收集隐私敏感种子,以此启动 PrivacyLens。总计收集 493 个种子,并扩展为 493 个情境短文与 493 条轨迹。我们用 1,479 个 QA 探针问题与基于轨迹的 LM Agent 设定评测一系列 LM。虽然闭源 LM(如 GPT-4)在探针评测中表现出色,但在行动式评测(action-based evaluation)中,GPT-4 即便配合隐私增强的提示工程,仍在 25.68% 的案例中泄露信息。这一泄露率令人担忧,因为我们关注的是最坏情形评测,而隐私泄露可能导致严重后果 [8]。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Furthermore, we demonstrate the dynamic nature of PrivacyLens by introducing variations to the vignette generation process, yielding more vignettes and trajectories. This approach holds the potential to mitigate data contamination and support comprehensive red-teaming.</p></div><p>此外,我们通过在短文生成过程中引入变化,产生更多短文与轨迹,展示了 PrivacyLens 的动态性。这一做法有望缓解数据污染(data contamination)并支持全面的红队测试。</p></div>
+<!-- 待续 -->
       </div>
     </article>
     <nav class="pager"><a class="pager-prev" href="OpenAI2025_Prompt_Injections.html"><span>上一篇</span>理解提示注入:一项前沿安全挑战</a><a class="pager-next" href="Wen2026_Contextualized_Privacy_Defense.html"><span>下一篇</span>&quot;面向 LLM 智能体的上下文化隐私防御(CDI)&quot;</a></nav>
