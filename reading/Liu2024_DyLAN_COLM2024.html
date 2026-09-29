@@ -21,7 +21,7 @@
   </div>
 </header>
 <div class="read-layout">
-  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">全文对照翻译</a><ul><li><a href="#_3">摘要</a></li><li><a href="#1">1 引言</a></li><li><a href="#2">2 相关工作</a></li><li><a href="#3-llm">3 动态 LLM 智能体网络</a></li><li><a href="#4">4 实验</a></li><li><a href="#5">5 结论与未来工作</a></li><li><a href="#_4">致谢</a></li><li><a href="#_5">伦理声明</a></li><li><a href="#a">附录 A 讨论与局限</a></li><li><a href="#b">附录 B 实现细节</a></li><li><a href="#c">附录 C 附加结果</a></li></ul></li></ul></aside>
+  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">全文对照翻译</a><ul><li><a href="#_3">摘要</a></li><li><a href="#1">1 引言</a></li><li><a href="#2">2 相关工作</a></li><li><a href="#3-llm">3 动态 LLM 智能体网络</a></li><li><a href="#4">4 实验</a></li><li><a href="#5">5 结论与未来工作</a></li><li><a href="#_4">致谢</a></li><li><a href="#_5">伦理声明</a></li><li><a href="#a">附录 A 讨论与局限</a></li><li><a href="#b">附录 B 实现细节</a></li><li><a href="#c">附录 C 附加结果</a></li><li><a href="#d">附录 D 提示词模板</a></li></ul></li><li><a href="#_6">要点速览</a></li></ul></aside>
   <main class="read-main">
       <link rel="stylesheet" href="../assets/katex/katex.min.css">
       <script defer src="../assets/katex/katex.min.js"></script>
@@ -799,7 +799,7 @@ end for
 </tbody>
 </table>
 <h4 id="c2-dylan">C.2 DyLAN 中不同基础模型的鲁棒性</h4>
-<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Besides using GPT-3.5 for DyLAN on CG tasks in Table 2, we also experiment with GPT-4 in Table 10. Due to budget limits, we directly reuse the performance reported in the paper of baselines, including LATS (Zhou et al., 2023), Reflexion (Shinn et al., 2023), Meta-GPT (Hong et al., 2024), and AgentVerse (Chen et al., 2024), and estimate the cost in terms of numbers of API calls. DyLAN is also constructed by agents which are optimized based on GPT-3.5, as demonstrated in Appendix B.1. We found that DyLAN consistently outperforms other multi-agent methods, indicating the effectiveness of dynamic agent team in T-FFN structure and the cross-model transferability of optimization results on agent teams. Although LATS outperforms DyLAN, it requires over 40 times GPT-4 calls per sample to conduct inference-time MCTS on GPT-4, which demonstrates poor efficiency.</p></div><p>除表 2 中 CG 任务使用 GPT-3.5 外,我们也在表 10 中实验了 GPT-4。受预算所限,基线方法——包括 LATS(Zhou et al., 2023)、Reflexion(Shinn et al., 2023)、Meta-GPT(Hong et al., 2024)与 AgentVerse(Chen et al., 2024)——直接沿用其论文报告的性能,成本以 API 调用次数估算。如表 B.1 所示,DyLAN 的智能体也是基于 GPT-3.5 优化得到的。我们发现 DyLAN 始终优于其他多智能体方法,这说明 T-FFN 结构中动态智能体团队的有效性,以及智能体团队优化结果的<strong>跨模型可迁移性</strong>。虽然 LATS 胜过 DyLAN,但它需要在 GPT-4 上做推理时 MCTS,每个样本要调用 GPT-4 超过 40 次,效率很差。</p></div>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>Besides using GPT-3.5 for DyLAN on CG tasks in Table 2, we also experiment with GPT-4 in Table 10. Due to budget limits, we directly reuse the performance reported in the paper of baselines, including LATS (Zhou et al., 2023), Reflexion (Shinn et al., 2023), Meta-GPT (Hong et al., 2024), and AgentVerse (Chen et al., 2024), and estimate the cost in terms of numbers of API calls. DyLAN is also constructed by agents which are optimized based on GPT-3.5, as demonstrated in Appendix B.1. We found that DyLAN consistently outperforms other multi-agent methods, indicating the effectiveness of dynamic agent team in T-FFN structure and the cross-model transferability of optimization results on agent teams. Although LATS outperforms DyLAN, it requires over 40 times GPT-4 calls per sample to conduct inference-time MCTS on GPT-4, which demonstrates poor efficiency.</p></div><p>除表 2 中 CG 任务使用 GPT-3.5 外,我们也在表 10 中实验了 GPT-4。受预算所限,基线方法——包括 LATS(Zhou et al., 2023)、Reflexion(Shinn et al., 2023)、Meta-GPT(Hong et al., 2024)与 AgentVerse(Chen et al., 2024)——直接沿用其论文报告的性能,成本以 API 调用次数估算。如附录 B.1 所示,DyLAN 的智能体也是基于 GPT-3.5 优化得到的。我们发现 DyLAN 始终优于其他多智能体方法,这说明 T-FFN 结构中动态智能体团队的有效性,以及智能体团队优化结果的<strong>跨模型可迁移性</strong>。虽然 LATS 胜过 DyLAN,但它需要在 GPT-4 上做推理时 MCTS,每个样本要调用 GPT-4 超过 40 次,效率很差。</p></div>
 <p>[表 10: Experimental results on the CG task on GPT-4-0613. The number in parentheses indicates the difference relative to the single execution or direct execution. The bold font denotes the results of our method and the best results are underlined.]</p>
 <p>表 10:CG 任务在 GPT-4-0613 上的实验结果。括号中的数字表示相对单次执行/直接执行的差值。加粗(译注:本页以粗体标示)为本文方法的结果,最佳结果在原表中加下划线。</p>
 <table>
@@ -1052,7 +1052,7 @@ end for
 <p><div class="math-display">$$S_i(R) = \frac{1}{|C||R|} \sum_{T \in C} \left(\text{Performance}(T \cup \{i\}) - \text{Performance}(T)\right), \tag{13}$$</div></p>
 <p>其中 <span class="math-inline">$R$</span> 是系统中的智能体集合,<span class="math-inline">$C$</span> 是 <span class="math-inline">$R\setminus\{i\}$</span> 的组合集(<span class="math-inline">$i \in R$</span>),Performance 表示系统在当前任务上的整体表现,如分类准确率或 Pass@1。该指标需要真值标签以及系统在不同智能体子集下的多次运行结果;分类任务用分类准确率,代码生成任务用 Pass@1。不过,由于其组合复杂度,当智能体数量增大时,其计算成本依然过高。</p>
 <div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>To examine Agent Importance Score as an indicator of agent selection with Shapley Value, we also randomly chose three combinations of three agents out of all 7 candidates to assemble a T-FFN and calculated the Shapley Value and the Agent Importance Score on GR tasks. In the GR task, The roles of candidates in DyLAN match the categories of MMLU in human priors, including &quot;Mathematician&quot; and &quot;Programmer&quot; for STEM, &quot;Lawyer&quot; and &quot;Historian&quot; for Humanities, &quot;Economist&quot; and &quot;Psychologist&quot; in Social Science, and &quot;Doctor&quot; for clinical questions in the &quot;Other&quot; category. During experiment with a T-FFN with at least one agent matches the category of the question, it is called a In-Domain scenario; vice versa.<br><br>In Appendix C.6, we report the correlations between Shapley Values and Agent Importance Scores. We are curious whether Agent Importance Score is an unsupervised substitution for Shapley Value. So, we calculated two list-wise metrics for the similarity between distributions: the KL divergence and ListMLE (Xia et al., 2008), between Agent Importance Scores and Shapley Value. It indeed shows a high correlation between the distributions of the two metrics during in-domain scenarios.<br><br>In summary, we use Shapley Value as a self-evident metric for measuring individual contribution, showing that Agent Importance Score emerges as a promising, unsupervised alternative with light computational complexity.</p></div><p>为用沙普利值检验智能体重要性分数作为智能体选择指标的表现,我们从全部 7 个候选中随机抽取三种"三智能体"组合搭建 T-FFN,并在 GR 任务上计算沙普利值与智能体重要性分数。在 GR 任务中,DyLAN 候选智能体的角色按人类先验与 MMLU 的类别对应:STEM 对应 "Mathematician" 与 "Programmer",人文学科对应 "Lawyer" 与 "Historian",社会科学对应 "Economist" 与 "Psychologist","Other" 类别中的临床问题对应 "Doctor"。实验中,若 T-FFN 中至少有一个智能体与题目类别匹配,称为<strong>域内(In-Domain)场景</strong>;反之则为域外场景。</p></div>
-<p>我们在表 15 中报告沙普利值与智能体重要性分数的相关性。我们想知道智能体重要性分数能否作为沙普利值的无监督替代。为此,我们计算了两种分布相似度的列表式指标:智能体重要性分数与沙普利值之间的 KL 散度与 ListMLE(Xia et al., 2008)。结果确实显示,域内场景中两种指标的分布高度相关。</p>
+<p>我们在附录 C.6(即表 15)中报告沙普利值与智能体重要性分数的相关性。我们想知道智能体重要性分数能否作为沙普利值的无监督替代。为此,我们计算了两种分布相似度的列表式指标:智能体重要性分数与沙普利值之间的 KL 散度与 ListMLE(Xia et al., 2008)。结果确实显示,域内场景中两种指标的分布高度相关。</p>
 <p>总之,我们把沙普利值作为度量个体贡献的自明指标,结果表明<strong>智能体重要性分数是一个有前景、计算开销轻的无监督替代方案</strong>。</p>
 <p>[表 15: Correlation between different metrics for quantifying agents' contributions in DyLAN on the GR task. We compute the KL divergence (DKL) and the ListMLE loss (LListMLE) between Shapley Value and other metrics on each subject and report the average value. The In-Domain column means at least one agent in DyLAN matches the category of the subject according to Appendix C.6, and Off-Domain means none of agents matches the subject.]</p>
 <p>表 15:GR 任务上不同贡献度量指标间的相关性。我们对每个科目计算沙普利值与其他指标之间的 KL 散度(<span class="math-inline">$D_{\mathrm{KL}}$</span>)与 ListMLE 损失(<span class="math-inline">$L_{\mathrm{ListMLE}}$</span>)并报告平均值。In-Domain 列表示 DyLAN 中至少一个智能体与该科目类别匹配(依据附录 C.6),Off-Domain 表示无智能体匹配。</p>
@@ -1099,6 +1099,208 @@ end for
 <p>图 6:DyLAN 求解通用推理任务的案例。题目:"一节课开始时班上一半学生去图书馆,之后剩余学生中的一半去机房,若最后班里还剩 8 名学生,问班里原有多少学生?"(选项 A. 12、B. 16、C. 24、D. 32)。第 1 层(<span class="math-inline">$V_1$</span>)中,Mathematician 从结果倒推但算错;Programmer 算得 8×2+8=24,答 (C);Economist 同样答 (C) 24;Doctor 表示"作为医生不擅长答数学题",拒绝作答。第 2 层(<span class="math-inline">$V_2$</span>)各智能体在看到他者解法后更新回答:Mathematician 正确倒推"8÷0.5=16,16÷0.5=32",答 (D) 32,并给四个解法打分 [[5, 2, 3, 0]];Programmer 答 (D) 32,打分 [[4, 3, 2, 0]];Economist 与 Doctor 亦给出 [[4, 3, 2, 1]] 等评分。第 2 步即触发早停,最终答案为 (D) 32 students。图下方展示重要性分数的计算:<span class="math-inline">$I_{1,1} = 0.165+0.147+0.132 = 0.45$</span>、<span class="math-inline">$I_{1,2} = 0.28$</span>、<span class="math-inline">$I_{1,3} = 0.24$</span>、<span class="math-inline">$I_{1,4} = 0.03$</span>(末层贡献 <span class="math-inline">$I_{2,1}=I_{2,2}=I_{2,4}=0.33$</span>、<span class="math-inline">$I_{2,3}=0.00$</span>)——第一轮就答对方向并说服他人的 Mathematician 分数最高。结果在第 1 时间步不正确、第 2 时间步变正确;图中包含用于计算智能体重要性分数的智能体评分。</p>
 <p>[图 7: A failed case of DyLAN solving code generation task. Optimization directions provided by Code Reflector are wrong.]</p>
 <p>图 7:DyLAN 求解代码生成任务的一个失败案例。题目为 <code>minPath(grid, k)</code>(在网格中找出长度为 k 的最小路径)。第 1 层 Algorithm Developer 用堆/DFS 等给出了(正确的)实现;但第 2 层 Code Reflector 给出的优化方向是错误的("A1 虽写了高效算法,但代码不够精炼……"),引导后续层朝错误方向改写;最终在后续时间步触发早停输出"最终答案",结果为失败(超时 Timeout)。这说明当审查者给出错误反馈时,动态架构也可能被带偏。</p>
+<h3 id="d">附录 D 提示词模板</h3>
+<div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>In DyLAN, agents are assigned roles with prompts extracted from an open-source code base³, relative research projects (Du et al., 2023; Shinn et al., 2023; Zheng et al., 2023), and generation results of GPT-4-0613, besides manual construction. The prompt of each agent are constructed by concatenation of the role prompt and optional tool descriptions, as the system prompt, and instruction prompts. We exhibit the instruction templates of different datasets, the prompts of all agents, and their sources in Table 16. We annotate the task where each prompt is used in the parenthesis, and the source of each prompt template. We omit the in-context examples of AR tasks from the original dataset of MATH (Hendrycks et al., 2021b) and PHP Zheng et al. (2023), and WebShop from ReAct (Yao et al., 2023).</p></div><p>在 DyLAN 中,智能体的角色提示除人工构建外,提取自一个开源代码库(原文脚注:³ https://github.com/GoGPTAI/ChatGPT-Prompt/blob/main/prompts.csv)、相关研究项目(Du et al., 2023; Shinn et al., 2023; Zheng et al., 2023)以及 GPT-4-0613 的生成结果。每个智能体的提示由"角色提示 + 可选的工具描述"(作为系统提示)与指令提示拼接而成。表 16 展示了各数据集的指令模板、所有智能体的提示及其来源;括号中标注各提示所用的任务,并标注每个提示模板的来源。我们省略了 AR 任务来自 MATH 原始数据集(Hendrycks et al., 2021b)、PHP(Zheng et al., 2023)以及 WebShop 来自 ReAct(Yao et al., 2023)的上下文示例。</p></div>
+<p>[表 16: Instruction and prompting templates used in different datasets and agents.]</p>
+<p>表 16:不同数据集与智能体所用的指令与提示模板。(来源:Manual=手工编写;Retrieved=从开源库/原论文检索;Generated=由 GPT-4 生成。)</p>
+<p><strong>指令模板(按任务)</strong></p>
+<table>
+<thead>
+<tr>
+<th>提示词</th>
+<th>内容(中译)</th>
+<th>来源</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MMLU 指令(GR)</td>
+<td>"Here is the question: {question} / These are the solutions to the problem from other agents: {responses} / Using the reasoning from other agents as additional advice with critical thinking, can you give an updated answer? Examine your solution and that other agents step by step. Notice that their answers might be all wrong. Put your answer in the form (X) at the end of your response. (X) represents choice (A), (B), (C), or (D)."(这是题目:{question}。这些是其他智能体对该题的解法:{responses}。请批判性地把其他智能体的推理当作额外建议,给出更新后的答案。逐步检查你与其他智能体的解法。注意他们的答案可能全错。把答案以 (X) 形式放在回复末尾,(X) 表示选项 (A)/(B)/(C)/(D)。)</td>
+<td>Manual</td>
+</tr>
+<tr>
+<td>MATH 指令(AR)</td>
+<td>"Follow the given examples and answer the mathematics problem. {question} / These are the solutions... from other agents: {responses} / Using the reasoning from other agents as additional advice with critical thinking, can you give an updated answer? Examine your solution and that other agents step by step. Notice that their answers might be all wrong."(参照给定示例解答数学题:{question}。这些是其他智能体的解法:{responses}。请批判性地把他们的推理当作额外建议,给出更新后的答案;逐步检查你与其他智能体的解法,注意他们的答案可能全错。)</td>
+<td>Manual</td>
+</tr>
+<tr>
+<td>HumanEval 指令(CG)</td>
+<td>"You must complete the python function I give you by rectifying previous implementations. Use the other information as a hint. Be sure to use the same indentation I specified. Furthermore, you may only write your response in code/comments. [improved impl]: <code>python {function signature}</code>. Please follow the template by repeating the function signature and complete the new implementation in [improved impl]. If no changes are needed, simply rewrite the implementation in the Python code block."(你必须通过修正此前的实现来补全我给出的 Python 函数;把其他信息当作提示;务必使用我指定的缩进;此外,回复只能包含代码/注释。[改进实现]:<code>python {函数签名}</code>。请按模板重复函数签名,并在 [improved impl] 中完成新实现;若无需修改,直接在 Python 代码块中原样重写实现即可。)</td>
+<td>Retrieved</td>
+</tr>
+<tr>
+<td>WebShop 指令(DM)</td>
+<td>"{history of observations and actions} / These are the suggested next action from other agents: {actions from other agents} / Using the solutions from other agents as additional advice with critical thinking, can you give an updated action in response to previous observations and actions? Please select the item after searching (click on the product name 'B0...'). And when you buy the item ('click[Buy Now]'), please make sure you have selected an item and entered its description page. Do not search for multiple times. Based on the example and previous actions and observations on the new instruction, give your next action in the format of 'Action: search[...]' or 'Action: click[...]'."({观察与动作历史}。这些是其他智能体建议的下一步动作:{其他智能体的动作}。请批判性地把其他智能体的方案当作额外建议,结合先前的观察与动作给出更新后的动作。搜索后请点击商品名('B0...')选择商品;购买('click[Buy Now]')前务必确认已选中商品并进入其详情页;不要反复搜索。请基于示例与关于新指令的先前动作和观察,以 "Action: search[...]" 或 "Action: click[...]" 格式给出下一步动作。)</td>
+<td>Retrieved</td>
+</tr>
+<tr>
+<td>人类先验选择指令(-)</td>
+<td>"A few agents will collaborate on the same task query. Please select the optimal composition of the candidate agents based on the description of the task and the agents' profiles. - Task: {subject} - Agents { - Agent/Code Writer/Judge_t (Name): Role Prompt/Description }_{t=1}^n. We want to select k agents/code writers/code reviewers among these candidates. Please write the agent IDs as the following format: [1, 2, 3, 4]. There could be multiple agents with the same ID."(若干智能体将协作完成同一任务查询。请依据任务描述与各智能体的画像,从候选中选出最优组合。——任务:{subject}——智能体:{各智能体/代码写作者/评审的名称与角色描述}。我们要从这些候选中选出 k 个智能体/代码写作者/代码审查者。请把智能体 ID 写成如下格式:[1, 2, 3, 4];允许同一 ID 出现多次。)</td>
+<td>Manual</td>
+</tr>
+<tr>
+<td>Ranker 指令(-)</td>
+<td>"Here is the question: {question} / These are the solutions to the problem from other agents: {responses} / Please choose the best 2 solutions and think step by step. Put your answer in the form like [1,2] or [3,4] at the end of your response."(这是题目:{question}。这些是其他智能体的解法:{responses}。请逐步思考,选出最好的 2 个解法,并把答案以 [1,2] 或 [3,4] 的形式放在回复末尾。)</td>
+<td>Manual</td>
+</tr>
+</tbody>
+</table>
+<p><strong>角色提示(智能体)</strong></p>
+<table>
+<thead>
+<tr>
+<th>提示词(角色)</th>
+<th>内容(中译)</th>
+<th>来源</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Mathematician(数学家,GR)</td>
+<td>"You are a mathematician. You are good at math games, arithmetic calculation, and long-term planning."(你是一名数学家,擅长数学游戏、算术计算与长期规划。)</td>
+<td>Retrieved</td>
+</tr>
+<tr>
+<td>Programmer(程序员,GR)</td>
+<td>"You are a programmer. You are good at computer science, engineering, and physics. You have experience in designing and developing computer software and hardware."(你是一名程序员,擅长计算机科学、工程与物理,有软硬件设计与开发经验。)</td>
+<td>Retrieved</td>
+</tr>
+<tr>
+<td>Lawyer(律师,GR)</td>
+<td>"You are a lawyer. You are good at law, politics, and history."(你是一名律师,擅长法律、政治与历史。)</td>
+<td>Retrieved</td>
+</tr>
+<tr>
+<td>Historian(历史学家,GR)</td>
+<td>"You are a historian. You research and analyze cultural, economic, political, and social events in the past, collect data from primary sources and use it to develop theories about what happened during various periods of history."(你是一名历史学家,研究并分析过去的文化、经济、政治与社会事件,从一手资料收集数据并据此建立关于各历史时期史实的理论。)</td>
+<td>Retrieved</td>
+</tr>
+<tr>
+<td>Economist(经济学家,GR)</td>
+<td>"You are an economist. You are good at economics, finance, and business. You have experience on understanding charts while interpreting the macroeconomic environment prevailing across world economies."(你是一名经济学家,擅长经济学、金融与商业,有结合图表理解全球经济宏观环境的经验。)</td>
+<td>Retrieved</td>
+</tr>
+<tr>
+<td>Psychologist(心理学家,GR)</td>
+<td>"You are a psychologist. You are good at psychology, sociology, and philosophy. You give people scientific suggestions that will make them feel better."(你是一名心理学家,擅长心理学、社会学与哲学,能给人们科学的建议使其感觉更好。)</td>
+<td>Retrieved</td>
+</tr>
+<tr>
+<td>Doctor(医生,GR)</td>
+<td>"You are a doctor and come up with creative treatments for illnesses or diseases. You are able to recommend conventional medicines, herbal remedies and other natural alternatives. You also consider the patient's age, lifestyle and medical history when providing your recommendations."(你是一名医生,能为疾病提出有创造性的治疗方案,能推荐常规药物、草药疗法与其他天然替代品;给出建议时还会考虑患者的年龄、生活方式与病史。)</td>
+<td>Retrieved</td>
+</tr>
+<tr>
+<td>Python Assistant(CG)</td>
+<td>"You are a Python writing assistant, an AI that only responds with python code, NOT ENGLISH. You will be given a function signature and its docstring by the user. Write your full implementation (restate the function signature)."(你是一个 Python 编写助手,一个只用 Python 代码(而非英文)回复的 AI。用户会给出函数签名与文档字符串,请写出完整实现(并复述函数签名)。)</td>
+<td>Retrieved</td>
+</tr>
+<tr>
+<td>Algorithm Developer(CG)</td>
+<td>"You are an algorithm developer. You are good at developing and utilizing algorithms to solve problems. You must respond with python code, no free-flowing text (unless in a comment). You will be given a function signature and its docstring by the user. Write your full implementation following the format (restate the function signature)."(你是一名算法开发者,擅长开发与运用算法解决问题。必须用 Python 代码回复,不得有自由文本(注释除外)。用户会给出函数签名与文档字符串,请按格式写出完整实现(复述函数签名)。)</td>
+<td>Retrieved</td>
+</tr>
+<tr>
+<td>Computer Scientist(CG)</td>
+<td>"You are a computer scientist. You are good at writing high performance code and recognizing corner cases while solve real problems. You must respond with python code, no free-flowing text (unless in a comment). You will be given a function signature and its docstring by the user. Write your full implementation following the format (restate the function signature)."(你是一名计算机科学家,擅长编写高性能代码并在解决实际问题时识别边界情况。必须用 Python 代码回复(自由文本仅限注释)。用户会给出函数签名与文档字符串,请按格式写出完整实现(复述函数签名)。)</td>
+<td>Retrieved</td>
+</tr>
+<tr>
+<td>Programmer(程序员,CG)</td>
+<td>"You are an intelligent programmer. You must complete the python function given to you by the user. And you must follow the format they present when giving your answer! You can only respond with comments and actual code, no free-flowing text (unless in a comment)."(你是一名聪明的程序员,必须补全用户给出的 Python 函数,且回答必须遵循其给定格式!只能以注释与实际代码回复,不得有自由文本(注释除外)。)</td>
+<td>Retrieved</td>
+</tr>
+<tr>
+<td>Coding Artist(CG)</td>
+<td>"You are a coding artist. You write Python code that is not only functional but also aesthetically pleasing and creative. Your goal is to make the code an art form while maintaining its utility. You will be given a function signature and its docstring by the user. Write your full implementation following the format (restate the function signature)."(你是一名编码艺术家,写出的 Python 代码不仅实用而且美观、有创意;目标是在保持实用性的同时把代码变成艺术。用户会给出函数签名与文档字符串,请按格式写出完整实现(复述函数签名)。)</td>
+<td>Generated</td>
+</tr>
+<tr>
+<td>Software Architect(CG)</td>
+<td>"You are a software architect, skilled in designing and structuring code for scalability, maintainability, and robustness. Your responses should focus on best practices in software design. You will be given a function signature and its docstring by the user. Write your full implementation following the format (restate the function signature)."(你是一名软件架构师,擅长以可扩展、可维护、健壮为目标设计与组织代码;回复应聚焦软件设计的最佳实践。用户会给出函数签名与文档字符串,请按格式写出完整实现(复述函数签名)。)</td>
+<td>Generated</td>
+</tr>
+<tr>
+<td>Unit Tester(CG)</td>
+<td>"You are an AI coding assistant that can write unique, diverse, and intuitive unit tests for functions given the signature and docstring."(你是一名 AI 编程助手,能依据函数签名与文档字符串,为函数写出独特、多样且直观的单元测试。)</td>
+<td>Retrieved</td>
+</tr>
+<tr>
+<td>Syntax Checker(CG)</td>
+<td>(空,Null——纯外部工具,无提示词)</td>
+<td>-</td>
+</tr>
+<tr>
+<td>Code Reflector(CG)</td>
+<td>"You are a Python writing assistant. You will be given a series of function implementations of the same function signature. Write a few sentences to explain whether and why the implementations are wrong. These comments will be used as a hint and your goal is to write your thoughts on the n-th previous implementation after [reflection n]."(你是一名 Python 编写助手。你会看到同一函数签名的一系列实现,请用几句话说明这些实现是否错误及原因。这些评注将作为提示;你的目标是在 [reflection n] 之后写下对倒数第 n 个实现的思考。)</td>
+<td>Generated</td>
+</tr>
+<tr>
+<td>Debugger(CG)</td>
+<td>"You are a debugger, specialized in finding and fixing bugs in Python code. You will be given a function implementation with a bug in it. Your goal is to identify the bug and provide a corrected implementation. Include comments to explain what was wrong and how it was fixed."(你是一名调试专家,专精于发现并修复 Python 代码中的 bug。你会得到一个含 bug 的函数实现,目标是定位 bug 并给出修正后的实现;用注释说明错在哪里、如何修复。)</td>
+<td>Generated</td>
+</tr>
+<tr>
+<td>Quality Manager(CG)</td>
+<td>"You are a quality manager, ensuring that the code meets high standards in terms of readability, efficiency, and accuracy. You will be given a function implementation and you need to provide a code review. Comment on its correctness, efficiency, and readability, and suggest improvements if needed."(你是一名质量管理者,确保代码在可读性、效率与准确性上达到高标准。你会得到一个函数实现,需要给出代码评审:就正确性、效率与可读性发表意见,必要时提出改进建议。)</td>
+<td>Generated</td>
+</tr>
+<tr>
+<td>Ranker(CG)</td>
+<td>"You are a Python writing assistant. You will be given a series of function implementations of the same function signature. You need to choose the best 2 implementations in consideration of correctness, efficiency, and possible corner cases."(你是一名 Python 编写助手。你会看到同一函数签名的一系列实现,需要综合考虑正确性、效率与潜在边界情况,选出最好的 2 个实现。)</td>
+<td>Generated</td>
+</tr>
+<tr>
+<td>Search Optimizer(DM)</td>
+<td>"As a Search Optimizer, analyze a user's vague or broad instruction and suggest a more precise and effective set of keywords or filters to accurately find products that meet their specific requirements. Please focus more on searching actions when giving the next action, especially on providing informative and accurate searching words in 'search[...]'."(作为搜索优化师,分析用户模糊或宽泛的指令,建议更精确有效的关键词或过滤条件,以准确找到符合其具体需求的商品。给出下一步动作时请更侧重搜索动作,尤其是提供信息量足、准确度高的 "search[...]" 检索词。)</td>
+<td>Generated</td>
+</tr>
+<tr>
+<td>Budget Analyst(DM)</td>
+<td>"As a Budget Analyst, guide a user in setting a realistic budget for their shopping needs, considering product categories, market prices, and personal financial constraints. Analyze whether the product matches the budget one by one. Please avoid searching multiple times. Please focus more on which product to click in 'click[...]' when giving the next action."(作为预算分析师,结合商品类别、市场价与个人财务约束,引导用户为购物需求设定现实预算;逐一分析商品是否匹配预算。请避免多次搜索;给出下一步动作时更侧重在 "click[...]" 中点击哪个商品。)</td>
+<td>Generated</td>
+</tr>
+<tr>
+<td>Product Explorer(DM)</td>
+<td>"As a Product Explorer, offer guidance on how to effectively compare different products based on their features, prices, and reviews. Advise on key factors to consider for making informed decisions in various product categories. You are preferred to 'click[← Prev]' or 'click[Next →]' to go on different pages, and click on the item name to browse its details."(作为商品探索者,提供如何依据特性、价格与评价有效比较不同商品的指引,并就各类商品做知情决策的关键因素提出建议。你更倾向于用 "click[← Prev]" 或 "click[Next →]" 翻页,并点击商品名浏览详情。)</td>
+<td>Generated</td>
+</tr>
+<tr>
+<td>Instruction Analyst(DM)</td>
+<td>"As an Instruction Analyst, evaluate a customer's stated needs and preferences, and provide a structured approach to ensure the selected product align with these instructions. Do not keep refining searching. You are preferred to check out products that might align with instruction. Otherwise, give the most reasonable action for the next step."(作为指令分析师,评估顾客陈述的需求与偏好,提供结构化方法确保所选商品与指令一致。不要反复优化搜索;你更倾向于查看可能符合指令的商品,否则给出下一步最合理的动作。)</td>
+<td>Generated</td>
+</tr>
+<tr>
+<td>Description Reader(DM)</td>
+<td>"As a Description Reader, detail how to read and interpret product descriptions and specifications to match them with a customer's specific needs, focusing on identifying key features, benefits, and potential drawbacks. You are preferred to click into each product and 'click[Description]' to see product details."(作为详情阅读者,详述如何阅读并解读商品描述与规格,使其与顾客的具体需求相匹配,重点识别关键特性、优点与潜在缺点。你更倾向于点进每件商品并 "click[Description]" 查看商品详情。)</td>
+<td>Generated</td>
+</tr>
+<tr>
+<td>Decision Maker(DM)</td>
+<td>"As a Decision Maker, you are more confident to purchase related products without refining searching results. If you believe a product is a suitable choice, proceed to click in the product and persuade other agents to click 'click[Buy Now]'. If not, recommend the most logical next step for rapid adaptation for the next product."(作为决策者,你更有信心在不继续精炼搜索结果的情况下购买相关商品。若认为某商品合适,就点击进入该商品并说服其他智能体点击 "click[Buy Now]";否则推荐最合乎逻辑的下一步,以便快速转向下一件商品。)</td>
+<td>Generated</td>
+</tr>
+<tr>
+<td>Decision Reflector(DM)</td>
+<td>"As a Decision Reflector, provide a framework for customers to critically evaluate their potential purchases, considering their initial requirements, product features, and overall value. Guide them in reflecting on whether a choice truly meets their needs. Please avoid repeated searching. If you think it's good to buy the product, go 'click[Buy Now]'. Otherwise, give the most reasonable action for the next step."(作为决策反思者,为顾客提供批判性评估潜在购买行为的框架,考虑其初始需求、商品特性与整体价值,引导其反思该选择是否真正满足需求。请避免重复搜索;若认为值得购买,就 "click[Buy Now]",否则给出下一步最合理的动作。)</td>
+<td>Manual</td>
+</tr>
+<tr>
+<td>Result Estimater(DM)</td>
+<td>"As a Result Estimator, describe how to predict the potential satisfaction and success of a customer's purchase decision based on their needs, product choice, and market trends. Offer insights into how these choices may meet their expectations. If you have any suggestions, print them in 'think[...]'. Otherwise, give the most reasonable action for the next step."(作为结果预估者,描述如何基于顾客需求、商品选择与市场趋势,预测其购买决策的潜在满意度与成功率,并就这些选择能否达到预期给出洞见。若有建议,请写入 "think[...]";否则给出下一步最合理的动作。)</td>
+<td>Generated</td>
+</tr>
+</tbody>
+</table>
+<h2 id="_6">要点速览</h2>
+<ul>
+<li>形式化:<strong>多智能体协作 = 时序前馈网络(T-FFN)</strong>,层=时间步、节点=智能体、边=通信;前向传消息推理,反向传评分归因。</li>
+<li>两阶段:Team Optimization(预试验 + 重要性分数选精英)→ Task Solving(动态协作)。</li>
+<li><strong>Agent Importance Score</strong>:同伴互评(前向)× 后继贡献加权求和(反向,类反向传播),各层归一化;无监督、可复用、对角色失衡稳健。</li>
+<li><strong>动态结构</strong>:LLM Ranker 每步排序,末位智能体退出后续层;<strong>拜占庭式早停</strong>(&gt;2/3 一致即停)大幅省成本(最高省 66% 调用)。</li>
+<li>主结果:HumanEval 82.9(超 LATS、调用仅其 35%)、WebShop 68.3、MMLU 70.5(调用仅 Debate 的 36.6%);MMLU 单科目选团队最高 +25%。</li>
+<li>与课程关联:回应了 AutoGen(GroupChatManager 手动/生成式组队)的"团队怎么定"问题——答案是<strong>用数据后验地选</strong>;与《Why Multi-Agent LLM Systems Fail?》指出的"角色/成员配置失误"失效模式直接对应:先选对团队,多智能体才不添乱。</li>
+</ul>
       </div>
     </article>
     <nav class="pager"><a class="pager-prev" href="Cemri2025_Why_Multi_Agent_LLM_Systems_Fail.html"><span>上一篇</span>&quot;为什么多智能体 LLM 系统会失败?&quot;</a><a class="pager-next" href="Neubig2024_Dont_Sleep_On_Single_Agent_Systems.html"><span>下一篇</span>别忽视单智能体系统</a></nav>
