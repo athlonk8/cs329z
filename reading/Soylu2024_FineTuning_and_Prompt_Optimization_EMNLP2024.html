@@ -21,7 +21,7 @@
   </div>
 </header>
 <div class="read-layout">
-  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">全文对照翻译</a><ul><li><a href="#_3">题目与作者</a></li><li><a href="#abstract">摘要(Abstract)</a></li><li><a href="#1-introduction">1 引言(Introduction)</a></li><li><a href="#2-problem-statement">2 问题陈述(Problem Statement)</a></li><li><a href="#3-bettertogether-lm-bettertogether-alternating-weight-and-prompt-optimization-steps-for-lm-programs">3 BetterTogether:对 LM 程序交替进行权重与提示优化(BetterTogether: Alternating Weight and Prompt Optimization Steps for LM Programs)</a></li></ul></li></ul></aside>
+  <aside class="read-toc"><div class="read-toc-title">本页目录</div><ul><li><a href="#_1">导读</a></li><li class="has-sub"><a href="#_2">全文对照翻译</a><ul><li><a href="#_3">题目与作者</a></li><li><a href="#abstract">摘要(Abstract)</a></li><li><a href="#1-introduction">1 引言(Introduction)</a></li><li><a href="#2-problem-statement">2 问题陈述(Problem Statement)</a></li><li><a href="#3-bettertogether-lm-bettertogether-alternating-weight-and-prompt-optimization-steps-for-lm-programs">3 BetterTogether:对 LM 程序交替进行权重与提示优化(BetterTogether: Alternating Weight and Prompt Optimization Steps for LM Programs)</a></li></ul></li><li><a href="#_4">要点速览</a></li></ul></aside>
   <main class="read-main">
       <link rel="stylesheet" href="../assets/katex/katex.min.css">
       <script defer src="../assets/katex/katex.min.js"></script>
@@ -107,6 +107,15 @@ Input: Training Set X and Metric µ                       # 输入:训练集 X �
 22: Set FINETUNE_WEIGHTS as BOOTSTRAPFINETUNE             # 把&quot;微调权重&quot;实例化为 BFT
 </code></pre>
 <div class="pair"><div class="en-orig"><span class="en-tag">EN</span><p>For fine-tuning, we extend BootstrapFinetune (BFT) of DSPy, which, given a program Φ, self-generates a large number examples for every module and combines them into one dataset to fine-tune the LM weights with an implicit multi-task objective, where the sub-tasks are the modules&#x27; roles. Existing work has only considered BFT in a very narrow setting for LM programs: on HotPotQA, Khattab et al. (2024) train a T5-Large model using traces from a few-shot Llama2-13b program, without considering getting an LM to teach itself via BFT nor considering a role for BFRS in the fine-tuned program. In this work, we focus on allowing models to teach themselves and self-improve. We propose for the first time combining the strategies of BFRS and BFT via alternation to get the same LM to teach itself better than either prompt or weight optimization in isolation. One could test similar ideas in scenarios where a larger model does the bootstrapping for a smaller LM. This may lead to even better results but is outside our scope.</p></div><p>微调方面,我们扩展了 DSPy 的 BootstrapFinetune(BFT):给定程序 <span class="math-inline">$\Phi$</span>,它自生成每个模块的大量示例,并把它们合并成一个数据集,以隐式的多任务目标(multi-task objective,各子任务即各模块的角色)来微调 LM 权重。既有工作只在一种非常窄的场景下考虑过 BFT 用于 LM 程序:在 HotPotQA 上,Khattab et al. (2024) 用一个少样本 Llama2-13b 程序产生的轨迹去训练 T5-Large 模型——既没有考虑让 LM 通过 BFT <strong>自己教自己</strong>,也没有考虑让 BFRS 在微调后的程序中扮演角色。本工作聚焦于让模型自己教自己、自我改进。我们首次提出通过交替(alternation)把 BFRS 与 BFT 两种策略组合起来,让同一个 LM 教自己教得比单独使用提示优化或权重优化都更好。也可以在"大模型为小 LM 做自举"的场景中检验类似想法,那可能带来更好的结果,但超出了本文范围。</p></div>
+<h2 id="_4">要点速览</h2>
+<ul>
+<li>BetterTogether = <strong>提示优化 → 自举微调 → 再提示优化</strong> 的交替框架,数据全部来自自举 program traces,同一模型自我教学。</li>
+<li>9 个设定中 7 个:联合 &gt; 单一手段;<strong>提示优化是处处不可省略的基线</strong>。</li>
+<li>仅微调的两大坑:常不敌提示优化;vanilla 冷启动失败时连微调数据都自举不出来(llama-2 GSM8K/Iris 直接 "–")。</li>
+<li>机制互补:好提示 → 更好的微调数据;好权重 → 提示优化的更高起点。</li>
+<li>与课程关联:与 MIPRO(提示侧)、GEPA(反思侧)、Snell 测试时计算(推理侧)同讲对照——优化可以发生在<strong>提示、权重、推理时</strong>三个层面,且可组合。</li>
+<li>工程启示:别问"微调还是提示工程",先做提示优化建立强基线,再自举微调,最后回到提示;全程用 DSPy 抽象管理。</li>
+</ul>
       </div>
     </article>
     <nav class="pager"><a class="pager-prev" href="Snell2025_Scaling_Test_Time_Compute_ICLR2025.html"><span>上一篇</span>&quot;优化地扩展 LLM 测试时计算,可以比扩展模型参数更有效&quot;</a><a class="pager-next" href="Shankar2024_Data_Flywheels_blog.html"><span>下一篇</span>LLM 应用的数据飞轮</a></nav>
