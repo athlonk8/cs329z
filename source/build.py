@@ -59,10 +59,13 @@ BADGE_LABEL = {"must": "必读", "recommended": "推荐", "supplementary": "补�
 LECTURES = [
     {"no": 1, "date": "9/23", "title_zh": "课程导论:什么是智能体系统?",
      "title": "Introduction — What Are Agentic Systems?", "file": "lecture01.pdf",
-     "gdrive": "https://drive.google.com/file/d/1Wlf723d9-LBuTp56QYppaZwozOAetTsC/view"},
+     "url": "https://web.stanford.edu/class/cs329z/slides/lecture01.pdf"},
     {"no": 2, "date": "9/28", "title_zh": "给开发者的 LLM",
      "title": "LLMs for Builders", "file": "lecture02.pdf",
-     "gdrive": "https://drive.google.com/file/d/1kekt_p0n-_Q4Y2dKYEkH87NEx6mr8nRE/view"},
+     "url": "https://web.stanford.edu/class/cs329z/slides/lecture02.pdf"},
+    {"no": 3, "date": "9/30", "title_zh": "构建基石:检索增强生成 RAG",
+     "title": "Building Blocks: Retrieval-Augmented Generation (RAG)", "file": "lecture03.pdf",
+     "url": "https://web.stanford.edu/class/cs329z/slides/lecture03.pdf"},
 ]
 
 def parse_front_matter(text: str):
@@ -396,7 +399,7 @@ def main():
           <td class="d-week">Lecture {l['no']}</td>
           <td>{html.escape(l['title_zh'])}<div class="mt-sub">{html.escape(l['title'])}</div></td>
           <td class="d-date">{l['date']}</td>
-          <td class="lecture-links"><a class="slide-dl" href="slides/{l['file']}" target="_blank" rel="noopener">在线阅读 / 下载 PDF ↗</a><div class="mt-sub"><a href="{l['gdrive']}" target="_blank" rel="noopener">官网原始链接</a></div></td>
+          <td class="lecture-links"><a class="slide-dl" href="slides/{l['file']}" target="_blank" rel="noopener">在线阅读 / 下载 PDF ↗</a><div class="mt-sub"><a href="{l['url']}" target="_blank" rel="noopener">官网原始链接</a></div></td>
         </tr>"""
         for l in lectures)
 
@@ -427,7 +430,7 @@ def main():
 
   <section class="dates lectures" id="lectures">
     <h2 class="sec-title">课程讲义 · Lecture Slides</h2>
-    <div class="lecture-note">课程 9/23 开课后,官网随进度放出各讲幻灯片,本站同步收录 PDF 原件——已收录 <b>{len(lectures)} 讲</b>(Lecture 3 起待官网发布后跟进)。视频录像暂未公开(仅斯坦福内部 Canvas 可见)。</div>
+    <div class="lecture-note">课程 9/23 开课后,官网随进度放出各讲幻灯片,本站同步收录 PDF 原件——已收录 <b>{len(lectures)} 讲</b>,后续讲次待官网发布后跟进(下一讲:10/5 Tool Use)。视频录像暂未公开(仅斯坦福内部 Canvas 可见)。</div>
     <table class="dates-table lecture-table">
       <tr><th>讲次</th><th>主题</th><th>日期</th><th>讲义</th></tr>
 {lectures_rows}
