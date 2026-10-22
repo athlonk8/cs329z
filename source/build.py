@@ -81,6 +81,9 @@ LECTURES = [
     {"no": 8, "date": "10/19", "title_zh": "多智能体系统",
      "title": "Multi-Agent Systems", "file": "lecture08.pdf",
      "url": "https://web.stanford.edu/class/cs329z/slides/lecture08.pdf"},
+    {"no": 9, "date": "10/21", "title_zh": "优化:测试时计算与提示优化",
+     "title": "Optimization: Test-Time Compute, Prompt Optimization & Finetuning", "file": "lecture09.pdf",
+     "url": "https://web.stanford.edu/class/cs329z/slides/lecture09.pdf"},
 ]
 
 # 官网发布的作业;HW 链接为官方 GitHub harness 仓库;pdf/zip 为本站镜像(hw/ 目录,存在才显示)
@@ -468,7 +471,7 @@ def main():
 
   <section class="dates lectures" id="lectures">
     <h2 class="sec-title">课程讲义 · Lecture Slides</h2>
-    <div class="lecture-note">课程 9/23 开课后,官网随进度放出各讲幻灯片,本站同步收录 PDF 原件——已收录 <b>{len(lectures)} 讲</b>,后续讲次待官网发布后跟进(下一讲:10/21 Optimization;10/26 嘉宾讲座:Terminal-Bench 作者团队)。视频录像暂未公开(仅斯坦福内部 Canvas 可见)。</div>
+    <div class="lecture-note">课程 9/23 开课后,官网随进度放出各讲幻灯片,本站同步收录 PDF 原件——已收录 <b>{len(lectures)} 讲</b>,后续讲次待官网发布后跟进(下一讲:10/26 嘉宾讲座 Terminal-Bench 作者团队·无 slides;10/28 Data)。视频录像暂未公开(仅斯坦福内部 Canvas 可见)。</div>
     <table class="dates-table lecture-table">
       <tr><th>讲次</th><th>主题</th><th>日期</th><th>讲义</th></tr>
 {lectures_rows}

@@ -26,7 +26,7 @@
 | 课程必读/推荐论文 | **35 篇全部完成逐段中英对照全译** | 每段英文原文 + 中文全译左右分栏,共 **2,035** 个对照段、约 **45 万** 中文字 |
 | 工程博客 / 规范文档 | 14 篇 | 全文中译(含 MCP 规范、Anthropic 工程博客等) |
 | 背景解读 | 1 篇 | 全文中译(CS329A 免费公开课程背景长文) |
-| 课程讲义 slides | 持续同步 | 官网每放出一讲即收录 PDF 原件(已收录 Lecture 1–8);HW1 讲义与完整仓库均已镜像 |
+| 课程讲义 slides | 持续同步 | 官网每放出一讲即收录 PDF 原件(已收录 Lecture 1–9);HW1 讲义与完整仓库均已镜像 |
 | PDF / HTML 原件 | 49 篇全部收录 | `originals/` 目录,在线可读 |
 
 > 35 篇论文的**全文逐段对照**全部完成——不是摘要式"精读笔记",是从 Abstract 到 Conclusion(多数含实质附录)的完整翻译,参考文献列表保留原文。
@@ -104,7 +104,7 @@ We introduce ReAct, a new paradigm that...
 ## 内容时效与同步策略
 
 - 阅读材料下载于 **2026-09-14**(开课前),覆盖课程大纲公布的全部 49 篇
-- 课程 **9/23 开课**,官网随进度放出讲义与作业 → 本站同步收录(现为 Lecture 1–8,HW1 已发布至 10/30 截止)
+- 课程 **9/23 开课**,官网随进度放出讲义与作业 → 本站同步收录(现为 Lecture 1–9,HW1 已发布至 10/30 截止)
 - **HW1 将于 10/5 发布**、HW2 于 10/26 发布,公开后跟进收录
 - 课程**视频暂未公开**(仅斯坦福内部 Canvas);姊妹课 CS329A 的全部讲次曾于学期后上传 [Stanford Online YouTube](https://www.youtube.com/@stanfordonline),CS329Z 大概率沿用此路径,值得持续关注
 
@@ -125,6 +125,7 @@ We introduce ReAct, a new paradigm that...
 
 | 日期 | 内容 |
 |---|---|
+| 2026-10-22 | 同步收录 Lecture 9(Optimization)slides |
 | 2026-10-20 | 同步收录 Lecture 8(Multi-Agent Systems)slides;重要日期表补充 10/26 嘉宾讲座(Terminal-Bench 作者团队) |
 | 2026-10-15 | 同步收录 Lecture 7(Memory Architectures)slides |
 | 2026-10-13 | 同步收录 Lecture 4–6 slides;新增「课程作业」板块:HW1 作业讲义 PDF 与完整 starter 仓库 zip 均已镜像,附中文作业概览 |
