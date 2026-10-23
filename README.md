@@ -125,6 +125,7 @@ We introduce ReAct, a new paradigm that...
 
 | 日期 | 内容 |
 |---|---|
+| 2026-10-26 | 镜像 Lecture 5 官方跟练代码仓库(lecture5-frameworks);HW2 发布日,持续关注 |
 | 2026-10-22 | 同步收录 Lecture 9(Optimization)slides |
 | 2026-10-20 | 同步收录 Lecture 8(Multi-Agent Systems)slides;重要日期表补充 10/26 嘉宾讲座(Terminal-Bench 作者团队) |
 | 2026-10-15 | 同步收录 Lecture 7(Memory Architectures)slides |

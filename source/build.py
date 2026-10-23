@@ -71,7 +71,9 @@ LECTURES = [
      "url": "https://web.stanford.edu/class/cs329z/slides/lecture04.pdf"},
     {"no": 5, "date": "10/7", "title_zh": "框架与编排",
      "title": "Frameworks & Orchestration", "file": "lecture05.pdf",
-     "url": "https://web.stanford.edu/class/cs329z/slides/lecture05.pdf"},
+     "url": "https://web.stanford.edu/class/cs329z/slides/lecture05.pdf",
+     "code_zip": "lecture05-code.zip",
+     "code_repo": "https://github.com/cs329z/lecture5-frameworks"},
     {"no": 6, "date": "10/12", "title_zh": "智能体设计模式与脚手架",
      "title": "Agent Design Patterns & Scaffolds", "file": "lecture06.pdf",
      "url": "https://web.stanford.edu/class/cs329z/slides/lecture06.pdf"},
@@ -431,7 +433,7 @@ def main():
           <td class="d-week">Lecture {l['no']}</td>
           <td>{html.escape(l['title_zh'])}<div class="mt-sub">{html.escape(l['title'])}</div></td>
           <td class="d-date">{l['date']}</td>
-          <td class="lecture-links"><a class="slide-dl" href="slides/{l['file']}" target="_blank" rel="noopener">在线阅读 / 下载 PDF ↗</a><div class="mt-sub"><a href="{l['url']}" target="_blank" rel="noopener">官网原始链接</a></div></td>
+          <td class="lecture-links"><a class="slide-dl" href="slides/{l['file']}" target="_blank" rel="noopener">在线阅读 / 下载 PDF ↗</a><div class="mt-sub"><a href="{l['url']}" target="_blank" rel="noopener">官网原始链接</a>{f' · <a href="slides/{l["code_zip"]}" target="_blank" rel="noopener">官方跟练代码 zip 镜像</a> · <a href="{l["code_repo"]}" target="_blank" rel="noopener">GitHub</a>' if l.get("code_zip") and (ROOT / "slides" / l["code_zip"]).exists() else ''}</div></td>
         </tr>"""
         for l in lectures)
     homework_rows = "\n".join(
