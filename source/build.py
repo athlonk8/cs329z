@@ -309,6 +309,8 @@ def main():
         (SITE / "slides").mkdir(exist_ok=True)
         for l in lectures:
             shutil.copy2(ROOT / "slides" / l["file"], SITE / "slides" / l["file"])
+            if l.get("code_zip") and (ROOT / "slides" / l["code_zip"]).exists():
+                shutil.copy2(ROOT / "slides" / l["code_zip"], SITE / "slides" / l["code_zip"])
     hw_dir = ROOT / "hw"
     if hw_dir.exists():
         (SITE / "hw").mkdir(exist_ok=True)
