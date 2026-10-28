@@ -86,6 +86,9 @@ LECTURES = [
     {"no": 9, "date": "10/21", "title_zh": "优化:测试时计算与提示优化",
      "title": "Optimization: Test-Time Compute, Prompt Optimization & Finetuning", "file": "lecture09.pdf",
      "url": "https://web.stanford.edu/class/cs329z/slides/lecture09.pdf"},
+    {"no": 10, "date": "10/28", "title_zh": "智能体需要什么数据?",
+     "title": "What Data Do Agents Need?", "file": "lecture10.pdf",
+     "url": "https://web.stanford.edu/class/cs329z/slides/lecture10.pdf"},
 ]
 
 # 官网发布的作业;HW 链接为官方 GitHub harness 仓库;pdf/zip 为本站镜像(hw/ 目录,存在才显示)
@@ -94,6 +97,10 @@ HOMEWORKS = [
      "released": "10/5", "due": "10/30",
      "url": "https://github.com/cs329z/assignment1-harness",
      "pdf": "cs329z_assignment1_harness.pdf", "zip": "assignment1-harness.zip"},
+    {"no": "Paper Video", "title_zh": "论文视频(课程项目交付物)", "title": "Paper Video (Project Deliverable)",
+     "released": "—", "due": "11/13",
+     "url": "https://web.stanford.edu/class/cs329z/assignments/paper_video.pdf",
+     "pdf": "paper_video.pdf"},
 ]
 
 def parse_front_matter(text: str):
@@ -475,7 +482,7 @@ def main():
 
   <section class="dates lectures" id="lectures">
     <h2 class="sec-title">课程讲义 · Lecture Slides</h2>
-    <div class="lecture-note">课程 9/23 开课后,官网随进度放出各讲幻灯片,本站同步收录 PDF 原件——已收录 <b>{len(lectures)} 讲</b>,后续讲次待官网发布后跟进(下一讲:10/26 嘉宾讲座 Terminal-Bench 作者团队·无 slides;10/28 Data)。视频录像暂未公开(仅斯坦福内部 Canvas 可见)。</div>
+    <div class="lecture-note">课程 9/23 开课后,官网随进度放出各讲幻灯片,本站同步收录 PDF 原件——已收录 <b>{len(lectures)} 讲</b>,后续讲次待官网发布后跟进(下一讲:11/2 数据选择与质量)。视频录像暂未公开(仅斯坦福内部 Canvas 可见)。</div>
     <table class="dates-table lecture-table">
       <tr><th>讲次</th><th>主题</th><th>日期</th><th>讲义</th></tr>
 {lectures_rows}
@@ -484,7 +491,7 @@ def main():
 
   <section class="dates homeworks" id="homeworks">
     <h2 class="sec-title">课程作业 · Homework</h2>
-    <div class="lecture-note">作业由课程官方发布在 GitHub(含 starter code),跟做作业请使用官方仓库;截止时间均为 23:59 PT。HW2 预计 <b>10/26</b> 发布。</div>
+    <div class="lecture-note">作业由课程官方发布(含 starter code),跟做作业请使用官方仓库;截止时间均为 23:59 PT。HW2《Evaluate an Agent》已随 <b>10/26</b> 发布,公开 harness 仓库链接尚未挂出,上线后本站将第一时间镜像。</div>
     <table class="dates-table lecture-table">
       <tr><th>作业</th><th>主题</th><th>发布</th><th>截止</th><th>链接</th></tr>
 {homework_rows}
