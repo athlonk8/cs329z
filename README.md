@@ -125,7 +125,8 @@ We introduce ReAct, a new paradigm that...
 
 | 日期 | 内容 |
 |---|---|
-| 2026-10-28 | 同步收录 Lecture 10(Data)slides;镜像 Paper Video 作业说明 PDF;HW1 今日截止 |
+| 2026-11-02 | 勘误:Lecture 10 实为 10/26 嘉宾讲座(Terminal-Bench & Harbor)slides;新增 Lecture 11(What Data Do Agents Need?, 10/28) |
+| 2026-10-28 | 同步收录当时误标的 Lecture 10 slides(实为嘉宾讲座);镜像 Paper Video 作业说明 PDF;HW1 当日截止 |
 | 2026-10-26 | 镜像 Lecture 5 官方跟练代码仓库(lecture5-frameworks);HW2 发布日,持续关注 |
 | 2026-10-22 | 同步收录 Lecture 9(Optimization)slides |
 | 2026-10-20 | 同步收录 Lecture 8(Multi-Agent Systems)slides;重要日期表补充 10/26 嘉宾讲座(Terminal-Bench 作者团队) |
