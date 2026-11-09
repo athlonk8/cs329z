@@ -92,6 +92,12 @@ LECTURES = [
     {"no": 11, "date": "10/28", "title_zh": "智能体需要什么数据?",
      "title": "What Data Do Agents Need?", "file": "lecture11.pdf",
      "url": "https://web.stanford.edu/class/cs329z/slides/lecture11.pdf"},
+    {"no": 12, "date": "11/2", "title_zh": "数据选择与质量",
+     "title": "Data Selection & Quality", "file": "lecture12.pdf",
+     "url": "https://web.stanford.edu/class/cs329z/slides/lecture12.pdf"},
+    {"no": 13, "date": "11/4", "title_zh": "评测基础与基准设计",
+     "title": "Evaluation Fundamentals & Benchmark Design", "file": "lecture13.pdf",
+     "url": "https://web.stanford.edu/class/cs329z/slides/lecture13.pdf"},
 ]
 
 # 官网发布的作业;HW 链接为官方 GitHub harness 仓库;pdf/zip 为本站镜像(hw/ 目录,存在才显示)
@@ -104,6 +110,10 @@ HOMEWORKS = [
      "released": "—", "due": "11/13",
      "url": "https://web.stanford.edu/class/cs329z/assignments/paper_video.pdf",
      "pdf": "paper_video.pdf"},
+    {"no": "HW2", "title_zh": "构建一个评测任务", "title": "Building an Evaluation Task",
+     "released": "10/26", "due": "11/20",
+     "url": "https://github.com/cs329z/assignment2-evals",
+     "pdf": "cs329z_assignment2_evaluation.pdf", "zip": "assignment2-evals.zip"},
 ]
 
 def parse_front_matter(text: str):
@@ -485,7 +495,7 @@ def main():
 
   <section class="dates lectures" id="lectures">
     <h2 class="sec-title">课程讲义 · Lecture Slides</h2>
-    <div class="lecture-note">课程 9/23 开课后,官网随进度放出各讲幻灯片,本站同步收录 PDF 原件——已收录 <b>{len(lectures)} 讲</b>,后续讲次待官网发布后跟进(下一讲:11/2 数据选择与质量,Lecture 10 为 10/26 Terminal-Bench 嘉宾讲座)。视频录像暂未公开(仅斯坦福内部 Canvas 可见)。</div>
+    <div class="lecture-note">课程 9/23 开课后,官网随进度放出各讲幻灯片,本站同步收录 PDF 原件——已收录 <b>{len(lectures)} 讲</b>,后续讲次待官网发布后跟进(下一讲:11/9 LLM-as-Judge;Lecture 10 为 10/26 Terminal-Bench 嘉宾讲座)。视频录像暂未公开(仅斯坦福内部 Canvas 可见)。</div>
     <table class="dates-table lecture-table">
       <tr><th>讲次</th><th>主题</th><th>日期</th><th>讲义</th></tr>
 {lectures_rows}
@@ -494,7 +504,7 @@ def main():
 
   <section class="dates homeworks" id="homeworks">
     <h2 class="sec-title">课程作业 · Homework</h2>
-    <div class="lecture-note">作业由课程官方发布(含 starter code),跟做作业请使用官方仓库;截止时间均为 23:59 PT。HW2《Evaluate an Agent》已随 <b>10/26</b> 发布,公开 harness 仓库链接尚未挂出,上线后本站将第一时间镜像。</div>
+    <div class="lecture-note">作业由课程官方发布(含 starter code),跟做作业请使用官方仓库;截止时间均为 23:59 PT。HW1 已于 10/30 截止;HW2 讲义与完整仓库本站已镜像。</div>
     <table class="dates-table lecture-table">
       <tr><th>作业</th><th>主题</th><th>发布</th><th>截止</th><th>链接</th></tr>
 {homework_rows}
@@ -511,6 +521,20 @@ def main():
           <li><b>环境</b>:uv + Python ≥3.11,OpenRouter API Key;两套测试:`uv run pytest`</li>
         </ul>
         <p>对应本站阅读材料:MCP 规范与工具调用(L4)、Effective Harnesses / Claude Code 最佳实践、RAG 与 ColBERT(L3)、ReAct 与设计模式(L6)。</p>
+      </div>
+    </details>
+    <details class="hw-brief">
+      <summary>📖 HW2 作业概览(讲义 17 页,点击展开)</summary>
+      <div class="markdown-body">
+        <p><b>背景</b>:基于 <b>Harbor</b>(Terminal-Bench 的评测框架,正是 10/26 嘉宾讲座的内容)亲手<b>构建评测任务</b>——不是调智能体,而是设计衡量智能体的尺子。</p>
+        <ul>
+          <li>示例任务 <code>humaneval-0</code>:完整 Harbor 任务结构(environment/Dockerfile + instruction + solution + tests)</li>
+          <li><code>pinned_agent.py</code>:固定 <b>mini-SWE-agent</b> 作为被测智能体,保证结果可复现</li>
+          <li><b>writeup 分节</b>:基础问答 → 跑示例任务 → 自建任务(LaTeX 报告模板)→ 同伴互评(对应 11/30 互评节点)</li>
+          <li><code>check_submission.py</code>:提交前自检完整性</li>
+          <li><b>环境</b>:uv + Docker(任务跑在容器里)</li>
+        </ul>
+        <p>对应本站阅读材料:评测基础与基准设计(L13)、How to Build Good LM Benchmarks、Terminal-Bench 嘉宾讲座 slides(L10)。</p>
       </div>
     </details>
   </section>
