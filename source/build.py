@@ -302,7 +302,7 @@ def main():
     entries.sort(key=lambda e: (order.get(e["week"], 99), e["file"]))
 
     # ---- fresh output (preserve repo meta + project docs + source mirror) ----
-    PRESERVE = {".git", "README.md", ".github", "CNAME", "LICENSE",
+    PRESERVE = {".git", "README.md", ".github", "CNAME", "LICENSE", ".nojekyll",
                 "CONTRIBUTING.md", "docs", "source", "hw", ".gitignore",
                 "requirements.txt"}
     if SITE.exists():

@@ -4,7 +4,6 @@
 
 **斯坦福 2026 秋季《AI 智能体工程》课程 · 全部阅读材料逐段中英对照全译**
 
-[![Deploy](https://github.com/athlonk8/cs329z/actions/workflows/pages.yml/badge.svg)](https://github.com/athlonk8/cs329z/actions/workflows/pages.yml)
 [![Website](https://img.shields.io/website?down_color=red&down_message=down&up_color=green&up_message=online&url=https%3A%2F%2Fcs.xuyili.com)](https://cs.xuyili.com)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
