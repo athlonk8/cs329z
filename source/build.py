@@ -56,13 +56,16 @@ IMPORTANT_DATES = [
 BADGE_LABEL = {"must": "必读", "recommended": "推荐", "supplementary": "补充"}
 
 # 官网(cs329z.stanford.edu)开课后放出的讲义;PDF 放在 slides/ 目录,存在即收录
+# video 字段 = 官网放出的课程录像(YouTube)
 LECTURES = [
     {"no": 1, "date": "9/23", "title_zh": "课程导论:什么是智能体系统?",
      "title": "Introduction — What Are Agentic Systems?", "file": "lecture01.pdf",
-     "url": "https://web.stanford.edu/class/cs329z/slides/lecture01.pdf"},
+     "url": "https://web.stanford.edu/class/cs329z/slides/lecture01.pdf",
+     "video": "https://youtu.be/DGI4vucR71w"},
     {"no": 2, "date": "9/28", "title_zh": "给开发者的 LLM",
      "title": "LLMs for Builders", "file": "lecture02.pdf",
-     "url": "https://web.stanford.edu/class/cs329z/slides/lecture02.pdf"},
+     "url": "https://web.stanford.edu/class/cs329z/slides/lecture02.pdf",
+     "video": "https://youtu.be/Vr1NzH8bT44"},
     {"no": 3, "date": "9/30", "title_zh": "构建基石:检索增强生成 RAG",
      "title": "Building Blocks: Retrieval-Augmented Generation (RAG)", "file": "lecture03.pdf",
      "url": "https://web.stanford.edu/class/cs329z/slides/lecture03.pdf"},
@@ -474,6 +477,7 @@ def main():
           <td>{html.escape(l['title_zh'])}<div class="mt-sub">{html.escape(l['title'])}</div></td>
           <td class="d-date">{l['date']}</td>
           <td class="lecture-links"><a class="slide-dl" href="slides/{l['file']}" target="_blank" rel="noopener">在线阅读 / 下载 PDF ↗</a><div class="mt-sub"><a href="{l['url']}" target="_blank" rel="noopener">官网原始链接</a>{f' · <a href="slides/{l["code_zip"]}" target="_blank" rel="noopener">官方跟练代码 zip 镜像</a> · <a href="{l["code_repo"]}" target="_blank" rel="noopener">GitHub</a>' if l.get("code_zip") and (ROOT / "slides" / l["code_zip"]).exists() else ''}</div></td>
+          <td class="lecture-links">{'<a class="video-link" href="' + l["video"] + '" target="_blank" rel="noopener">▶ 观看视频 ↗</a><div class="mt-sub">YouTube</div>' if l.get("video") else '<span class="mt-sub">待放出</span>'}</td>
         </tr>"""
         for l in lectures)
     homework_rows = "\n".join(
@@ -513,9 +517,9 @@ def main():
 
   <section class="dates lectures" id="lectures">
     <h2 class="sec-title">课程讲义 · Lecture Slides</h2>
-    <div class="lecture-note">课程 9/23 开课后,官网随进度放出各讲幻灯片,本站同步收录 PDF 原件——已收录 <b>{len(lectures)} 讲</b>,后续讲次待官网发布后跟进(下一讲:11/9 LLM-as-Judge;Lecture 10 为 10/26 Terminal-Bench 嘉宾讲座)。视频录像暂未公开(仅斯坦福内部 Canvas 可见)。</div>
+    <div class="lecture-note">课程 9/23 开课后,官网随进度放出各讲幻灯片,本站同步收录 PDF 原件——已收录 <b>{len(lectures)} 讲</b>,后续讲次待官网发布后跟进(下一讲:11/9 LLM-as-Judge;Lecture 10 为 10/26 Terminal-Bench 嘉宾讲座)。<b>官方录像已开始放出</b>(视频列,YouTube 渠道,国内访问需自备网络)。</div>
     <table class="dates-table lecture-table">
-      <tr><th>讲次</th><th>主题</th><th>日期</th><th>讲义</th></tr>
+      <tr><th>讲次</th><th>主题</th><th>日期</th><th>讲义</th><th>视频</th></tr>
 {lectures_rows}
     </table>
   </section>

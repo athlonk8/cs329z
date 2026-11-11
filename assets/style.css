@@ -341,3 +341,7 @@ body.zh-only .en-orig { display: none; }
 .fig-grid img { width: 100%; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
 .fig-grid figcaption { font-size: 12px; color: var(--ink-soft); text-align: center; margin-top: 4px; }
 .fig-note { font-size: 12.5px; color: var(--ink-soft); margin: 10px 0 0; line-height: 1.6; }
+
+/* ---------- 课程视频列 ---------- */
+.lecture-table a.video-link { font-weight: 700; white-space: nowrap; color: var(--cardinal); }
+.lecture-table a.video-link:hover { text-decoration: underline; }

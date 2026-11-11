@@ -124,7 +124,7 @@ We introduce ReAct, a new paradigm that...
 
 | 日期 | 内容 |
 |---|---|
-| 2026-11-11 | 新增「原文图表」:阅读页自动嵌入从原始 PDF/网页提取的 291 张插图(#1);修复 Lecture 10 编号误会说明(#2) |
+| 2026-11-11 | 官方录像开始放出:L1/L2 视频上线,讲义板块新增「视频」列;新增「原文图表」:阅读页自动嵌入 291 张原始插图(#1);修复 Lecture 10 编号误会说明(#2) |
 | 2026-11-09 | 同步收录 Lecture 11–13(数据/数据选择/评测基础)slides;镜像 HW2《Building an Evaluation Task》讲义与完整仓库,附中文概览;Pages 部署切换为经典分支模式(不依赖 Actions,零费用) |
 | 2026-11-02 | 勘误:Lecture 10 实为 10/26 嘉宾讲座(Terminal-Bench & Harbor)slides;新增 Lecture 11(What Data Do Agents Need?, 10/28) |
 | 2026-10-28 | 同步收录当时误标的 Lecture 10 slides(实为嘉宾讲座);镜像 Paper Video 作业说明 PDF;HW1 当日截止 |
