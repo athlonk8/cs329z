@@ -331,3 +331,13 @@ body.zh-only .en-orig { display: none; }
   background: var(--card); border: 1px dashed var(--line); border-radius: 10px; padding: 10px;
 }
 .read-star b { color: var(--cardinal); }
+
+/* ---------- 原文图表画廊 ---------- */
+.fig-gallery { margin-top: 28px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; }
+.fig-gallery summary { cursor: pointer; font-weight: 700; font-size: 15px; }
+.fig-gallery[open] summary { margin-bottom: 12px; }
+.fig-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.fig-grid figure { margin: 0; }
+.fig-grid img { width: 100%; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.fig-grid figcaption { font-size: 12px; color: var(--ink-soft); text-align: center; margin-top: 4px; }
+.fig-note { font-size: 12.5px; color: var(--ink-soft); margin: 10px 0 0; line-height: 1.6; }

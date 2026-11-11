@@ -337,6 +337,10 @@ def main():
         for f in hw_dir.iterdir():
             if f.is_file():
                 shutil.copy2(f, SITE / "hw" / f.name)
+    if (ROOT / "figures").exists():
+        for d in (ROOT / "figures").iterdir():
+            if d.is_dir() and any(d.iterdir()):
+                shutil.copytree(d, SITE / "figures" / d.name, dirs_exist_ok=True)
 
     # ---- reading pages ----
     stars = github_stars()
@@ -361,6 +365,19 @@ def main():
         meta_line = " · ".join(x for x in [e["meta"].get("authors"), e["meta"].get("venue")] if x)
         orig_anchor = (f'<a class="orig-link" href="{orig_html}" target="_blank" rel="noopener">查看原文({e["kind"].upper()}) ↗</a>' if orig_html else "")
         star_line = f'觉得有帮助?欢迎在 GitHub 给本项目一个 ⭐ <a href="https://github.com/athlonk8/cs329z" target="_blank" rel="noopener">athlonk8/cs329z</a>{star_text}'
+        fig_dir = ROOT / "figures" / e["slug"]
+        figs = sorted(f for f in fig_dir.iterdir()
+                      if f.suffix.lower() in (".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg")
+                      ) if fig_dir.exists() else []
+        if figs:
+            fig_items = "".join(
+                f'<figure><img loading="lazy" src="../figures/{e["slug"]}/{f.name}" alt="原文插图 {n}"><figcaption>原文图 {n} / {len(figs)}</figcaption></figure>'
+                for n, f in enumerate(figs, 1))
+            gallery = (f'<details class="fig-gallery"><summary>🖼 原文图表({len(figs)} 张)—— 提取自原始文献,点击展开</summary>'
+                       f'<div class="fig-grid">{fig_items}</div>'
+                       f'<p class="fig-note">以上图片自动提取自原始 PDF/网页并镜像至本站;与正文的对应关系请以原文为准。若某篇无画廊,说明其原文图表为矢量绘制,暂无法自动提取。</p></details>')
+        else:
+            gallery = ""
         body = f"""{topbar()}
 <div class="read-layout">
   <aside class="read-toc"><div class="read-toc-title">本页目录</div>{e['toc']}</aside>
@@ -377,6 +394,7 @@ def main():
       <div class="markdown-body">
 {e['body_html']}
       </div>
+{gallery}
     </article>
     {nav}
     <div class="read-star">📖 {star_line}</div>
