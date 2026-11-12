@@ -68,7 +68,8 @@ LECTURES = [
      "video": "https://youtu.be/Vr1NzH8bT44"},
     {"no": 3, "date": "9/30", "title_zh": "构建基石:检索增强生成 RAG",
      "title": "Building Blocks: Retrieval-Augmented Generation (RAG)", "file": "lecture03.pdf",
-     "url": "https://web.stanford.edu/class/cs329z/slides/lecture03.pdf"},
+     "url": "https://web.stanford.edu/class/cs329z/slides/lecture03.pdf",
+     "video": "https://youtu.be/psLc-46GqY0"},
     {"no": 4, "date": "10/5", "title_zh": "工具调用与函数调用",
      "title": "Tool Use & Function Calling", "file": "lecture04.pdf",
      "url": "https://web.stanford.edu/class/cs329z/slides/lecture04.pdf"},
@@ -101,6 +102,9 @@ LECTURES = [
     {"no": 13, "date": "11/4", "title_zh": "评测基础与基准设计",
      "title": "Evaluation Fundamentals & Benchmark Design", "file": "lecture13.pdf",
      "url": "https://web.stanford.edu/class/cs329z/slides/lecture13.pdf"},
+    {"no": 15, "date": "11/9", "title_zh": "LLM-as-Judge 与评测基础设施",
+     "title": "LLM-as-Judge & Evaluation Infrastructure", "file": "lecture15.pdf",
+     "url": "https://web.stanford.edu/class/cs329z/slides/lecture15.pdf"},
 ]
 
 # 官网发布的作业;HW 链接为官方 GitHub harness 仓库;pdf/zip 为本站镜像(hw/ 目录,存在才显示)
@@ -517,7 +521,7 @@ def main():
 
   <section class="dates lectures" id="lectures">
     <h2 class="sec-title">课程讲义 · Lecture Slides</h2>
-    <div class="lecture-note">课程 9/23 开课后,官网随进度放出各讲幻灯片,本站同步收录 PDF 原件——已收录 <b>{len(lectures)} 讲</b>,后续讲次待官网发布后跟进(下一讲:11/9 LLM-as-Judge;Lecture 10 为 10/26 Terminal-Bench 嘉宾讲座)。<b>官方录像已开始放出</b>(视频列,YouTube 渠道,国内访问需自备网络)。</div>
+    <div class="lecture-note">课程 9/23 开课后,官网随进度放出各讲幻灯片,本站同步收录 PDF 原件——已收录 <b>{len(lectures)} 讲</b>,后续讲次待官网发布后跟进(11/11 Safety 讲 slides 待发布;官网暂缺 Lecture 14 编号,LLM-as-Judge 为第 15 讲;Lecture 10 为 10/26 Terminal-Bench 嘉宾讲座)。<b>官方录像持续放出中</b>(视频列,YouTube 渠道,国内访问需自备网络)。</div>
     <table class="dates-table lecture-table">
       <tr><th>讲次</th><th>主题</th><th>日期</th><th>讲义</th><th>视频</th></tr>
 {lectures_rows}
