@@ -377,13 +377,23 @@ def main():
         figs = sorted(f for f in fig_dir.iterdir()
                       if f.suffix.lower() in (".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg")
                       ) if fig_dir.exists() else []
+        cap_map = {}
+        if figs and (fig_dir / "captions.json").exists():
+            try:
+                cap_map = json.loads((fig_dir / "captions.json").read_text(encoding="utf-8"))
+            except Exception:
+                cap_map = {}
         if figs:
-            fig_items = "".join(
-                f'<figure><img loading="lazy" src="../figures/{e["slug"]}/{f.name}" alt="原文插图 {n}"><figcaption>原文图 {n} / {len(figs)}</figcaption></figure>'
-                for n, f in enumerate(figs, 1))
+            parts = []
+            for n, f in enumerate(figs, 1):
+                cap = cap_map.get(f.name) or f"原文图 {n} / {len(figs)}"
+                if len(cap) > 120:
+                    cap = cap[:117] + "…"
+                parts.append(f'<figure><img loading="lazy" src="../figures/{e["slug"]}/{f.name}" alt="原文插图 {n}"><figcaption>{html.escape(cap)}</figcaption></figure>')
+            fig_items = "".join(parts)
             gallery = (f'<details class="fig-gallery"><summary>🖼 原文图表({len(figs)} 张)—— 提取自原始文献,点击展开</summary>'
                        f'<div class="fig-grid">{fig_items}</div>'
-                       f'<p class="fig-note">以上图片自动提取自原始 PDF/网页并镜像至本站;与正文的对应关系请以原文为准。若某篇无画廊,说明其原文图表为矢量绘制,暂无法自动提取。</p></details>')
+                       f'<p class="fig-note">以上图片提取自原始 PDF/网页或 arXiv 官方 HTML 版(含矢量图与原始图注),已镜像至本站;与正文的对应关系请以原文为准。</p></details>')
         else:
             gallery = ""
         body = f"""{topbar()}
