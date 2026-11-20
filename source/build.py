@@ -90,10 +90,12 @@ LECTURES = [
      "video": "https://youtu.be/qh5tP6PBZ6U"},
     {"no": 8, "date": "10/19", "title_zh": "多智能体系统",
      "title": "Multi-Agent Systems", "file": "lecture08.pdf",
-     "url": "https://web.stanford.edu/class/cs329z/slides/lecture08.pdf"},
+     "url": "https://web.stanford.edu/class/cs329z/slides/lecture08.pdf",
+     "video": "https://youtu.be/TlX_ft_PQIM"},
     {"no": 9, "date": "10/21", "title_zh": "优化:测试时计算与提示优化",
      "title": "Optimization: Test-Time Compute, Prompt Optimization & Finetuning", "file": "lecture09.pdf",
-     "url": "https://web.stanford.edu/class/cs329z/slides/lecture09.pdf"},
+     "url": "https://web.stanford.edu/class/cs329z/slides/lecture09.pdf",
+     "video": "https://youtu.be/e_m99aR7_3Q"},
     {"no": 10, "date": "10/26", "title_zh": "嘉宾讲座:Terminal-Bench 与 Harbor(智能体评测)",
      "title": "Guest Lecture: Evaluating Agents — Terminal-Bench & Harbor (Laude Institute)", "file": "lecture10.pdf",
      "url": "https://web.stanford.edu/class/cs329z/slides/lecture10.pdf"},
@@ -109,6 +111,9 @@ LECTURES = [
     {"no": 15, "date": "11/9", "title_zh": "LLM-as-Judge 与评测基础设施",
      "title": "LLM-as-Judge & Evaluation Infrastructure", "file": "lecture15.pdf",
      "url": "https://web.stanford.edu/class/cs329z/slides/lecture15.pdf"},
+    {"no": 17, "date": "11/11", "title_zh": "安全与风险",
+     "title": "Safety and Risks", "file": "lecture17.pdf",
+     "url": "https://web.stanford.edu/class/cs329z/slides/lecture17.pdf"},
 ]
 
 # 官网发布的作业;HW 链接为官方 GitHub harness 仓库;pdf/zip 为本站镜像(hw/ 目录,存在才显示)
@@ -536,7 +541,7 @@ def main():
 
   <section class="dates lectures" id="lectures">
     <h2 class="sec-title">课程讲义 · Lecture Slides</h2>
-    <div class="lecture-note">课程 9/23 开课后,官网随进度放出各讲幻灯片,本站同步收录 PDF 原件——已收录 <b>{len(lectures)} 讲</b>,后续讲次待官网发布后跟进(11/11 Safety 讲 slides 待发布;官网暂缺 Lecture 14 编号,LLM-as-Judge 为第 15 讲;Lecture 10 为 10/26 Terminal-Bench 嘉宾讲座)。<b>官方录像持续放出中</b>(视频列,YouTube 渠道,国内访问需自备网络)。</div>
+    <div class="lecture-note">课程 9/23 开课后,官网随进度放出各讲幻灯片,本站同步收录 PDF 原件——已收录 <b>{len(lectures)} 讲</b>,后续讲次待官网发布后跟进(官网编号连续跳过 14/16 号:LLM-as-Judge 为第 15 讲、Safety 为第 17 讲,Lecture 10 为 10/26 Terminal-Bench 嘉宾讲座)。<b>官方录像持续放出中</b>(视频列,YouTube 渠道,国内访问需自备网络)。</div>
     <table class="dates-table lecture-table">
       <tr><th>讲次</th><th>主题</th><th>日期</th><th>讲义</th><th>视频</th></tr>
 {lectures_rows}
